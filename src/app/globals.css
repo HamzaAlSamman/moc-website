@@ -1,0 +1,677 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #002723;
+  --color-secondary: #428177;
+  --color-gold: #A48E68;
+  --color-bronze: #988561;
+  --color-accent: #988561;
+  --color-lightBlack: #2C2C2C;
+  --color-foreground: #171717;
+  --color-cream: #F8F3EC;
+  --color-sand: #EDE5D6;
+
+  --color-admin-primary: #003D33;
+  --color-admin-primary-hover: #002B24;
+  --color-admin-primary-light: #005544;
+  --color-admin-secondary: #A48E68;
+  --color-admin-secondary-hover: #8B7654;
+
+  --breakpoint-xs: 400px;
+
+  --font-cairo: "Cairo", system-ui, -apple-system, sans-serif;
+  --font-inter: "Inter", system-ui, -apple-system, sans-serif;
+  --font-qomra: var(--font-qomra-local), "Cairo", system-ui, sans-serif;
+  --font-sans: var(--font-inter), sans-serif;
+
+  --animate-scan: scan 3s linear infinite;
+}
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+.font-cairo {
+  font-family: var(--font-cairo);
+}
+
+.font-qomra {
+  font-family: var(--font-qomra);
+}
+
+[dir="rtl"] {
+  --font-sans: var(--font-qomra), var(--font-cairo), sans-serif;
+}
+
+body {
+  font-family: var(--font-sans);
+  overflow-x: hidden;
+  /* Force Western/Latin numerals (0-9) everywhere */
+  font-variant-numeric: lining-nums;
+  -webkit-font-feature-settings: "lnum" 1;
+  font-feature-settings: "lnum" 1;
+}
+
+/* Ensure numbers stay Western even in RTL context */
+[dir="rtl"] * {
+  font-variant-numeric: lining-nums;
+}
+
+/* Custom RTL spacing when needed */
+[dir="rtl"] .ltr\:-scale-x-100 {
+  transform: scaleX(-1);
+}
+
+/* CSS-driven entrance animation. Used for above-the-fold content (e.g. the hero)
+   so it animates in on first paint WITHOUT waiting for JS hydration — gating
+   visibility behind a useState/useEffect flag leaves the content invisible until
+   the bundle loads, which badly inflates Speed Index on slow devices. */
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(2rem); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-up {
+  animation: fade-up 1s ease-out both;
+}
+.animate-fade-up-delayed {
+  animation: fade-up 1s ease-out 0.5s both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-up,
+  .animate-fade-up-delayed { animation: none; }
+}
+
+/* Custom mask styles for principle eagle watermarks */
+.eagle-mask {
+  mask-repeat: no-repeat;
+  mask-size: contain;
+  mask-position: center;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-size: contain;
+  -webkit-mask-position: center;
+}
+
+/* Smooth active zoom animation for hero section */
+@keyframes subtle-zoom {
+  0% {
+    transform: scale(1.0);
+  }
+  50% {
+    transform: scale(1.06);
+  }
+  100% {
+    transform: scale(1.0);
+  }
+}
+
+.animate-subtle-zoom {
+  animation: subtle-zoom 25s ease-in-out infinite;
+}
+
+/* Scroll reveal animations */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(40px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeInLeft {
+  from { opacity: 0; transform: translateX(-40px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes fadeInRight {
+  from { opacity: 0; transform: translateX(40px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.88); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes shimmer-gold {
+  0%   { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+/* Card staggered animation using CSS custom property for delay */
+.card-reveal {
+  animation: fadeInUp 0.65s ease var(--anim-delay, 0ms) both;
+}
+
+.card-reveal-scale {
+  animation: scaleIn 0.55s ease var(--anim-delay, 0ms) both;
+}
+
+/* Section header reveal */
+.section-reveal {
+  animation: fadeInUp 0.7s ease both;
+}
+
+/* Shimmer text effect */
+.text-shimmer {
+  background: linear-gradient(
+    90deg,
+    #A48E68 0%,
+    #988561 40%,
+    #A48E68 60%,
+    #988561 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: shimmer-gold 3s linear infinite;
+}
+
+/* Hide scrollbar cross-browser */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none !important;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+/* Month tab active glow */
+.month-tab-active {
+  box-shadow: 0 0 20px rgba(152, 133, 97, 0.35);
+}
+
+/* Service card hover overlay */
+.service-card-overlay {
+  background: radial-gradient(ellipse at center, rgba(255,255,255,0.03) 0%, transparent 70%);
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+.group:hover .service-card-overlay {
+  opacity: 1;
+}
+
+/* Calendar event card line */
+.event-card-line {
+  height: 3px;
+  background: linear-gradient(90deg, #002723, #428177);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.4s ease;
+}
+[dir="rtl"] .event-card-line {
+  transform-origin: right;
+}
+.group:hover .event-card-line {
+  transform: scaleX(1);
+}
+
+/* Pulse dot animation */
+@keyframes pulse-dot {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50%       { transform: scale(1.4); opacity: 0.7; }
+}
+.pulse-dot {
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+/* Premium glassmorphic utility classes */
+.glass-panel {
+  background: rgba(3, 7, 5, 0.45);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(164, 142, 104, 0.15);
+}
+
+.glass-navbar {
+  background: rgba(0, 39, 35, 0.75);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(164, 142, 104, 0.22);
+}
+
+/* Gold glow shadow */
+.shadow-gold-glow {
+  box-shadow: 0 0 25px rgba(152, 133, 97, 0.15);
+}
+.shadow-gold-glow-hover:hover {
+  box-shadow: 0 0 35px rgba(152, 133, 97, 0.25);
+}
+
+/* Scroll reveal transitions */
+.reveal-on-scroll {
+  opacity: 0;
+  transform: translateY(28px);
+  transition: opacity 1s cubic-bezier(0.16, 1, 0.3, 1), transform 1s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, transform;
+}
+.reveal-on-scroll.in-view {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.reveal-left-on-scroll {
+  opacity: 0;
+  transform: translateX(-40px);
+  transition: opacity 1s cubic-bezier(0.16, 1, 0.3, 1), transform 1s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, transform;
+}
+.reveal-left-on-scroll.in-view {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.reveal-right-on-scroll {
+  opacity: 0;
+  transform: translateX(40px);
+  transition: opacity 1s cubic-bezier(0.16, 1, 0.3, 1), transform 1s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, transform;
+}
+.reveal-right-on-scroll.in-view {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.reveal-scale-on-scroll {
+  opacity: 0;
+  transform: scale(0.93);
+  transition: opacity 1s cubic-bezier(0.16, 1, 0.3, 1), transform 1s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, transform;
+}
+.reveal-scale-on-scroll.in-view {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* Stagger delay utilities */
+.delay-100 { transition-delay: 100ms !important; }
+.delay-200 { transition-delay: 200ms !important; }
+.delay-300 { transition-delay: 300ms !important; }
+.delay-400 { transition-delay: 400ms !important; }
+.delay-500 { transition-delay: 500ms !important; }
+
+/* ===== ADMIN CMS THEME (moc-dashboard style) ===== */
+
+/* Admin color overrides inside .admin-layout */
+.admin-layout {
+  --color-admin-primary: #003D33;
+  --color-admin-primary-hover: #002B24;
+  --color-admin-primary-light: #005544;
+  --color-admin-secondary: #A48E68;
+  --color-admin-secondary-hover: #8B7654;
+}
+
+/* Global input/select/textarea styling inside the admin panel */
+.admin-layout input[type="text"],
+.admin-layout input[type="email"],
+.admin-layout input[type="password"],
+.admin-layout input[type="search"],
+.admin-layout input[type="date"],
+.admin-layout input[type="datetime-local"],
+.admin-layout select,
+.admin-layout textarea {
+  border-radius: 0.75rem !important;
+  border: 1px solid rgba(0, 61, 51, 0.12) !important;
+  padding: 0.625rem 1rem !important;
+  font-size: 0.875rem !important;
+  line-height: 1.25rem !important;
+  outline: none !important;
+  background-color: #ffffff !important;
+  color: #1e293b !important;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.02) !important;
+}
+
+.admin-layout input[type="text"]:focus,
+.admin-layout input[type="email"]:focus,
+.admin-layout input[type="password"]:focus,
+.admin-layout input[type="search"]:focus,
+.admin-layout input[type="date"]:focus,
+.admin-layout input[type="datetime-local"]:focus,
+.admin-layout select:focus,
+.admin-layout textarea:focus {
+  border-color: #A48E68 !important;
+  box-shadow: 0 0 0 3px rgba(164, 142, 104, 0.18), 0 1px 2px 0 rgba(0, 0, 0, 0.02) !important;
+  background-color: #ffffff !important;
+}
+
+.admin-layout input:disabled,
+.admin-layout select:disabled,
+.admin-layout textarea:disabled {
+  background-color: #f8fafc !important;
+  color: #64748b !important;
+  cursor: not-allowed !important;
+  border-color: #e2e8f0 !important;
+}
+
+/*
+ * Native date/time inputs render their localized format placeholder
+ * (e.g. "يوم/شهر/سنة" in an Arabic-locale browser). Inside an RTL context
+ * the bidi algorithm flips it to "ةنس/رهش/موي". Force the control — and its
+ * internal webkit edit field — to LTR so the format always reads correctly,
+ * regardless of the visitor's browser language. Applied globally so it covers
+ * both the admin panel and public forms (e.g. the event request form).
+ */
+input[type="date"],
+input[type="datetime-local"],
+input[type="time"],
+input[type="month"] {
+  direction: ltr !important;
+  text-align: left !important;
+}
+
+input[type="date"]::-webkit-datetime-edit,
+input[type="datetime-local"]::-webkit-datetime-edit,
+input[type="time"]::-webkit-datetime-edit,
+input[type="month"]::-webkit-datetime-edit {
+  direction: ltr !important;
+  unicode-bidi: normal !important;
+  text-align: left !important;
+}
+
+/* Prevent iOS Safari from zooming in on focus by enforcing a minimum 16px font-size on mobile viewports */
+@media (max-width: 767px) {
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="search"],
+  input[type="tel"],
+  input[type="url"],
+  input[type="date"],
+  input[type="datetime-local"],
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Admin panels & card enhancements */
+.admin-layout .bg-white.rounded-xl.border {
+  border-radius: 1rem !important;
+  border: 1px solid rgba(0, 61, 51, 0.08) !important;
+  box-shadow: 0 4px 20px -2px rgba(0, 61, 51, 0.04), 0 2px 4px -1px rgba(0, 61, 51, 0.02) !important;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.admin-layout .bg-white.rounded-xl.border:hover {
+  box-shadow: 0 10px 30px -4px rgba(0, 61, 51, 0.08), 0 4px 12px -2px rgba(0, 61, 51, 0.03) !important;
+}
+
+/* Table styling polish */
+.admin-layout table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.admin-layout table th {
+  color: #475569 !important;
+  font-weight: 600 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid rgba(0, 61, 51, 0.08) !important;
+  padding: 0.875rem 1rem !important;
+}
+
+.admin-layout table td {
+  padding: 0.875rem 1rem !important;
+  vertical-align: middle;
+}
+
+.admin-layout tbody tr {
+  transition: background-color 0.2s ease;
+}
+
+.admin-layout tbody tr:hover {
+  background-color: rgba(0, 61, 51, 0.02) !important;
+}
+
+/* Primary admin button styling */
+.admin-layout button[style*="background: rgb(0, 61, 51)"],
+.admin-layout button[style*="background: #003D33"],
+.admin-layout a[href*="new"][class*="bg-[#003D33]"],
+.admin-layout button[class*="bg-[#003D33]"] {
+  border-radius: 0.75rem !important;
+  padding: 0.625rem 1.25rem !important;
+  font-weight: 700 !important;
+  background: linear-gradient(135deg, #004D40, #003D33) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(0, 0, 0, 0.05) !important;
+  box-shadow: 0 4px 12px rgba(0, 61, 51, 0.15) !important;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  cursor: pointer;
+}
+
+.admin-layout button[style*="background: rgb(0, 61, 51)"]:hover,
+.admin-layout button[style*="background: #003D33"]:hover,
+.admin-layout a[href*="new"][class*="bg-[#003D33]"]:hover,
+.admin-layout button[class*="bg-[#003D33]"]:hover {
+  background: linear-gradient(135deg, #003D33, #002B24) !important;
+  box-shadow: 0 6px 16px rgba(0, 61, 51, 0.22) !important;
+  transform: translateY(-1px);
+}
+
+.admin-layout button[style*="background: rgb(0, 61, 51)"]:active,
+.admin-layout button[style*="background: #003D33"]:active,
+.admin-layout a[href*="new"][class*="bg-[#003D33]"]:active,
+.admin-layout button[class*="bg-[#003D33]"]:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(0, 61, 51, 0.15) !important;
+}
+
+/* MOC nav-shape decorative header bar */
+.moc-header-bar {
+  background: #003D33;
+  background-image: url('/moc-nav-shape.svg');
+  background-size: auto 100%;
+  background-repeat: repeat-x;
+  background-position: center;
+}
+
+/* Sidebar geometric pattern — interlocking khatam on dark green */
+.sidebar-geo {
+  background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' stroke='%23A48E68' stroke-width='0.6'%3E%3Cpolygon points='30,5 34,20 48,12 40,26 55,30 40,34 48,48 34,40 30,55 26,40 12,48 20,34 5,30 20,26 12,12 26,20' stroke-opacity='0.25' fill='%23A48E68' fill-opacity='0.04'/%3E%3Cpolygon points='34,20 40,26 40,34 34,40 26,40 20,34 20,26 26,20' stroke-opacity='0.15' fill='%23A48E68' fill-opacity='0.06'/%3E%3Crect x='26' y='26' width='8' height='8' transform='rotate(45 30 30)' fill='%23A48E68' fill-opacity='0.1' stroke-opacity='0.18'/%3E%3C/g%3E%3C/svg%3E");
+  background-size: 60px 60px;
+}
+
+/* Gold gradient text */
+.gradient-text {
+  background: linear-gradient(135deg, #A48E68, #c4ae88, #A48E68);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Pulse gold box-shadow */
+@keyframes pulse-gold {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(164, 142, 104, 0.4); }
+  50% { box-shadow: 0 0 0 6px rgba(164, 142, 104, 0); }
+}
+.animate-pulse-gold {
+  animation: pulse-gold 2.2s ease-in-out infinite;
+}
+
+/* Slide up animation for mobile sheets */
+@keyframes slide-up {
+  from { transform: translateY(100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.animate-slide-up {
+  animation: slide-up 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Fade in up for dropdowns */
+@keyframes fade-in-up-fast {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in-up {
+  animation: fade-in-up-fast 0.2s ease both;
+}
+
+/* Hide scrollbar */
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none !important;
+}
+.hide-scrollbar::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+/* Touch target minimum */
+.tap-target {
+  min-width: 44px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ===== ANIMATIONS (from moc-dashboard) ===== */
+@keyframes adminFadeInDown {
+  from { opacity: 0; transform: translateY(-20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes adminFadeInUp {
+  from { opacity: 0; transform: translateY(30px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes adminScaleIn {
+  from { opacity: 0; transform: scale(0.85); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes adminGoldShimmer {
+  0%   { background-position: 200% center; }
+  100% { background-position: -200% center; }
+}
+@keyframes adminPulseGold {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(164,142,104,0.5); }
+  50%       { box-shadow: 0 0 0 14px rgba(164,142,104,0); }
+}
+@keyframes adminSpin {
+  to { transform: rotate(360deg); }
+}
+
+.admin-fade-in-down { animation: adminFadeInDown 0.6s ease-out forwards; }
+.admin-fade-in-up   { animation: adminFadeInUp 0.7s ease-out forwards; }
+.admin-scale-in     { animation: adminScaleIn 0.6s ease-out forwards; }
+.admin-on-load      { opacity: 0; }
+.admin-pulse-gold   { animation: adminPulseGold 2.2s ease-in-out infinite; }
+.admin-spin         { animation: adminSpin 0.8s linear infinite; }
+
+/* Glassmorphism — dark green panel */
+.glass-dark {
+  background: rgba(0, 61, 51, 0.80);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(164, 142, 104, 0.25);
+}
+
+/* Diamond divider */
+.diamond-divider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+.diamond-divider::before,
+.diamond-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(to var(--dir, left), transparent, rgba(164,142,104,0.6));
+}
+.diamond-divider::after { --dir: right; }
+.diamond-divider span {
+  width: 10px; height: 10px;
+  background: #A48E68;
+  transform: rotate(45deg);
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+/* Gradient text — animated gold shimmer */
+.gradient-text {
+  background: linear-gradient(120deg, #c4ae88 0%, #A48E68 30%, #e8d5a3 50%, #A48E68 70%, #c4ae88 100%);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: adminGoldShimmer 4s linear infinite;
+}
+
+/* Calendar premium styles */
+@keyframes calendar-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(185, 167, 121, 0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(185, 167, 121, 0); }
+}
+.calendar-tile-event {
+  position: relative;
+}
+.calendar-tile-event::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  border: 1px solid rgba(185, 167, 121, 0.3);
+  pointer-events: none;
+}
+.calendar-tile-event-active::after {
+  animation: calendar-pulse 2s infinite;
+  border-color: #988561;
+}
+
+/* Timeline card pulse scroll highlight */
+@keyframes timeline-highlight {
+  0%, 100% { border-color: rgba(152, 133, 97, 0.2); box-shadow: 0 0 10px rgba(152, 133, 97, 0.05); }
+  50% { border-color: rgba(152, 133, 97, 0.8); box-shadow: 0 0 25px rgba(152, 133, 97, 0.3); }
+}
+.timeline-card-active {
+  animation: timeline-highlight 2s ease-in-out infinite;
+  background-color: rgba(5, 66, 57, 0.03);
+}
+
+/* Custom premium scrollbar styling */
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+::-webkit-scrollbar {
+  width: 10px !important;
+  height: 10px !important;
+}
+
+html::-webkit-scrollbar-track,
+body::-webkit-scrollbar-track,
+::-webkit-scrollbar-track {
+  background: #F8F3EC !important; /* Cream color */
+  border-left: 1px solid rgba(164, 142, 104, 0.15) !important; /* Light gold border */
+}
+
+html::-webkit-scrollbar-thumb,
+body::-webkit-scrollbar-thumb,
+::-webkit-scrollbar-thumb {
+  background-color: #A48E68 !important; /* Gold color */
+  border: 2px solid #F8F3EC !important; /* Padding effect */
+  border-radius: 9999px !important;
+  background-clip: padding-box !important;
+}
+
+html::-webkit-scrollbar-thumb:hover,
+body::-webkit-scrollbar-thumb:hover,
+::-webkit-scrollbar-thumb:hover {
+  background-color: #988561 !important; /* Bronze/accent gold hover color */
+}
+
+/* Firefox support */
+* {
+  scrollbar-width: thin !important;
+  scrollbar-color: #A48E68 #F8F3EC !important;
+}
+
+/* Scan laser animation for payment QR codes */
+@keyframes scan {
+  0%, 100% { transform: translateY(0); opacity: 0.3; }
+  50% { transform: translateY(176px); opacity: 0.9; }
+}
+

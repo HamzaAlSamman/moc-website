@@ -1,0 +1,31 @@
+export const DIRECTORATE_USERS = [
+  { nameAr: "مديرية العلاقات الثقافية", email: "c.relations@moc.gov.sy" },
+  { nameAr: "مديرية المراكز الثقافية", email: "centers@moc.gov.sy" },
+  { nameAr: "مديرية التعاون الدولي", email: "ayham_alkasti@moc.gov.sy" },
+  { nameAr: "مديرية العامة لآثار والمتاحف - طرطوس", email: "tartous@moc.gov.sy" },
+  { nameAr: "مديرية العامة لآثار والمتاحف - حلب", email: "aleppo@moc.gov.sy" },
+  { nameAr: "مديرية التحول الرقمي", email: "digital.trans@moc.gov.sy" },
+  { nameAr: "مديرية التأهيل الفني", email: "dosymi@moc.gov.sy" },
+  { nameAr: "مديرية الفنون الجميلة", email: "finearts@moc.gov.sy" },
+  { nameAr: "مديرية العامة لآثار والمتاحف - إدلب", email: "edlib@moc.gov.sy" },
+  { nameAr: "مديرية التنمية الادارية", email: "development@moc.gov.sy" },
+  { nameAr: "مديرية الرقابة الداخلية", email: "intinspect@moc.gov.sy" },
+  { nameAr: "المديرية العامة للآثار والمتاحف - دمشق", email: "damasvcus@moc.gov.sy" },
+  { nameAr: "ادارة الاستثمار", email: "investment.directorate@moc.gov.sy" },
+  { nameAr: "مديرية التخطيط والاحصاء", email: "planning@moc.gov.sy" },
+  { nameAr: "الشؤون القانونية وحماية حقوق المؤلف", email: "lawful@moc.gov.sy" },
+  { nameAr: "الشؤون القانونية وحماية حقوق المؤلف", email: "authors@moc.gov.sy" },
+  { nameAr: "مديرية ثقافة الطفل", email: "child@moc.gov.sy" },
+  { nameAr: "دار الاوبرا", email: "opera@moc.gov.sy" },
+  { nameAr: "مديرية تعليم الكبار", email: "oldteach@moc.gov.sy" },
+  { nameAr: "المؤسسة العامة للسينما", email: "cinema@moc.gov.sy" },
+  { nameAr: "المعهد العالي للفنون المسرحية", email: "funoon@moc.gov.sy" },
+  { nameAr: "المعهد العالي الموسيقا", email: "music.in@moc.gov.sy" },
+  { nameAr: "مديرية التراث اللامادي", email: "turathminist@moc.gov.sy" },
+  { nameAr: "مديرية الشؤون المالية", email: "accounting@moc.gov.sy" },
+  { nameAr: "الديوان العام", email: "dywan@moc.gov.sy" },
+  { nameAr: "مديرية الدعم والتوريد", email: "support-supply@moc.gov.sy" },
+];
+
+export const DIRECTORATE_USER_ROLE = "DIRECTORATE";
+export const DEFAULT_DIRECTORATE_PASSWORD = "Moc@2026-Directorates!";

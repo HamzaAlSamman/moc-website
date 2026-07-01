@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 400" fill="none">
+  <!-- Elegant Syrian heritage inspired gold half-mandala/Islamic geometric star ornament -->
+  <!-- Center is anchored at the left edge (0, 200) -->
+  
+  <!-- Outer radiating star tips -->
+  <path d="M 0 50 L 50 100 L 0 150 L 80 200 L 0 250 L 50 300 L 0 350" stroke="#988561" stroke-width="1.5" stroke-linecap="round" opacity="0.4"/>
+  <path d="M 0 20 L 70 110 L 0 200 L 70 290 L 0 380" stroke="#988561" stroke-width="1" stroke-linecap="round" opacity="0.25"/>
+  
+  <!-- Concentric semi-circles and stars -->
+  <path d="M 0 70 A 130 130 0 0 1 0 330" stroke="#988561" stroke-width="1.2" stroke-dasharray="4 4" opacity="0.6"/>
+  <path d="M 0 95 A 105 105 0 0 1 0 305" stroke="#988561" stroke-width="2" opacity="0.75"/>
+  <path d="M 0 125 A 75 75 0 0 1 0 275" stroke="#988561" stroke-width="1" stroke-dasharray="2 2" opacity="0.7"/>
+  <path d="M 0 150 A 50 50 0 0 1 0 250" stroke="#988561" stroke-width="2.5" opacity="0.85"/>
+  <path d="M 0 175 A 25 25 0 0 1 0 225" stroke="#988561" stroke-width="1.5" opacity="0.95"/>
+  
+  <!-- Radial lines from center (0,200) -->
+  <line x1="0" y1="200" x2="110" y2="200" stroke="#988561" stroke-width="2" opacity="0.8"/>
+  
+  <line x1="0" y1="200" x2="101" y2="159" stroke="#988561" stroke-width="1.5" opacity="0.7"/>
+  <line x1="0" y1="200" x2="101" y2="241" stroke="#988561" stroke-width="1.5" opacity="0.7"/>
+  
+  <line x1="0" y1="200" x2="78" y2="122" stroke="#988561" stroke-width="1.5" opacity="0.6"/>
+  <line x1="0" y1="200" x2="78" y2="278" stroke="#988561" stroke-width="1.5" opacity="0.6"/>
+  
+  <line x1="0" y1="200" x2="42" y2="98" stroke="#988561" stroke-width="1.5" opacity="0.5"/>
+  <line x1="0" y1="200" x2="42" y2="302" stroke="#988561" stroke-width="1.5" opacity="0.5"/>
+
+  <!-- Star shapes and diamond nodes inside -->
+  <path d="M 100 200 L 95 197 L 90 200 L 95 203 Z" fill="#988561" opacity="0.9"/>
+  <path d="M 92 155 L 87 152 L 82 155 L 87 158 Z" fill="#988561" opacity="0.8"/>
+  <path d="M 92 245 L 87 242 L 82 245 L 87 248 Z" fill="#988561" opacity="0.8"/>
+  
+  <path d="M 70 114 L 66 111 L 62 114 L 66 117 Z" fill="#988561" opacity="0.7"/>
+  <path d="M 70 286 L 66 283 L 62 286 L 66 289 Z" fill="#988561" opacity="0.7"/>
+
+  <!-- Delicate scalloped border line details -->
+  <path d="M 0 100 
+           C 15 105, 15 115, 0 120
+           C 15 125, 15 135, 0 140
+           C 15 145, 15 155, 0 160
+           C 15 165, 15 175, 0 180
+           C 15 185, 15 195, 0 200
+           C 15 205, 15 215, 0 220
+           C 15 225, 15 235, 0 240
+           C 15 245, 15 255, 0 260
+           C 15 265, 15 275, 0 280
+           C 15 285, 15 295, 0 300" stroke="#988561" stroke-width="1.2" opacity="0.8"/>
+</svg>

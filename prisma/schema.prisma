@@ -1,0 +1,346 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  EDITOR
+  AUTHOR
+  CONTRIBUTOR
+  VIEWER
+  EVENT_MANAGER
+  MEDIA_OFFICE
+  SUPERVISOR
+  ASSISTANT
+  STUDIES
+  AUDITOR
+  STUDIES_ASSESSOR
+  STUDIES_HEAD
+  LEGAL_DIRECTOR
+  DEPUTY_MINISTER
+  FINANCE
+  DIRECTORATE
+}
+
+enum PostStatus {
+  DRAFT
+  PENDING_REVIEW
+  PUBLISHED
+  ARCHIVED
+}
+
+enum PostType {
+  NEWS
+  ANNOUNCEMENT
+  ACHIEVEMENT
+  PAGE
+}
+
+enum EventStatus {
+  UPCOMING
+  ONGOING
+  COMPLETED
+  CANCELLED
+}
+
+// Moderation state for calendar events. Events created by authority roles
+// (those holding REVIEW_EVENT — admins, the festivals directorate) default to
+// APPROVED and publish immediately. Events created by the DIRECTORATE role
+// start as PENDING and only reach the public calendar once approved.
+enum EventReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model EventKind {
+  id        String   @id @default(cuid())
+  nameAr    String   @unique
+  nameEn    String?
+  color     String   @default("#6C4A8F")
+  events    Event[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model User {
+  id                 String   @id @default(cuid())
+  email              String   @unique
+  password           String
+  nameAr             String
+  nameEn             String?
+  role               Role     @default(AUTHOR)
+  avatar             String?
+  isActive           Boolean  @default(true)
+  // Set when an admin force-resets this user's password; the user is locked
+  // out of the rest of the CMS until they set their own new password.
+  mustChangePassword Boolean  @default(false)
+  posts              Post[]
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+// Append-only security audit trail for sensitive admin actions
+// (currently: forced password resets and self-service password changes).
+// Actor/target identity is denormalized (id + email snapshot) so the trail
+// stays meaningful even if a user account is later edited or deleted.
+model AuditLog {
+  id          String   @id @default(cuid())
+  action      String
+  actorId     String
+  actorEmail  String
+  targetId    String?
+  targetEmail String?
+  ipAddress   String?
+  metadata    String?  @db.Text
+  createdAt   DateTime @default(now())
+
+  @@index([action])
+  @@index([actorId])
+  @@index([targetId])
+  @@index([createdAt])
+}
+
+model Post {
+  id             String     @id @default(cuid())
+  titleAr        String
+  titleEn        String?
+  contentAr      String?    @db.Text
+  contentEn      String?    @db.Text
+  summaryAr      String?
+  summaryEn      String?
+  slug           String     @unique
+  status         PostStatus @default(DRAFT)
+  type           PostType   @default(NEWS)
+  featuredImage  String?
+  views          Int        @default(0)
+  authorId       String
+  author         User       @relation(fields: [authorId], references: [id])
+  categoryId     String?
+  category       Category?  @relation(fields: [categoryId], references: [id])
+  tags           PostTag[]
+  seoTitleAr     String?
+  seoTitleEn     String?
+  seoDescAr      String?
+  seoDescEn      String?
+  builderData    String?    @db.Text
+  publishedAt    DateTime?
+  gallery        String?    @db.Text
+  attachments    String?    @db.Text
+  facebookUrl    String?
+  instagramUrl   String?
+  twitterUrl     String?
+  youtubeUrl     String?
+  sourceUrl      String?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+}
+
+model Category {
+  id     String  @id @default(cuid())
+  nameAr String
+  nameEn String?
+  slug   String  @unique
+  posts  Post[]
+}
+
+model Tag {
+  id     String    @id @default(cuid())
+  nameAr String
+  nameEn String?
+  slug   String    @unique
+  posts  PostTag[]
+}
+
+model PostTag {
+  postId String
+  tagId  String
+  post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
+  tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([postId, tagId])
+}
+
+model Event {
+  id              String         @id @default(cuid())
+  titleAr         String
+  titleEn         String?
+  descriptionAr   String?        @db.Text
+  descriptionEn   String?        @db.Text
+  location        String?
+  locationEn      String?
+  governorate     String?
+  governorateEn   String?
+  startDate       DateTime
+  endDate         DateTime?
+  featuredImage   String?
+  status          EventStatus    @default(UPCOMING)
+  eventCategoryId String?
+  eventCategory   EventCategory? @relation(fields: [eventCategoryId], references: [id], onDelete: SetNull)
+  eventKindId     String?
+  eventKind       EventKind?     @relation(fields: [eventKindId], references: [id], onDelete: SetNull)
+  // Moderation workflow (cultural-calendar review). Identity fields are
+  // denormalized plain ids (no relation), mirroring AuditLog, so the trail
+  // survives user edits/deletes and keeps migrations friction-free.
+  reviewStatus    EventReviewStatus @default(APPROVED)
+  rejectionReason String?        @db.Text
+  createdById     String?
+  reviewedById    String?
+  reviewedAt      DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([reviewStatus])
+  @@index([createdById])
+}
+
+model EventCategory {
+  id        String   @id @default(cuid())
+  nameAr    String   @unique
+  nameEn    String?
+  color     String   @default("#1C665A")
+  events    Event[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum SubmissionStatus {
+  PENDING
+  UNDER_REVIEW
+  APPROVED
+  CONDITIONAL
+  REJECTED
+}
+
+enum EntityType {
+  DIRECTORATE
+  GOVERNMENT
+  EXTERNAL
+  INDIVIDUAL
+}
+
+model EventSubmission {
+  id                 String           @id @default(cuid())
+  applicantName      String
+  directorate        String?
+  phone              String?
+  email              String?
+  eventName          String
+  entityType         EntityType       @default(INDIVIDUAL)
+  entityName         String?
+  description        String           @db.Text
+  goals              String           @db.Text
+  expectedImpact     String?          @db.Text
+  targetAudience     String?
+  governorate        String?
+  culturalCenterId   String?
+  proposedVenue      String?
+  proposedDate       String?
+  eventType          String?
+  isSustainable      Boolean          @default(false)
+  sustainabilityNote String?          @db.Text
+  sponsorshipNeeded  String?
+  sponsorshipNote    String?
+  additionalNotes    String?          @db.Text
+  agreedToTerms      Boolean          @default(false)
+  status             SubmissionStatus @default(PENDING)
+  adminNotes         String?          @db.Text
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+}
+
+model CulturalCenter {
+  id          String   @id @default(cuid())
+  nameAr      String
+  governorate String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([nameAr, governorate])
+}
+
+model Media {
+  id           String   @id @default(cuid())
+  filename     String
+  originalName String
+  url          String
+  mimeType     String
+  size         Int
+  width        Int?
+  height       Int?
+  altAr        String?
+  altEn        String?
+  uploadedById String
+  createdAt    DateTime @default(now())
+}
+
+// In-app notifications surfaced in the admin topbar bell. Kept intentionally
+// simple (no read-receipts table, no push integration) — just enough to turn
+// the previously-decorative bell icon into a real, queryable inbox per user.
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String   // e.g. "SUBMISSION_PENDING", "POST_PENDING_REVIEW", "PASSWORD_RESET"
+  titleAr   String
+  titleEn   String?
+  link      String?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([userId, isRead])
+}
+
+model Setting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String   @db.Text
+  type      String   @default("string")
+  group     String   @default("general")
+  labelAr   String?
+  labelEn   String?
+  updatedAt DateTime @updatedAt
+}
+
+model CopyrightSubmission {
+  id                         String   @id @default(cuid())
+  applicantName              String
+  applicantPhone             String
+  applicantEmail             String
+  applicantRole              String
+  workTitle                  String
+  workCategory               String
+  workDesc                   String   @db.Text
+  province                   String
+  center                     String
+  completionDate             String
+  hasTelecomDoc              Boolean  @default(false)
+  paymentStatus              String   @default("pending") // pending, initial_paid, fully_paid
+  applicationStatus          String   @default("submitted") // draft, submitted, under_review, etc.
+  applicantSignature         String?  @db.Text // Base64 signature image (optional)
+  reviewerSignature          String?  @db.Text // Base64 reviewer signature image
+  authors                    Json?    // Array of joint authors: { name: String, signature: String, idLabel: String }
+  paymentGateway             String?  @default("syriatel_cash")
+  paymentRef                 String?
+  paymentReceipt             String?  @db.Text
+  commercialRegisterFile     String?  @db.Text
+  delegationFile             String?  @db.Text
+  representativeIdFile       String?  @db.Text
+  originalOwnerIdFile        String?  @db.Text
+  assessorReportFile         String?  @db.Text
+  studiesRecommendationsFile String?  @db.Text
+  workFile                   String?  @db.Text
+  idDocType                  String   @default("national_id") // national_id (front+back) or passport (single page in idFileFront)
+  idFileFront                String?  @db.Text
+  idFileBack                 String?  @db.Text
+  telecomFile                String?  @db.Text
+  roleFile                   String?  @db.Text
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+}
