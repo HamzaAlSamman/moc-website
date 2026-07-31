@@ -22,6 +22,7 @@ import {
   ShieldCheck,
   MapPin,
   Bookmark,
+  FileKey2,
 } from "lucide-react";
 import { useShell } from "./AdminShell";
 import { can, ROLE_LABELS } from "@/lib/permissions";
@@ -51,6 +52,7 @@ const navGroups = [
     items: [
       { href: "/admin/event-submissions", icon: Inbox,      labelAr: "طلبات الفعاليات", permission: "VIEW_SUBMISSIONS" },
       { href: "/admin/copyright",   icon: Copyright,  labelAr: "حقوق المؤلف",     permission: "VIEW_SUBMISSIONS" },
+      { href: "/admin/legal-licenses", icon: FileKey2, labelAr: "التراخيص القانونية", permission: "VIEW_LEGAL_LICENSES" },
     ],
     // EVENT_MANAGER sees only this group and Events from المحتوى
     eventManagerOnly: false,
@@ -98,9 +100,13 @@ export default function AdminSidebar({ collapsed, onLinkClick }) {
         ? ["/admin/events", "/admin/dashboard"]
       : role === "MEDIA_OFFICE"
         ? ["/admin/posts", "/admin/achievements", "/admin/categories", "/admin/dashboard"]
-        : ["FINANCE", "STUDIES_ASSESSOR", "STUDIES_HEAD", "LEGAL_DIRECTOR", "DEPUTY_MINISTER"].includes(role)
+        : ["FINANCE", "STUDIES_ASSESSOR", "STUDIES_HEAD"].includes(role)
           ? ["/admin/copyright", "/admin/dashboard"]
-          : null;
+          : ["LEGAL_DIRECTOR", "DEPUTY_MINISTER"].includes(role)
+            ? ["/admin/copyright", "/admin/legal-licenses", "/admin/dashboard"]
+            : ["LICENSING_OFFICER", "LICENSING_COMMITTEE"].includes(role)
+              ? ["/admin/legal-licenses", "/admin/dashboard"]
+              : null;
   const isVisible = (item) =>
     can(role, item.permission) && (!roleAllowedHrefs || roleAllowedHrefs.includes(item.href));
 

@@ -72,7 +72,26 @@ const SERVICES = [
       "Query submission status online",
     ],
   },
-  /* ── 3. International Cooperation Contact ── ACTIVE */
+  /* ── Legal License Applications ── INTERNAL TESTING */
+  {
+    id: "legal-licenses",
+    status: "soon",
+    href: (locale) => `/${locale}/services/legal-licenses`,
+    color: "#5D4A7D",
+    colorLight: "#5D4A7D",
+    badge: null,
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="w-7 h-7">
+        <path d="M6 3h9l3 3v15H6z" /><path d="M15 3v4h4M9 11h6M9 15h6M9 19h4" />
+      </svg>
+    ),
+    titleAr: "طلبات التراخيص القانونية",
+    titleEn: "Legal License Applications",
+    descAr: "تقديم ومتابعة طلبات تراخيص الجهات والأنشطة الثقافية مع وثائق المؤسسين وسير اعتماد قانوني موثّق.",
+    descEn: "Apply for and track licenses for cultural entities and activities through a documented legal review workflow.",
+    featuresAr: ["عشرة أنواع من التراخيص الثقافية", "حفظ المسودة ومتابعتها برمز سري", "رفع آمن للوثائق خارج التخزين العام"],
+    featuresEn: ["Ten cultural license types", "Secure draft saving and tracking", "Private protected document storage"],
+  },  /* ── 3. International Cooperation Contact ── ACTIVE */
   {
     id: "international-cooperation",
     status: "active",
