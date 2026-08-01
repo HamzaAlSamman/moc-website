@@ -112,3 +112,38 @@ test("public tracking uses the bounded small JSON reader and safe error mapper",
   assert.match(track, /legalLicenseError/);
   assert.doesNotMatch(track, /request[.]json[(]/);
 });
+test("citizen wizard binds tracked results to the successful token and clears stale results", () => {
+  const wizard = read("../app/[locale]/services/legal-licenses/LegalLicenseWizard.jsx");
+  assert.match(wizard, /buildTrackedWizardResult/);
+  assert.match(wizard, /trackedResult[.]accessToken/);
+  assert.match(wizard, /setTrackedResult[(]null[)]/);
+  assert.doesNotMatch(wizard, /token=[{]track[.]accessToken[}]/);
+});
+
+test("citizen wizard validates expiring private snapshots and exposes an explicit reset", () => {
+  const wizard = read("../app/[locale]/services/legal-licenses/LegalLicenseWizard.jsx");
+  assert.match(wizard, /localStorage[.]removeItem[(]STORAGE_KEY[)]/);
+  assert.match(wizard, /resetNewApplication/);
+  assert.match(wizard, /window[.]confirm/);
+  assert.match(wizard, /7 days|7 أيام/);
+  assert.doesNotMatch(wizard, /JSON[.]parse[(]localStorage[.]getItem[(]LEGACY_STORAGE_KEY/);
+});
+
+test("all citizen draft mutations share one synchronous global lock", () => {
+  const wizard = read("../app/[locale]/services/legal-licenses/LegalLicenseWizard.jsx");
+  const documents = read("../app/[locale]/services/legal-licenses/steps/DocumentsStep.jsx");
+  assert.match(wizard, /createWizardMutationLock/);
+  assert.match(wizard, /mutationLockRef/);
+  assert.match(wizard, /beginDraftMutation/);
+  assert.match(wizard, /endDraftMutation/);
+  assert.match(wizard, /mutationBusy/);
+  assert.match(documents, /mutationBusy/);
+});
+
+test("protected blob downloads use a downloadable anchor and revoke their object URL", () => {
+  const wizard = read("../app/[locale]/services/legal-licenses/LegalLicenseWizard.jsx");
+  assert.match(wizard, /document[.]createElement[(]"a"[)]/);
+  assert.match(wizard, /anchor[.]download/);
+  assert.match(wizard, /URL[.]revokeObjectURL/);
+  assert.doesNotMatch(wizard, /window[.]open[(]url/);
+});

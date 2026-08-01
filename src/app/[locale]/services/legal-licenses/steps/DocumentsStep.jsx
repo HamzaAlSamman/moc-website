@@ -9,6 +9,7 @@ function DocumentRow({
   founderId,
   isRtl,
   busyKey,
+  mutationBusy,
   editable,
   canDelete,
   onUpload,
@@ -53,7 +54,7 @@ function DocumentRow({
               className="sr-only"
               type="file"
               accept=".pdf,image/jpeg,image/png,image/webp"
-              disabled={!editable || busy}
+              disabled={!editable || busy || mutationBusy}
               onChange={(event) => {
                 onUpload(event.target.files?.[0], kind, founderId);
                 event.target.value = "";
@@ -64,7 +65,7 @@ function DocumentRow({
             <button
               type="button"
               onClick={() => onDelete(latest)}
-              disabled={busy}
+              disabled={busy || mutationBusy}
               className="rounded-lg p-2 text-rose-700 outline-none hover:bg-rose-100 focus-visible:ring-4 focus-visible:ring-rose-100 disabled:opacity-40"
               aria-label={isRtl ? "حذف الوثيقة" : "Delete document"}
             >
@@ -85,6 +86,7 @@ export default function DocumentsStep({
   founderKinds,
   isRtl,
   busyKey,
+  mutationBusy,
   canEditAttachment,
   onUpload,
   onDelete,
@@ -93,7 +95,7 @@ export default function DocumentsStep({
     return <p className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm font-bold text-amber-900">{isRtl ? "احفظ المسودة أولاً لتفعيل رفع الوثائق." : "Save the draft first to enable document uploads."}</p>;
   }
 
-  const rowProps = { application, isRtl, busyKey, onUpload, onDelete };
+  const rowProps = { application, isRtl, busyKey, mutationBusy, onUpload, onDelete };
   return (
     <div className="space-y-7">
       <section>

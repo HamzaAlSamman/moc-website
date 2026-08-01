@@ -1,7 +1,11 @@
 import {
-  LEGAL_LICENSE_BYLAW_ACKNOWLEDGMENT_KEY,
+  LEGAL_LICENSE_REQUIREMENT_CATEGORIES,
   getApplicableLegalLicenseRequirements,
 } from "./legal-license-requirements.mjs";
+import {
+  GENERAL_LEGAL_LICENSE_DOCUMENTS,
+  LEGAL_LICENSE_DOCUMENT_RULES,
+} from "./legal-license.mjs";
 
 const STEP_DEFINITIONS = [
   { id: "guide", label: { ar: "الدليل ونوع الترخيص", en: "Guide & license type" } },
@@ -18,13 +22,16 @@ export const LEGAL_LICENSE_WIZARD_STEPS = Object.freeze(
   STEP_DEFINITIONS.map((step, index) => Object.freeze({ ...step, index })),
 );
 
+export const LOCAL_WIZARD_SNAPSHOT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const LOCAL_WIZARD_SNAPSHOT_VERSION = 3;
+
 const STEP_BY_SCOPE = Object.freeze({
   ELIGIBILITY: 1,
   APPLICANT: 2,
   FOUNDER: 2,
   PREMISES: 3,
   EQUIPMENT: 3,
-  EVIDENCE: 4,
+  EVIDENCE: 3,
   ATTACHMENT: 4,
   BYLAWS: 5,
   POST_LICENSE: 7,
@@ -55,14 +62,52 @@ const STEP_BY_FIELD = Object.freeze({
   applicantSignature: 7,
 });
 
+const FORM_TEXT_FIELDS = Object.freeze([
+  "licenseType", "applicantName", "nationalId", "phone", "email", "capacity",
+  "entityName", "purpose", "objectives", "activityDescription", "governorate", "address",
+]);
+const FOUNDER_TEXT_FIELDS = Object.freeze([
+  "id", "fullName", "nationalId", "birthDate", "occupation", "qualification", "phone", "email", "address",
+]);
+const MANAGER_TEXT_FIELDS = Object.freeze([
+  "fullName", "nationalId", "phone", "email", "occupation", "qualification",
+]);
+const ANSWER_RECORD_FIELDS = Object.freeze([
+  "eligibilityAnswers", "premisesAnswers", "bylawAnswers", "postLicenseDeclarations",
+]);
+const ANSWER_KEY = /^[a-zA-Z0-9_.:-]{1,256}$/;
+const NATIONAL_ID = /^\d{11}$/;
+const PHONE = /^\+?\d{8,15}$/;
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 function isRecord(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-function blockingEligibility(profile, form) {
+function nonEmpty(value) {
+  return typeof value === "string" && Boolean(value.trim());
+}
+
+function applicableBlocking(profile, form, categories) {
   if (!profile) return [];
+  const acceptedCategories = new Set(categories);
   return getApplicableLegalLicenseRequirements(profile.licenseType, form)
-    .filter((requirement) => requirement.category === "ELIGIBILITY" && requirement.blocking);
+    .filter((requirement) => requirement.blocking && acceptedCategories.has(requirement.category));
+}
+
+function requirementAnswerSatisfied(requirement, value) {
+  if (requirement.answerType === "BOOLEAN") return value === true;
+  if (requirement.answerType === "NUMBER") return typeof value === "number" && Number.isFinite(value);
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function requirementsSatisfied(requirements, answers) {
+  const record = isRecord(answers) ? answers : {};
+  return requirements.every((requirement) => requirementAnswerSatisfied(requirement, record[requirement.key]));
+}
+
+function blockingEligibility(profile, form) {
+  return applicableBlocking(profile, form, [LEGAL_LICENSE_REQUIREMENT_CATEGORIES.ELIGIBILITY]);
 }
 
 export function wizardEligibility(profile, form = {}) {
@@ -72,111 +117,278 @@ export function wizardEligibility(profile, form = {}) {
   return { eligible: Boolean(profile) && issues.length === 0, issues };
 }
 
-export function canNavigateToWizardStep(stepIndex, { profile, form = {} } = {}) {
-  if (!Number.isInteger(stepIndex) || stepIndex < 0 || stepIndex >= LEGAL_LICENSE_WIZARD_STEPS.length) {
-    return false;
-  }
-  if (stepIndex === 0) return true;
-  if (!profile || !form.licenseType) return false;
-  if (stepIndex === 1) return true;
-  return wizardEligibility(profile, form).eligible;
+function managerCompleted(manager) {
+  if (!isRecord(manager) || manager.enabled !== true) return !manager || manager.enabled === false;
+  if (!nonEmpty(manager.fullName)) return false;
+  if (manager.nationalId && !NATIONAL_ID.test(String(manager.nationalId).trim())) return false;
+  if (manager.phone && !PHONE.test(String(manager.phone).trim().replace(/[\s()-]/g, ""))) return false;
+  if (manager.email && !EMAIL.test(String(manager.email).trim())) return false;
+  return MANAGER_TEXT_FIELDS.every((field) => manager[field] === undefined || typeof manager[field] === "string");
 }
 
 function peopleCompleted(form) {
   const founders = Array.isArray(form.founders) ? form.founders : [];
-  const representativeCount = founders.filter((founder) => founder?.isAuthorizedRepresentative).length;
-  return Boolean(
-    form.applicantName
-    && form.nationalId
-    && form.phone
-    && form.email
-    && form.capacity
-    && founders.length
-    && representativeCount === 1,
-  );
+  const representativeCount = founders.filter((founder) => founder?.isAuthorizedRepresentative === true).length;
+  return ["applicantName", "nationalId", "phone", "email", "capacity"].every((field) => nonEmpty(form[field]))
+    && founders.length > 0
+    && founders.every((founder) => isRecord(founder) && nonEmpty(founder.fullName) && nonEmpty(founder.nationalId))
+    && representativeCount === 1
+    && managerCompleted(form.managerDetails);
 }
 
-function entityCompleted(form) {
-  return ["entityName", "purpose", "objectives", "activityDescription", "governorate", "address"]
-    .every((field) => Boolean(String(form[field] || "").trim()));
+function entityCompleted(profile, form) {
+  if (!profile) return false;
+  const fieldsComplete = profile.requiredFields.every((field) => nonEmpty(form[field]));
+  const requirements = applicableBlocking(profile, form, [
+    LEGAL_LICENSE_REQUIREMENT_CATEGORIES.PREMISES,
+    LEGAL_LICENSE_REQUIREMENT_CATEGORIES.EQUIPMENT,
+    LEGAL_LICENSE_REQUIREMENT_CATEGORIES.EVIDENCE,
+  ]);
+  return fieldsComplete && requirementsSatisfied(requirements, form.premisesAnswers);
 }
 
-export function wizardStepStatus(stepId, { profile, form = {}, application } = {}) {
-  if (stepId === "guide") {
-    return { required: true, completed: Boolean(profile && form.licenseType), notRequired: false };
-  }
-  if (stepId === "eligibility") {
-    return { required: true, completed: wizardEligibility(profile, form).eligible, notRequired: false };
-  }
-  if (stepId === "people") {
-    return { required: true, completed: peopleCompleted(form), notRequired: false };
-  }
-  if (stepId === "entity") {
-    return { required: true, completed: entityCompleted(form), notRequired: false };
-  }
-  if (stepId === "documents") {
-    return {
-      required: true,
-      completed: Boolean(application && Array.isArray(application.attachments) && application.attachments.length),
-      notRequired: false,
-    };
-  }
-  if (stepId === "bylaws") {
-    const required = profile?.generatesBylaws === true;
-    return {
-      required,
-      completed: !required || form.bylawAnswers?.[LEGAL_LICENSE_BYLAW_ACKNOWLEDGMENT_KEY] === true,
-      notRequired: !required,
-    };
-  }
+function requiredDocumentKinds(profile) {
+  if (!profile) return [];
+  return [...new Set([
+    ...GENERAL_LEGAL_LICENSE_DOCUMENTS.map((document) => document.kind),
+    ...profile.attachmentKinds,
+  ])].filter((kind) => LEGAL_LICENSE_DOCUMENT_RULES[kind]?.required !== false);
+}
+
+function documentsCompleted(profile, form, application) {
+  if (!profile || !Array.isArray(application?.attachments)) return false;
+  const founders = Array.isArray(form.founders) ? form.founders : [];
+  const attachments = application.attachments;
+  return requiredDocumentKinds(profile).every((kind) => {
+    const owner = LEGAL_LICENSE_DOCUMENT_RULES[kind]?.owner;
+    if (owner === "FOUNDER") {
+      return founders.length > 0 && founders.every((founder) => nonEmpty(founder?.id)
+        && attachments.some((attachment) => attachment?.kind === kind && attachment?.founderId === founder.id));
+    }
+    return attachments.some((attachment) => attachment?.kind === kind && !attachment?.founderId);
+  });
+}
+
+function bylawsCompleted(profile, form) {
+  const requirements = applicableBlocking(profile, form, [LEGAL_LICENSE_REQUIREMENT_CATEGORIES.BYLAWS]);
+  return requirementsSatisfied(requirements, form.bylawAnswers);
+}
+
+function declarationCompleted(profile, form) {
+  const requirements = applicableBlocking(profile, form, [LEGAL_LICENSE_REQUIREMENT_CATEGORIES.POST_LICENSE]);
+  return form.declarationAccuracy === true
+    && form.declarationResponsibility === true
+    && form.declarationPrivacy === true
+    && nonEmpty(form.applicantSignature)
+    && requirementsSatisfied(requirements, form.postLicenseDeclarations);
+}
+
+function baseStepCompleted(stepId, { profile, form = {}, application } = {}) {
+  if (stepId === "guide") return Boolean(profile && form.licenseType === profile.licenseType);
+  if (stepId === "eligibility") return wizardEligibility(profile, form).eligible;
+  if (stepId === "people") return peopleCompleted(form);
+  if (stepId === "entity") return entityCompleted(profile, form);
+  if (stepId === "documents") return documentsCompleted(profile, form, application);
+  if (stepId === "bylaws") return bylawsCompleted(profile, form);
+  if (stepId === "declaration") return declarationCompleted(profile, form);
+  return false;
+}
+
+function stepHasOpenDeficiency(stepId, context) {
+  if (context.application?.status !== "SUSPENDED") return false;
+  const stepIndex = LEGAL_LICENSE_WIZARD_STEPS.find((step) => step.id === stepId)?.index;
+  return Number.isInteger(stepIndex) && (context.application.deficiencyScopes || [])
+    .some((scope) => mapDeficiencyToWizardStep(scope) === stepIndex);
+}
+
+export function wizardStepStatus(stepId, context = {}) {
+  let status;
   if (stepId === "review") {
-    return { required: true, completed: Boolean(application?.id), notRequired: false };
+    const completed = LEGAL_LICENSE_WIZARD_STEPS.slice(0, 6)
+      .every((step) => baseStepCompleted(step.id, context));
+    status = { required: true, completed, notRequired: false };
+  } else if (stepId === "bylaws") {
+    const required = applicableBlocking(context.profile, context.form || {}, [LEGAL_LICENSE_REQUIREMENT_CATEGORIES.BYLAWS]).length > 0;
+    status = { required, completed: baseStepCompleted(stepId, context), notRequired: !required };
+  } else if (LEGAL_LICENSE_WIZARD_STEPS.some((step) => step.id === stepId)) {
+    status = { required: true, completed: baseStepCompleted(stepId, context), notRequired: false };
+  } else {
+    return { required: false, completed: false, notRequired: true };
   }
-  if (stepId === "declaration") {
-    return {
-      required: true,
-      completed: Boolean(
-        form.declarationAccuracy
-        && form.declarationResponsibility
-        && form.declarationPrivacy
-        && form.applicantSignature,
-      ),
-      notRequired: false,
-    };
-  }
-  return { required: false, completed: false, notRequired: true };
+  return stepHasOpenDeficiency(stepId, context) ? { ...status, completed: false } : status;
 }
 
-export function buildLocalWizardSnapshot({ form, application = null, token = "", step = 0 }) {
+export function firstIncompleteWizardStep(context = {}) {
+  for (const step of LEGAL_LICENSE_WIZARD_STEPS) {
+    if (!wizardStepStatus(step.id, context).completed) return step.index;
+  }
+  return null;
+}
+
+export function canNavigateToWizardStep(stepIndex, context = {}) {
+  if (!Number.isInteger(stepIndex) || stepIndex < 0 || stepIndex >= LEGAL_LICENSE_WIZARD_STEPS.length) return false;
+  if (stepIndex === 0) return true;
+  return LEGAL_LICENSE_WIZARD_STEPS.slice(0, stepIndex)
+    .every((step) => wizardStepStatus(step.id, context).completed);
+}
+
+const INCOMPLETE_MESSAGES = Object.freeze([
+  { ar: "اختر نوع الترخيص أولاً.", en: "Choose a license type first." },
+  { ar: "استكمل شروط الأهلية قبل المتابعة.", en: "Complete the eligibility conditions before continuing." },
+  { ar: "استكمل بيانات مقدم الطلب والمؤسسين وحدد مفوضاً واحداً.", en: "Complete the applicant and founder details and select one representative." },
+  { ar: "استكمل بيانات الجهة ومتطلبات المقر.", en: "Complete the entity and premises requirements." },
+  { ar: "ارفع جميع الوثائق المطلوبة للطلب ولكل مؤسس.", en: "Upload every required application and founder document." },
+  { ar: "راجع مشروع النظام الأساسي وأكّد الإقرار المطلوب.", en: "Review the draft bylaws and accept the required acknowledgment." },
+  { ar: "استكمل الخطوات السابقة قبل مراجعة الطلب.", en: "Complete the previous steps before reviewing the application." },
+  { ar: "أكمل الإقرارات والتوقيع قبل إرسال الطلب.", en: "Complete the declarations and signature before submitting." },
+]);
+
+export function wizardIncompleteMessage(stepIndex, language = "en") {
+  const message = INCOMPLETE_MESSAGES[stepIndex] || INCOMPLETE_MESSAGES[0];
+  return message[language === "ar" ? "ar" : "en"];
+}
+
+function sanitizeAnswerRecord(value) {
+  if (!isRecord(value)) return null;
+  const normalized = {};
+  for (const [key, answer] of Object.entries(value)) {
+    if (!ANSWER_KEY.test(key) || ["__proto__", "prototype", "constructor"].includes(key)
+      || !(answer === null || typeof answer === "string" || typeof answer === "boolean"
+        || (typeof answer === "number" && Number.isFinite(answer)))) return null;
+    normalized[key] = answer;
+  }
+  return normalized;
+}
+
+function sanitizeFounder(value) {
+  if (!isRecord(value)) return null;
+  const founder = {};
+  for (const field of FOUNDER_TEXT_FIELDS) {
+    const next = value[field];
+    if (next !== undefined && next !== null && typeof next !== "string") return null;
+    founder[field] = typeof next === "string" ? next : "";
+  }
+  if (value.isAuthorizedRepresentative !== undefined && typeof value.isAuthorizedRepresentative !== "boolean") return null;
+  founder.isAuthorizedRepresentative = value.isAuthorizedRepresentative === true;
+  return founder;
+}
+
+function sanitizeManager(value) {
+  if (value === undefined || value === null) return { enabled: false };
+  if (!isRecord(value) || typeof value.enabled !== "boolean") return null;
+  if (!value.enabled) return { enabled: false };
+  const manager = { enabled: true };
+  for (const field of MANAGER_TEXT_FIELDS) {
+    const next = value[field];
+    if (next !== undefined && typeof next !== "string") return null;
+    manager[field] = typeof next === "string" ? next : "";
+  }
+  return manager;
+}
+
+function sanitizeSnapshotForm(value) {
+  if (!isRecord(value)) return null;
+  const form = {};
+  for (const field of FORM_TEXT_FIELDS) {
+    const next = value[field];
+    if (next !== undefined && typeof next !== "string") return null;
+    form[field] = typeof next === "string" ? next : "";
+  }
+  if (value.founders !== undefined && !Array.isArray(value.founders)) return null;
+  const founders = (value.founders || []).map(sanitizeFounder);
+  if (founders.some((founder) => founder === null) || founders.length > 100) return null;
+  form.founders = founders;
+  const managerDetails = sanitizeManager(value.managerDetails);
+  if (!managerDetails) return null;
+  form.managerDetails = managerDetails;
+  for (const field of ANSWER_RECORD_FIELDS) {
+    const answers = sanitizeAnswerRecord(value[field] ?? {});
+    if (!answers) return null;
+    form[field] = answers;
+  }
+  for (const field of ["declarationAccuracy", "declarationResponsibility", "declarationPrivacy"]) {
+    if (value[field] !== undefined && typeof value[field] !== "boolean") return null;
+    form[field] = value[field] === true;
+  }
+  form.applicantSignature = null;
+  return form;
+}
+
+function sanitizeSnapshotApplication(value) {
+  if (value === null || value === undefined) return null;
+  if (!isRecord(value) || typeof value.id !== "string") return null;
+  const application = {};
+  for (const field of ["id", "referenceNo", "status", "updatedAt"]) {
+    if (value[field] !== undefined && value[field] !== null && typeof value[field] !== "string") return null;
+    if (typeof value[field] === "string") application[field] = value[field];
+  }
+  if (value.revision !== undefined && (!Number.isInteger(value.revision) || value.revision < 0)) return null;
+  if (Number.isInteger(value.revision)) application.revision = value.revision;
+  for (const field of ["attachments", "deficiencyScopes"]) {
+    if (value[field] !== undefined && !Array.isArray(value[field])) return null;
+    application[field] = Array.isArray(value[field]) ? value[field] : [];
+  }
+  return application;
+}
+
+export function buildLocalWizardSnapshot({ form, application = null, token = "", step = 0, now = Date.now() }) {
+  const normalizedForm = sanitizeSnapshotForm(isRecord(form) ? form : {});
+  const normalizedApplication = sanitizeSnapshotApplication(application);
   return {
-    version: 2,
-    form: isRecord(form) ? form : {},
-    application: isRecord(application) ? application : null,
-    token: typeof token === "string" ? token : "",
+    version: LOCAL_WIZARD_SNAPSHOT_VERSION,
+    savedAt: now,
+    expiresAt: now + LOCAL_WIZARD_SNAPSHOT_TTL_MS,
+    form: normalizedForm || sanitizeSnapshotForm({}),
+    application: normalizedApplication,
+    token: typeof token === "string" ? token.slice(0, 4096) : "",
     step: Number.isInteger(step) && step >= 0 && step < LEGAL_LICENSE_WIZARD_STEPS.length ? step : 0,
   };
 }
 
-export function parseLocalWizardSnapshot(raw) {
+export function parseLocalWizardSnapshot(raw, now = Date.now()) {
   try {
     const snapshot = typeof raw === "string" ? JSON.parse(raw) : raw;
-    if (
-      !isRecord(snapshot)
-      || snapshot.version !== 2
-      || !isRecord(snapshot.form)
-      || !(snapshot.application === null || isRecord(snapshot.application))
+    if (!isRecord(snapshot)
+      || snapshot.version !== LOCAL_WIZARD_SNAPSHOT_VERSION
+      || !Number.isFinite(snapshot.savedAt)
+      || !Number.isFinite(snapshot.expiresAt)
+      || snapshot.expiresAt !== snapshot.savedAt + LOCAL_WIZARD_SNAPSHOT_TTL_MS
+      || snapshot.expiresAt <= now
       || typeof snapshot.token !== "string"
       || snapshot.token.length > 4096
       || !Number.isInteger(snapshot.step)
       || snapshot.step < 0
-      || snapshot.step >= LEGAL_LICENSE_WIZARD_STEPS.length
-    ) return null;
-    return snapshot;
+      || snapshot.step >= LEGAL_LICENSE_WIZARD_STEPS.length) return null;
+    const form = sanitizeSnapshotForm(snapshot.form);
+    const application = sanitizeSnapshotApplication(snapshot.application);
+    if (!form || (snapshot.application !== null && !application)) return null;
+    return { ...snapshot, form, application };
   } catch {
     return null;
   }
 }
 
+export function buildTrackedWizardResult(application, accessToken) {
+  if (!isRecord(application) || !nonEmpty(application.id) || !nonEmpty(accessToken)) return null;
+  return { application, accessToken: accessToken.trim() };
+}
+
+export function createWizardMutationLock() {
+  let owner = null;
+  return Object.freeze({
+    acquire(nextOwner) {
+      if (!nonEmpty(nextOwner) || owner !== null) return false;
+      owner = nextOwner;
+      return true;
+    },
+    release(currentOwner) {
+      if (owner !== currentOwner) return false;
+      owner = null;
+      return true;
+    },
+    locked() { return owner !== null; },
+  });
+}
 function rootField(field) {
   if (typeof field !== "string" || !field) return null;
   if (field.startsWith("founders.")) return "founders";
@@ -196,6 +408,22 @@ export function firstDeficientWizardStep(scopes) {
     .map(mapDeficiencyToWizardStep)
     .filter(Number.isInteger);
   return mapped.length ? Math.min(...mapped) : 4;
+}
+export function firstServerIssueWizardStep(response) {
+  if (!isRecord(response)) return null;
+  const mapped = [];
+  for (const issue of Array.isArray(response.issues) ? response.issues : []) {
+    const step = mapDeficiencyToWizardStep(issue);
+    if (Number.isInteger(step)) mapped.push(step);
+  }
+  const fieldErrors = response.fields?.fieldErrors;
+  if (isRecord(fieldErrors)) {
+    for (const field of Object.keys(fieldErrors)) {
+      const step = mapDeficiencyToWizardStep({ field });
+      if (Number.isInteger(step)) mapped.push(step);
+    }
+  }
+  return mapped.length ? Math.min(...mapped) : null;
 }
 
 export function isWizardStepEditable(stepIndex, { status, deficiencyScopes } = {}) {
