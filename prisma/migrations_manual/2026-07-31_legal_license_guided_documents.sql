@@ -19,6 +19,7 @@ ALTER TABLE "LegalLicenseApplication"
   ADD COLUMN IF NOT EXISTS "premisesAnswers" JSONB,
   ADD COLUMN IF NOT EXISTS "bylawAnswers" JSONB,
   ADD COLUMN IF NOT EXISTS "postLicenseDeclarations" JSONB,
+  ADD COLUMN IF NOT EXISTS "managerDetails" JSONB,
   ADD COLUMN IF NOT EXISTS "requirementSnapshot" JSONB,
   ADD COLUMN IF NOT EXISTS "deficiencyScopes" JSONB,
   ADD COLUMN IF NOT EXISTS "documentTemplateVersion" TEXT;

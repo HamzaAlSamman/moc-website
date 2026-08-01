@@ -112,6 +112,34 @@ export const LEGAL_LICENSE_POST_LICENSE_DECLARATION_KEY =
 export const LEGAL_LICENSE_BYLAW_ACKNOWLEDGMENT_KEY =
   "bylaws.generated_from_model_acknowledgment";
 
+export const LEGAL_LICENSE_BYLAW_VARIABLES = deepFreeze([
+  {
+    key: "entityName",
+    label: { ar: "اسم الجهة", en: "Entity name" },
+    source: { document: "model-cultural-bylaws", article: "بيانات الجهة" },
+  },
+  {
+    key: "purpose",
+    label: { ar: "غاية الجهة", en: "Entity purpose" },
+    source: { document: "model-cultural-bylaws", article: "الغاية" },
+  },
+  {
+    key: "objectives",
+    label: { ar: "أهداف الجهة", en: "Entity objectives" },
+    source: { document: "model-cultural-bylaws", article: "الأهداف" },
+  },
+  {
+    key: "governorate",
+    label: { ar: "المحافظة", en: "Governorate" },
+    source: { document: "model-cultural-bylaws", article: "المقر" },
+  },
+  {
+    key: "address",
+    label: { ar: "عنوان المقر", en: "Premises address" },
+    source: { document: "model-cultural-bylaws", article: "المقر" },
+  },
+]);
+
 const postLicenseComplianceDeclaration = createLegalLicenseRequirement({
   key: LEGAL_LICENSE_POST_LICENSE_DECLARATION_KEY,
   category: LEGAL_LICENSE_REQUIREMENT_CATEGORIES.POST_LICENSE,
@@ -176,6 +204,7 @@ function createProfile({
     requiredFields: [...requiredFields],
     pdfTemplate,
     generatesBylaws,
+    bylawVariables: generatesBylaws ? LEGAL_LICENSE_BYLAW_VARIABLES : [],
     pendingOfficialGuidance,
     gated: pendingOfficialGuidance,
     templateVersion: "guided-v1",

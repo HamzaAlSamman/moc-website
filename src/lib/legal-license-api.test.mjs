@@ -285,3 +285,92 @@ test("submission validation rejects missing required attachments", () => {
   }));
   assert.doesNotThrow(() => validateLegalLicenseSubmissionRecord(record));
 });
+
+
+test("optional manager drafts round-trip through a strict normalized shape", () => {
+  const disabled = normalizeLegalLicenseDraft({
+    licenseType: "CULTURAL_FORUM",
+    managerDetails: { enabled: false, fullName: "stale PII", injected: "drop" },
+  });
+  assert.deepEqual(disabled.managerDetails, { enabled: false });
+
+  const enabled = normalizeLegalLicenseDraft({
+    licenseType: "CULTURAL_FORUM",
+    managerDetails: {
+      enabled: true,
+      fullName: "  Manager Name  ",
+      nationalId: "01234567890",
+      phone: "+963944444444",
+      email: "MANAGER@EXAMPLE.COM",
+      occupation: " Director ",
+      qualification: " Law ",
+      injected: "drop",
+    },
+  });
+  assert.deepEqual(enabled.managerDetails, {
+    enabled: true,
+    fullName: "Manager Name",
+    nationalId: "01234567890",
+    phone: "+963944444444",
+    email: "manager@example.com",
+    occupation: "Director",
+    qualification: "Law",
+  });
+  assert.deepEqual(
+    normalizeLegalLicenseDraft({ licenseType: "CULTURAL_FORUM", managerDetails: null }).managerDetails,
+    { enabled: false },
+  );
+  assert.deepEqual(legalLicenseApplicationWriteData(enabled).managerDetails, enabled.managerDetails);
+});
+
+test("enabled manager requires a name and validates non-empty identity and contact values on submission", () => {
+  const record = {
+    licenseType: "CULTURAL_FORUM",
+    applicantName: "Applicant Name",
+    nationalId: "01234567890",
+    phone: "0999999999",
+    email: "citizen@example.com",
+    capacity: "Founder",
+    entityName: "Culture Forum",
+    purpose: "A clear purpose",
+    objectives: "Clear objectives",
+    activityDescription: "Cultural activities",
+    governorate: "Damascus",
+    address: "Main street",
+    declarationAccuracy: true,
+    declarationResponsibility: true,
+    declarationPrivacy: true,
+    bylawAnswers: { [LEGAL_LICENSE_BYLAW_ACKNOWLEDGMENT_KEY]: true },
+    postLicenseDeclarations: { [LEGAL_LICENSE_POST_LICENSE_DECLARATION_KEY]: true },
+    applicantSignature: "data:image/png;base64,abc",
+    founders: [{
+      id: "founder-1",
+      fullName: "Founder One",
+      nationalId: "12345678901",
+      isAuthorizedRepresentative: true,
+    }],
+    attachments: [],
+    managerDetails: { enabled: true },
+  };
+  record.attachments = requiredLegalLicenseDocumentKinds(record.licenseType).map((kind) => ({
+    kind,
+    founderId: LEGAL_LICENSE_DOCUMENT_RULES[kind]?.owner === "FOUNDER" ? "founder-1" : null,
+  }));
+
+  assert.throws(() => validateLegalLicenseSubmissionRecord(record), /managerDetails[.]fullName is required/);
+  record.managerDetails = { enabled: true, fullName: "Manager", nationalId: "bad" };
+  assert.throws(() => validateLegalLicenseSubmissionRecord(record), /managerDetails[.]nationalId is invalid/);
+  record.managerDetails = { enabled: true, fullName: "Manager", phone: "bad" };
+  assert.throws(() => validateLegalLicenseSubmissionRecord(record), /managerDetails[.]phone is invalid/);
+  record.managerDetails = { enabled: true, fullName: "Manager", email: "bad" };
+  assert.throws(() => validateLegalLicenseSubmissionRecord(record), /managerDetails[.]email is invalid/);
+  record.managerDetails = {
+    enabled: true,
+    fullName: "Manager",
+    nationalId: "23456789012",
+    phone: "+963944444444",
+    email: "MANAGER@EXAMPLE.COM",
+  };
+  const normalized = validateLegalLicenseSubmissionRecord(record);
+  assert.equal(normalized.managerDetails.email, "manager@example.com");
+});

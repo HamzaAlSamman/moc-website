@@ -223,3 +223,19 @@ test("recorded source hashes match the actual public legal-license PDFs", () => 
     assert.equal(actualHash, source.sha256, source.key);
   }
 });
+
+
+test("locked model bylaw variables are central, immutable, and profile-driven", () => {
+  const expectedKeys = ["entityName", "purpose", "objectives", "governorate", "address"];
+  for (const profile of Object.values(LEGAL_LICENSE_REQUIREMENT_PROFILES)) {
+    const expected = profile.generatesBylaws ? expectedKeys : [];
+    assert.deepEqual(profile.bylawVariables.map((variable) => variable.key), expected);
+    assert.equal(Object.isFrozen(profile.bylawVariables), true);
+    for (const variable of profile.bylawVariables) {
+      assert.equal(Object.isFrozen(variable), true);
+      assert.equal(variable.source.document, "model-cultural-bylaws");
+      assert.ok(variable.label.ar);
+      assert.ok(variable.label.en);
+    }
+  }
+});

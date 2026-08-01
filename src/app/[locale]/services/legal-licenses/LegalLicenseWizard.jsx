@@ -43,7 +43,7 @@ const STATUS = {
 const EMPTY_FORM = {
   licenseType: "", applicantName: "", nationalId: "", phone: "", email: "", capacity: "",
   entityName: "", purpose: "", objectives: "", activityDescription: "", governorate: "", address: "",
-  founders: [], eligibilityAnswers: {}, premisesAnswers: {}, bylawAnswers: {}, postLicenseDeclarations: {},
+  founders: [], managerDetails: { enabled: false }, eligibilityAnswers: {}, premisesAnswers: {}, bylawAnswers: {}, postLicenseDeclarations: {},
   declarationAccuracy: false, declarationResponsibility: false, declarationPrivacy: false, applicantSignature: null,
 };
 const FORM_KEYS = Object.keys(EMPTY_FORM);
@@ -345,9 +345,10 @@ export default function LegalLicenseWizard({ locale = "ar" }) {
     <DocumentsStep key="documents" application={application} founders={form.founders}
       applicationKinds={applicationKinds} founderKinds={founderKinds} isRtl={isRtl}
       busyKey={busyDocument} canEditAttachment={canEditAttachment} onUpload={uploadDocument} onDelete={deleteDocument} />,
-    <BylawsStep key="bylaws" profile={profile} source={LEGAL_LICENSE_SOURCE_DOCUMENTS["model-cultural-bylaws"]}
+    <BylawsStep key="bylaws" profile={profile} form={form} source={LEGAL_LICENSE_SOURCE_DOCUMENTS["model-cultural-bylaws"]}
       answer={form.bylawAnswers?.["bylaws.generated_from_model_acknowledgment"]}
-      onAnswer={(key, value) => updateAnswer("bylawAnswers", key, value)} isRtl={isRtl} disabled={!currentEditable} />,
+      onAnswer={(key, value) => updateAnswer("bylawAnswers", key, value)} isRtl={isRtl} disabled={!currentEditable}
+      onReturnToEntity={() => setStep(3)} />,
     <ReviewStep key="review" form={form} profile={profile} application={application}
       isRtl={isRtl} onPreviewApplication={previewApplicationPdf} />,
     <DeclarationStep key="declaration" form={form} update={update}

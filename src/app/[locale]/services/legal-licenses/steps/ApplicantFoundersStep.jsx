@@ -3,6 +3,15 @@
 import { Plus, Trash2, UserRoundCheck } from "lucide-react";
 import StepField from "./StepField";
 
+const managerFields = [
+  ["fullName", "اسم المدير", "Manager name", "text"],
+  ["nationalId", "الرقم الوطني", "National ID", "text", "ltr"],
+  ["phone", "رقم الهاتف", "Phone", "tel", "ltr"],
+  ["email", "البريد الإلكتروني", "Email", "email", "ltr"],
+  ["occupation", "المهنة", "Occupation", "text"],
+  ["qualification", "المؤهل العلمي", "Qualification", "text"],
+];
+
 const founderFields = [
   ["fullName", "الاسم الكامل", "Full name"],
   ["nationalId", "الرقم الوطني", "National ID", "text", "ltr"],
@@ -50,6 +59,57 @@ export default function ApplicantFoundersStep({
             help={isRtl ? "مثال: مؤسس مفوض، مدير متعاقد، وكيل قانوني." : "Example: authorized founder, contracted manager, legal representative."}
           />
         </div>
+      </section>
+
+      <section className="border-t border-slate-100 pt-6">
+        <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <input
+            className="mt-1"
+            type="checkbox"
+            checked={form.managerDetails?.enabled === true}
+            disabled={!canEditField("managerDetails.enabled")}
+            onChange={(event) => update("managerDetails", event.target.checked
+              ? {
+                  enabled: true,
+                  fullName: "",
+                  nationalId: "",
+                  phone: "",
+                  email: "",
+                  occupation: "",
+                  qualification: "",
+                }
+              : { enabled: false })}
+          />
+          <span>
+            <span className="block font-qomra text-lg font-black text-[#054239]">
+              {isRtl ? "يوجد مدير مختلف عن مقدم الطلب (اختياري)" : "A different manager will be appointed (optional)"}
+            </span>
+            <span className="mt-1 block text-xs leading-6 text-slate-500">
+              {isRtl
+                ? "فعّل هذا الخيار فقط عندما سيتولى شخص آخر إدارة الجهة."
+                : "Enable this only when another person will manage the entity."}
+            </span>
+          </span>
+        </label>
+        {form.managerDetails?.enabled ? (
+          <div className="mt-4 grid gap-4 rounded-2xl border border-[#b9a779]/35 bg-[#b9a779]/5 p-4 md:grid-cols-2">
+            {managerFields.map(([key, ar, en, type, dir]) => (
+              <StepField
+                key={key}
+                required={key === "fullName"}
+                label={isRtl ? ar : en}
+                type={type}
+                dir={dir}
+                value={form.managerDetails?.[key] || ""}
+                onChange={(value) => update("managerDetails", {
+                  ...form.managerDetails,
+                  [key]: value,
+                })}
+                disabled={!canEditField("managerDetails." + key)}
+              />
+            ))}
+          </div>
+        ) : null}
       </section>
 
       <section className="border-t border-slate-100 pt-6">

@@ -172,6 +172,7 @@ test("public legal-license DTO strips tokens, storage keys and internal review d
     premisesAnswers: { premises: "ready" },
     bylawAnswers: { bylaws: true },
     postLicenseDeclarations: { compliance: true },
+    managerDetails: { enabled: true, fullName: "Manager", email: "manager@example.com", internalNote: "secret" },
     deficiencyScopes: [{ scope: "ATTACHMENT", attachmentKind: "NATIONAL_ID_FRONT", subjectRef: "founder-1" }],
     accessTokenHash: "secret-token-hash",
     committeeRecommendation: "internal committee recommendation",
@@ -219,6 +220,8 @@ test("public legal-license DTO strips tokens, storage keys and internal review d
   assert.deepEqual(dto.premisesAnswers, { premises: "ready" });
   assert.deepEqual(dto.bylawAnswers, { bylaws: true });
   assert.deepEqual(dto.postLicenseDeclarations, { compliance: true });
+  assert.deepEqual(dto.managerDetails, { enabled: true, fullName: "Manager", nationalId: "", phone: "", email: "manager@example.com", occupation: "", qualification: "" });
+  assert.equal("internalNote" in dto.managerDetails, false);
   assert.equal(dto.deficiencyScopes[0].attachmentKind, "NATIONAL_ID_FRONT");
   assert.deepEqual(Object.keys(dto.attachments[0]), [
     "id", "founderId", "kind", "originalName", "mimeType", "size", "version", "createdAt",
@@ -322,7 +325,7 @@ test("guided answers and generated document metadata are additive and nullable",
   );
 
   for (const field of [
-    "eligibilityAnswers", "premisesAnswers", "bylawAnswers", "postLicenseDeclarations", "requirementSnapshot", "deficiencyScopes",
+    "eligibilityAnswers", "premisesAnswers", "bylawAnswers", "postLicenseDeclarations", "requirementSnapshot", "deficiencyScopes", "managerDetails",
   ]) {
     assert.match(schema, new RegExp(`${field}\\s+Json\\?`));
     assert.match(migration, new RegExp(`ADD COLUMN IF NOT EXISTS "${field}" JSONB`));

@@ -12,6 +12,27 @@ import {
 
 const text = (max = 500) => z.string().trim().max(max).optional().default("");
 const optionalEmail = z.string().trim().max(320).optional().default("").transform((value) => value.toLowerCase());
+const managerDetailsSchema = z.object({
+  enabled: z.boolean().optional().default(false),
+  fullName: text(300),
+  nationalId: text(32),
+  phone: text(32),
+  email: optionalEmail,
+  occupation: text(300),
+  qualification: text(300),
+}).strip().nullish().transform((manager) => {
+  if (manager?.enabled !== true) return { enabled: false };
+  return {
+    enabled: true,
+    fullName: manager.fullName,
+    nationalId: manager.nationalId,
+    phone: manager.phone,
+    email: manager.email,
+    occupation: manager.occupation,
+    qualification: manager.qualification,
+  };
+});
+
 const licenseTypes = Object.keys(LEGAL_LICENSE_TYPES);
 const answerKey = z.string().trim().min(1).max(256)
   .refine((key) => !["__proto__", "prototype", "constructor"].includes(key), "Unsafe answer key");
@@ -64,6 +85,7 @@ export const legalLicenseDraftSchema = z.object({
   declarationPrivacy: z.boolean().optional().default(false),
   applicantSignature: z.string().max(2_000_000).nullable().optional().default(null),
   founders: z.array(founderDraftSchema).max(100).optional().default([]),
+  managerDetails: managerDetailsSchema,
   ...guidedAnswerRecordFields,
 }).strip();
 
@@ -223,8 +245,54 @@ export function requiredLegalLicenseDocumentKinds(licenseType) {
   ])];
 }
 
+const MANAGER_NATIONAL_ID_PATTERN = /^\d{11}$/;
+const MANAGER_PHONE_PATTERN = /^\+?\d{8,15}$/;
+const MANAGER_EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function managerRequiredText(value, field) {
+  if (typeof value !== "string" || !value.trim()) throw new Error(field + " is required");
+  return value.trim();
+}
+
+export function validateLegalLicenseManagerDetailsForSubmission(managerInput, record = {}) {
+  const manager = managerDetailsSchema.parse(managerInput);
+  if (!manager.enabled) return manager;
+
+  const normalized = {
+    ...manager,
+    fullName: managerRequiredText(manager.fullName, "managerDetails.fullName"),
+  };
+  if (manager.nationalId) {
+    normalized.nationalId = manager.nationalId.trim();
+    if (!MANAGER_NATIONAL_ID_PATTERN.test(normalized.nationalId)) {
+      throw new Error("managerDetails.nationalId is invalid");
+    }
+    const usedNationalIds = new Set([
+      record.nationalId,
+      ...(Array.isArray(record.founders) ? record.founders.map((founder) => founder?.nationalId) : []),
+    ].filter(Boolean));
+    if (usedNationalIds.has(normalized.nationalId)) {
+      throw new Error("managerDetails.nationalId duplicates an applicant or founder");
+    }
+  }
+  if (manager.phone) {
+    normalized.phone = manager.phone.trim().replace(/[\s()-]/g, "");
+    if (!MANAGER_PHONE_PATTERN.test(normalized.phone)) {
+      throw new Error("managerDetails.phone is invalid");
+    }
+  }
+  if (manager.email) {
+    normalized.email = manager.email.trim().toLowerCase();
+    if (!MANAGER_EMAIL_PATTERN.test(normalized.email)) {
+      throw new Error("managerDetails.email is invalid");
+    }
+  }
+  return normalized;
+}
+
 export function validateLegalLicenseSubmissionRecord(record) {
   const normalized = validateLegalLicenseApplication(record);
+  const managerDetails = validateLegalLicenseManagerDetailsForSubmission(record.managerDetails, record);
   validateLegalLicenseGuidedSubmission(record);
   const attachments = Array.isArray(record.attachments) ? record.attachments : [];
   const requiredKinds = requiredLegalLicenseDocumentKinds(record.licenseType);
@@ -249,6 +317,7 @@ export function validateLegalLicenseSubmissionRecord(record) {
   return {
     ...normalized,
     ...normalizeLegalLicenseAnswers(record.licenseType, record, record),
+    managerDetails,
   };
 }
 

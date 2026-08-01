@@ -230,6 +230,23 @@ const PUBLIC_HISTORY_FIELDS = [
   "id", "fromStatus", "toStatus", "action", "publicNote", "createdAt",
 ];
 
+const PUBLIC_MANAGER_DETAIL_FIELDS = [
+  "fullName", "nationalId", "phone", "email", "occupation", "qualification",
+];
+
+function publicManagerDetails(manager) {
+  if (!manager || typeof manager !== "object" || Array.isArray(manager) || manager.enabled !== true) {
+    return { enabled: false };
+  }
+  return {
+    enabled: true,
+    ...Object.fromEntries(PUBLIC_MANAGER_DETAIL_FIELDS.map((field) => [
+      field,
+      typeof manager[field] === "string" ? manager[field] : "",
+    ])),
+  };
+}
+
 const PUBLIC_DEFICIENCY_SCOPE_FIELDS = [
   "scope", "field", "requirementKey", "attachmentKind", "subjectRef",
 ];
@@ -258,6 +275,7 @@ export function toPublicLegalLicenseApplication(application) {
   dto.attachments = Array.isArray(application?.attachments)
     ? application.attachments.map((attachment) => pick(attachment, PUBLIC_ATTACHMENT_FIELDS))
     : [];
+  dto.managerDetails = publicManagerDetails(application?.managerDetails);
   dto.deficiencyScopes = publicDeficiencyScopes(application?.deficiencyScopes);
   dto.history = Array.isArray(application?.history)
     ? application.history.map((entry) => pick(entry, PUBLIC_HISTORY_FIELDS))

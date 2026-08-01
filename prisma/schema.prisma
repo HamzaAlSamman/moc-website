@@ -175,6 +175,7 @@ model LegalLicenseApplication {
   premisesAnswers           Json?
   bylawAnswers              Json?
   postLicenseDeclarations   Json?
+  managerDetails            Json?
   requirementSnapshot       Json?
   deficiencyScopes          Json?
   documentTemplateVersion   String?

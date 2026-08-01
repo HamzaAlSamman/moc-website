@@ -255,3 +255,35 @@ test("founder representative changes require an exact founder scope", () => {
     field: "founders.isAuthorizedRepresentative",
   }]));
 });
+
+
+test("suspended manager deficiencies allow only the exact nested manager field", () => {
+  const current = {
+    licenseType: "CULTURAL_FORUM",
+    managerDetails: {
+      enabled: true,
+      fullName: "Manager",
+      nationalId: "23456789012",
+      phone: "+963944444444",
+      email: "manager@example.com",
+      occupation: "Director",
+      qualification: "Law",
+    },
+  };
+  const scopes = [{ scope: "APPLICANT", field: "managerDetails.phone" }];
+  assert.deepEqual(allowedSuspendedFields(scopes), ["managerDetails.phone"]);
+  assert.doesNotThrow(() => assertSuspendedDraftChangesAllowed(
+    current,
+    { ...current, managerDetails: { ...current.managerDetails, phone: "+963955555555" } },
+    scopes,
+  ));
+  assert.throws(
+    () => assertSuspendedDraftChangesAllowed(
+      current,
+      { ...current, managerDetails: { ...current.managerDetails, email: "other@example.com" } },
+      scopes,
+    ),
+    (error) => error.code === "LEGAL_LICENSE_SUSPENDED_SCOPE_VIOLATION"
+      && error.fields.includes("managerDetails.email"),
+  );
+});

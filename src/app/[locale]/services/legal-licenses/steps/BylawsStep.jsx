@@ -5,11 +5,13 @@ import { LEGAL_LICENSE_BYLAW_ACKNOWLEDGMENT_KEY } from "@/lib/legal-license-requ
 
 export default function BylawsStep({
   profile,
+  form,
   source,
   answer,
   onAnswer,
   isRtl,
   disabled,
+  onReturnToEntity,
 }) {
   if (!profile?.generatesBylaws) {
     return (
@@ -45,7 +47,37 @@ export default function BylawsStep({
           </a>
         ) : null}
       </div>
-      <label className={`flex items-start gap-3 rounded-2xl border p-4 text-sm font-bold leading-7 ${answer ? "border-emerald-300 bg-emerald-50 text-emerald-900" : "border-slate-200 text-slate-700"}`}>
+      <section className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+        <h3 className="font-qomra text-lg font-black text-[#054239]">
+          {isRtl ? "البيانات التي ستُدمج في النظام الأساسي" : "Data inserted into the bylaws"}
+        </h3>
+        <p className="mt-1 text-xs leading-6 text-slate-500">
+          {isRtl
+            ? "هذه القيم مقفلة هنا وتأتي من خطوة بيانات الجهة؛ البنود القانونية نفسها غير قابلة للتحرير."
+            : "These values are locked here and come from the entity step; legal clauses are not editable."}
+        </p>
+        <dl className="mt-4 grid gap-3 sm:grid-cols-2">
+          {profile.bylawVariables.map((variable) => {
+            const value = form?.[variable.key];
+            return (
+              <div key={variable.key} className="rounded-xl border border-slate-200 bg-white p-3">
+                <dt className="text-[11px] font-bold text-slate-500">{isRtl ? variable.label.ar : variable.label.en}</dt>
+                <dd className={"mt-1 text-sm font-bold " + (value ? "text-slate-800" : "text-amber-700")}>
+                  {value || (isRtl ? "غير مكتمل" : "Missing")}
+                </dd>
+              </div>
+            );
+          })}
+        </dl>
+        {profile.bylawVariables.some((variable) => !String(form?.[variable.key] || "").trim()) ? (
+          <button type="button" onClick={onReturnToEntity}
+            className="mt-4 rounded-xl border border-[#054239] bg-white px-4 py-2.5 text-xs font-bold text-[#054239] outline-none focus-visible:ring-4 focus-visible:ring-[#b9a779]/25">
+            {isRtl ? "العودة لإكمال بيانات الجهة" : "Return to complete entity data"}
+          </button>
+        ) : null}
+      </section>
+
+      <label className={"flex items-start gap-3 rounded-2xl border p-4 text-sm font-bold leading-7 " + (answer ? "border-emerald-300 bg-emerald-50 text-emerald-900" : "border-slate-200 text-slate-700")}>
         <input
           className="mt-1.5"
           type="checkbox"

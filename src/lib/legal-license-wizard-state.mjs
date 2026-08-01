@@ -37,6 +37,7 @@ const STEP_BY_FIELD = Object.freeze({
   phone: 2,
   email: 2,
   capacity: 2,
+  managerDetails: 2,
   founders: 2,
   entityName: 3,
   purpose: 3,

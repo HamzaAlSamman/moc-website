@@ -78,6 +78,7 @@ test("local draft snapshot resumes form, step, application and secret token safe
 test("deficiency categories, fields and attachments map to the owning wizard step", () => {
   assert.equal(mapDeficiencyToWizardStep({ scope: "ELIGIBILITY", requirementKey: "x" }), 1);
   assert.equal(mapDeficiencyToWizardStep({ scope: "FOUNDER", field: "founders.phone" }), 2);
+  assert.equal(mapDeficiencyToWizardStep({ field: "managerDetails.phone" }), 2);
   assert.equal(mapDeficiencyToWizardStep({ field: "entityName" }), 3);
   assert.equal(mapDeficiencyToWizardStep({ scope: "ATTACHMENT", attachmentKind: "FLOOR_PLAN" }), 4);
   assert.equal(mapDeficiencyToWizardStep({ scope: "BYLAWS", requirementKey: "x" }), 5);

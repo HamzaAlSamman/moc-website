@@ -32,6 +32,8 @@ test("public and admin legal-license pages are present", () => {
   assert.match(wizard, /expectedUpdatedAt/);
   assert.match(wizard, /expectedRevision/);
   assert.match(wizard, /TrackingCard/);
+  assert.match(wizard, /managerDetails/);
+  assert.match(read("../app/[locale]/services/legal-licenses/steps/BylawsStep.jsx"), /profile[.]bylawVariables/);
   for (const step of [
     "LicenseGuideStep", "EligibilityStep", "ApplicantFoundersStep", "EntityPremisesStep",
     "DocumentsStep", "BylawsStep", "ReviewStep", "DeclarationStep",

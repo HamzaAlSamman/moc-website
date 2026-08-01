@@ -30,6 +30,16 @@ const CITIZEN_EDITABLE_FIELDS = new Set([
   "applicantSignature",
 ]);
 
+const MANAGER_EDITABLE_FIELDS = new Set([
+  "enabled",
+  "fullName",
+  "nationalId",
+  "phone",
+  "email",
+  "occupation",
+  "qualification",
+]);
+
 const FOUNDER_EDITABLE_FIELDS = new Set([
   "fullName",
   "nationalId",
@@ -73,6 +83,14 @@ function normalizedFounderField(item) {
     ? item.field.slice("founders.".length)
     : item.field;
   return FOUNDER_EDITABLE_FIELDS.has(field) ? field : null;
+}
+
+function normalizedManagerField(item) {
+  if (typeof item?.field !== "string" || !item.field.startsWith("managerDetails.")) {
+    return null;
+  }
+  const field = item.field.slice("managerDetails.".length);
+  return MANAGER_EDITABLE_FIELDS.has(field) ? field : null;
 }
 
 function founderScopeMap(scopes) {
@@ -134,6 +152,9 @@ export function allowedSuspendedFields(scopes) {
       allowed.add(answerField);
     }
 
+    const managerField = normalizedManagerField(item);
+    if (managerField) allowed.add("managerDetails." + managerField);
+
     const founderField = normalizedFounderField(item);
     if (founderField) {
       allowed.add(`founders.${item.subjectRef}.${founderField}`);
@@ -165,8 +186,32 @@ export function assertSuspendedDraftChangesAllowed(current, next, scopes) {
     answerKeys.get(answerField).add(item.requirementKey);
   }
 
+  const allowedManagerFields = new Set(
+    deficiencies.map(normalizedManagerField).filter(Boolean),
+  );
+
   const violations = [];
   for (const field of changedKeys(current, next)) {
+    if (field === "managerDetails") {
+      const currentManager = current.managerDetails && typeof current.managerDetails === "object"
+        ? current.managerDetails
+        : { enabled: false };
+      const nextManager = next.managerDetails && typeof next.managerDetails === "object"
+        ? next.managerDetails
+        : { enabled: false };
+      const disablingWithPermission = (
+        allowedManagerFields.has("enabled")
+        && currentManager.enabled === true
+        && nextManager.enabled === false
+      );
+      for (const key of changedKeys(currentManager, nextManager)) {
+        if (!allowedManagerFields.has(key) && !(disablingWithPermission && key !== "enabled")) {
+          violations.push("managerDetails." + key);
+        }
+      }
+      continue;
+    }
+
     if (field === "founders") {
       violations.push(...founderViolations(current.founders, next.founders, deficiencies));
       continue;
