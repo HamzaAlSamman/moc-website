@@ -6,7 +6,11 @@ import {
   createLegalLicenseAccessToken,
   hashLegalLicenseAccessToken,
 } from "@/lib/legal-license-storage.mjs";
-import { normalizeLegalLicenseDraft, legalLicenseFounderWriteData } from "@/lib/legal-license-api.mjs";
+import {
+  legalLicenseApplicationWriteData,
+  legalLicenseFounderWriteData,
+  normalizeLegalLicenseDraft,
+} from "@/lib/legal-license-api.mjs";
 import { LEGAL_LICENSE_INCLUDE, legalLicenseError, legalLicenseJson } from "@/lib/legal-license-server";
 import { sendLegalLicenseCitizenEmail } from "@/lib/legal-license-mailer";
 
@@ -18,7 +22,8 @@ export async function POST(request) {
     const draft = normalizeLegalLicenseDraft(await request.json());
     const accessToken = createLegalLicenseAccessToken();
     const referenceNo = await nextReferenceNumber(REFERENCE_SCOPES.LEGAL_LICENSE);
-    const { founders, ...applicationData } = draft;
+    const { founders } = draft;
+    const applicationData = legalLicenseApplicationWriteData(draft);
     const application = await prisma.legalLicenseApplication.create({
       data: {
         ...applicationData,

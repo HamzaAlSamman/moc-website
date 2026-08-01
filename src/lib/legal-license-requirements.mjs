@@ -107,6 +107,42 @@ export function createLegalLicenseRequirement({
   });
 }
 
+export const LEGAL_LICENSE_POST_LICENSE_DECLARATION_KEY =
+  "post_license.comply_with_license_conditions";
+export const LEGAL_LICENSE_BYLAW_ACKNOWLEDGMENT_KEY =
+  "bylaws.generated_from_model_acknowledgment";
+
+const postLicenseComplianceDeclaration = createLegalLicenseRequirement({
+  key: LEGAL_LICENSE_POST_LICENSE_DECLARATION_KEY,
+  category: LEGAL_LICENSE_REQUIREMENT_CATEGORIES.POST_LICENSE,
+  label: {
+    ar: "أتعهد بالالتزام بشروط الترخيص بعد صدوره.",
+    en: "I undertake to comply with the license conditions after it is issued.",
+  },
+  help: {
+    ar: "إقرار خدمي عام مطلوب لإتمام الطلب، ولا ينسب إلى مادة قانونية محددة.",
+    en: "A general service declaration required to complete the application; it is not attributed to a specific legal article.",
+  },
+  source: { kind: "SERVICE_DECLARATION" },
+});
+
+const modelBylawsAcknowledgment = createLegalLicenseRequirement({
+  key: LEGAL_LICENSE_BYLAW_ACKNOWLEDGMENT_KEY,
+  category: LEGAL_LICENSE_REQUIREMENT_CATEGORIES.BYLAWS,
+  label: {
+    ar: "أوافق على توليد مشروع النظام الأساسي من النموذج الاسترشادي المرفق ومراجعته قبل الإرسال.",
+    en: "I agree to generate the draft bylaws from the attached model and review it before submission.",
+  },
+  help: {
+    ar: "يثبت هذا الإقرار اختيار النموذج الاسترشادي المرفق كأساس لتوليد مشروع النظام.",
+    en: "This acknowledgment records the attached model as the basis for generating the draft bylaws.",
+  },
+  source: {
+    document: "model-cultural-bylaws",
+    article: "النموذج الاسترشادي (كامل الوثيقة)",
+  },
+});
+
 function createProfile({
   licenseType,
   slug,
@@ -119,10 +155,17 @@ function createProfile({
   pendingOfficialGuidance = false,
   requirements = [],
 }) {
+  const profileRequirements = [
+    ...requirements,
+    ...(generatesBylaws ? [modelBylawsAcknowledgment] : []),
+    postLicenseComplianceDeclaration,
+  ];
   const groups = Object.fromEntries(
     Object.values(QUESTION_GROUP_BY_CATEGORY).map((group) => [group, []]),
   );
-  for (const item of requirements) groups[QUESTION_GROUP_BY_CATEGORY[item.category]].push(item);
+  for (const item of profileRequirements) {
+    groups[QUESTION_GROUP_BY_CATEGORY[item.category]].push(item);
+  }
 
   return deepFreeze({
     licenseType,
@@ -136,7 +179,7 @@ function createProfile({
     pendingOfficialGuidance,
     gated: pendingOfficialGuidance,
     templateVersion: "guided-v1",
-    requirements: [...requirements],
+    requirements: [...profileRequirements],
     ...groups,
   });
 }

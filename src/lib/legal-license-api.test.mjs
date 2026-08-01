@@ -2,11 +2,16 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { LEGAL_LICENSE_DOCUMENT_RULES } from "./legal-license.mjs";
+import {
+  LEGAL_LICENSE_BYLAW_ACKNOWLEDGMENT_KEY,
+  LEGAL_LICENSE_POST_LICENSE_DECLARATION_KEY,
+} from "./legal-license-requirements.mjs";
 
 import {
   buildRequirementSnapshot,
   evaluateLegalLicenseEligibility,
   normalizeLegalLicenseAnswers,
+  legalLicenseApplicationWriteData,
   normalizeLegalLicenseDraft,
   requiredLegalLicenseDocumentKinds,
   validateLegalLicenseGuidedSubmission,
@@ -31,13 +36,13 @@ test("draft parsing accepts partial guided answers without enforcing submission 
   const draft = normalizeLegalLicenseDraft({
     licenseType: "MUSIC_INSTITUTE",
     premisesAnswers: {},
-    postLicenseDeclarations: { reportingCommitment: false },
+    postLicenseDeclarations: { [LEGAL_LICENSE_POST_LICENSE_DECLARATION_KEY]: false },
   });
 
   assert.deepEqual(draft.eligibilityAnswers, {});
   assert.deepEqual(draft.premisesAnswers, {});
   assert.deepEqual(draft.bylawAnswers, {});
-  assert.deepEqual(draft.postLicenseDeclarations, { reportingCommitment: false });
+  assert.deepEqual(draft.postLicenseDeclarations, { [LEGAL_LICENSE_POST_LICENSE_DECLARATION_KEY]: false });
 });
 
 test("guided answer normalization rejects values that are not JSON-safe scalars", () => {
@@ -68,12 +73,22 @@ test("guided answer normalization strips unknown and non-applicable requirement 
   });
 });
 
+test("draft normalization strips bylaw answers from profiles that do not generate bylaws", () => {
+  const draft = normalizeLegalLicenseDraft({
+    licenseType: "AMATEUR_TROUPE",
+    bylawAnswers: { unexpected: true },
+    postLicenseDeclarations: { unexpected: true },
+  });
+  assert.deepEqual(draft.bylawAnswers, {});
+  assert.deepEqual(draft.postLicenseDeclarations, {});
+});
+
 test("guided submission requires every applicable blocking answer", () => {
   assert.throws(
     () => validateLegalLicenseGuidedSubmission({
       licenseType: "MUSIC_INSTITUTE",
       premisesAnswers: {},
-      postLicenseDeclarations: { continuingCompliance: true },
+      postLicenseDeclarations: { [LEGAL_LICENSE_POST_LICENSE_DECLARATION_KEY]: true },
     }),
     (error) => {
       assert.equal(error.code, "LEGAL_LICENSE_REQUIREMENTS_INCOMPLETE");
@@ -99,38 +114,55 @@ test("a false blocking eligibility answer reports its stable central requirement
   });
 });
 
-test("bylaw answers are required only for profiles that generate bylaws", () => {
+test("bylaw submissions require the known central acknowledgment only for bylaw profiles", () => {
   for (const licenseType of ["CULTURAL_FORUM", "CULTURAL_ASSOCIATION", "CULTURAL_HOUSE"]) {
     assert.throws(
       () => validateLegalLicenseGuidedSubmission({
         licenseType,
-        bylawAnswers: {},
-        postLicenseDeclarations: { continuingCompliance: true },
+        bylawAnswers: { unexpected: true },
+        postLicenseDeclarations: { [LEGAL_LICENSE_POST_LICENSE_DECLARATION_KEY]: true },
       }),
       (error) => error.code === "LEGAL_LICENSE_REQUIREMENTS_INCOMPLETE"
-        && error.issues.some((issue) => issue.key === "bylaws.answers" && issue.scope === "BYLAWS"),
+        && error.issues.some((issue) => (
+          issue.key === LEGAL_LICENSE_BYLAW_ACKNOWLEDGMENT_KEY
+          && issue.scope === "BYLAWS"
+        )),
+    );
+    assert.doesNotThrow(() => validateLegalLicenseGuidedSubmission({
+      licenseType,
+      bylawAnswers: { [LEGAL_LICENSE_BYLAW_ACKNOWLEDGMENT_KEY]: true },
+      postLicenseDeclarations: { [LEGAL_LICENSE_POST_LICENSE_DECLARATION_KEY]: true },
+    }));
+  }
+
+  const amateur = validateLegalLicenseGuidedSubmission({
+    licenseType: "AMATEUR_TROUPE",
+    bylawAnswers: { unexpected: true },
+    postLicenseDeclarations: { [LEGAL_LICENSE_POST_LICENSE_DECLARATION_KEY]: true },
+  });
+  assert.deepEqual(amateur.bylawAnswers, {});
+});
+
+test("submission requires the known post-license declaration and rejects unknown or false values", () => {
+  for (const postLicenseDeclarations of [
+    {},
+    { unexpected: true },
+    { [LEGAL_LICENSE_POST_LICENSE_DECLARATION_KEY]: false },
+  ]) {
+    assert.throws(
+      () => validateLegalLicenseGuidedSubmission({
+        licenseType: "AMATEUR_TROUPE",
+        postLicenseDeclarations,
+      }),
+      (error) => error.code === "LEGAL_LICENSE_REQUIREMENTS_INCOMPLETE"
+        && error.issues.some((issue) => issue.scope === "POST_LICENSE"),
     );
   }
 
   assert.doesNotThrow(() => validateLegalLicenseGuidedSubmission({
     licenseType: "AMATEUR_TROUPE",
-    bylawAnswers: {},
-    postLicenseDeclarations: { continuingCompliance: true },
+    postLicenseDeclarations: { [LEGAL_LICENSE_POST_LICENSE_DECLARATION_KEY]: true },
   }));
-});
-
-test("all submitted post-license declarations must be true", () => {
-  assert.throws(
-    () => validateLegalLicenseGuidedSubmission({
-      licenseType: "AMATEUR_TROUPE",
-      postLicenseDeclarations: {
-        continuingCompliance: true,
-        notifyMaterialChanges: false,
-      },
-    }),
-    (error) => error.code === "LEGAL_LICENSE_REQUIREMENTS_INCOMPLETE"
-      && error.issues.some((issue) => issue.key === "notifyMaterialChanges" && issue.scope === "POST_LICENSE"),
-  );
 });
 
 test("requirement snapshots contain only the selected profile's applicable stable requirements", () => {
@@ -139,7 +171,27 @@ test("requirement snapshots contain only the selected profile's applicable stabl
   assert.equal(snapshot.templateVersion, "guided-v1");
   assert.deepEqual(snapshot.requirements.map((item) => item.key), [
     "music.building.soundproof_rooms",
+    LEGAL_LICENSE_POST_LICENSE_DECLARATION_KEY,
   ]);
+});
+
+test("application write data keeps every Prisma-backed guided record and excludes relation input", () => {
+  const data = legalLicenseApplicationWriteData({
+    licenseType: "CULTURAL_FORUM",
+    founders: [{ fullName: "Founder" }],
+    eligibilityAnswers: { unexpected: true },
+    premisesAnswers: { unexpected: true },
+    bylawAnswers: { [LEGAL_LICENSE_BYLAW_ACKNOWLEDGMENT_KEY]: true },
+    postLicenseDeclarations: { [LEGAL_LICENSE_POST_LICENSE_DECLARATION_KEY]: true },
+  });
+
+  assert.equal(Object.hasOwn(data, "founders"), false);
+  assert.deepEqual(data.eligibilityAnswers, {});
+  assert.deepEqual(data.premisesAnswers, {});
+  assert.deepEqual(data.bylawAnswers, { [LEGAL_LICENSE_BYLAW_ACKNOWLEDGMENT_KEY]: true });
+  assert.deepEqual(data.postLicenseDeclarations, {
+    [LEGAL_LICENSE_POST_LICENSE_DECLARATION_KEY]: true,
+  });
 });
 
 test("required document kinds combine shared and license-specific requirements", () => {
@@ -168,8 +220,8 @@ test("submission validation rejects missing required attachments", () => {
     declarationAccuracy: true,
     declarationResponsibility: true,
     declarationPrivacy: true,
-    bylawAnswers: { governanceModel: "Model bylaws" },
-    postLicenseDeclarations: { continuingCompliance: true },
+    bylawAnswers: { [LEGAL_LICENSE_BYLAW_ACKNOWLEDGMENT_KEY]: true },
+    postLicenseDeclarations: { [LEGAL_LICENSE_POST_LICENSE_DECLARATION_KEY]: true },
     applicantSignature: "data:image/png;base64,abc",
     founders: [{
       id: "founder-1",

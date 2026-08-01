@@ -312,7 +312,7 @@ test("guided answers and generated document metadata are additive and nullable",
   );
 
   for (const field of [
-    "eligibilityAnswers", "premisesAnswers", "bylawAnswers", "requirementSnapshot", "deficiencyScopes",
+    "eligibilityAnswers", "premisesAnswers", "bylawAnswers", "postLicenseDeclarations", "requirementSnapshot", "deficiencyScopes",
   ]) {
     assert.match(schema, new RegExp(`${field}\\s+Json\\?`));
     assert.match(migration, new RegExp(`ADD COLUMN IF NOT EXISTS "${field}" JSONB`));

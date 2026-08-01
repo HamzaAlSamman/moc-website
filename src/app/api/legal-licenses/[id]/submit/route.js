@@ -98,6 +98,14 @@ export async function POST(request, { params }) {
     if (storageKey) await removeLegalLicensePrivateFile(storageKey).catch(() => {});
     console.error("Legal-license submission failed:", error);
     const message = error?.message || "Unable to submit application";
+    if (error?.code === "LEGAL_LICENSE_REQUIREMENTS_INCOMPLETE") {
+      return NextResponse.json({
+        error: message,
+        message,
+        code: error.code,
+        issues: Array.isArray(error.issues) ? error.issues : [],
+      }, { status: 400 });
+    }
     const status = /Chromium|PDF/i.test(message) ? 503 : 400;
     return NextResponse.json({ error: message }, { status });
   }

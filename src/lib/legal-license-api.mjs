@@ -8,7 +8,6 @@ import {
 import {
   getApplicableLegalLicenseRequirements,
   getLegalLicenseRequirementProfile,
-  legalLicenseRequiresBylaws,
 } from "./legal-license-requirements.mjs";
 
 const text = (max = 500) => z.string().trim().max(max).optional().default("");
@@ -115,12 +114,21 @@ export function normalizeLegalLicenseAnswers(licenseType, input = {}, context = 
       .filter((item) => !["ELIGIBILITY", "BYLAWS", "POST_LICENSE"].includes(item.category))
       .map((item) => item.key),
   );
+  const bylawKeys = new Set(
+    applicable.filter((item) => item.category === "BYLAWS").map((item) => item.key),
+  );
+  const postLicenseKeys = new Set(
+    applicable.filter((item) => item.category === "POST_LICENSE").map((item) => item.key),
+  );
 
   return {
     eligibilityAnswers: copyAllowedAnswers(parsed.eligibilityAnswers, eligibilityKeys),
     premisesAnswers: copyAllowedAnswers(parsed.premisesAnswers, premisesKeys),
-    bylawAnswers: { ...parsed.bylawAnswers },
-    postLicenseDeclarations: { ...parsed.postLicenseDeclarations },
+    bylawAnswers: copyAllowedAnswers(parsed.bylawAnswers, bylawKeys),
+    postLicenseDeclarations: copyAllowedAnswers(
+      parsed.postLicenseDeclarations,
+      postLicenseKeys,
+    ),
   };
 }
 
@@ -164,28 +172,23 @@ export function validateLegalLicenseGuidedSubmission(record, context = record) {
     context,
   );
   const requirements = getApplicableLegalLicenseRequirements(normalizedInput.licenseType, context);
-  const issues = requirements
+  const knownPostLicenseKeys = new Set(
+    requirements
+      .filter((requirement) => requirement.category === "POST_LICENSE")
+      .map((requirement) => requirement.key),
+  );
+  const hasUnknownPostLicenseKey = Object.keys(normalizedInput.postLicenseDeclarations)
+    .some((key) => !knownPostLicenseKeys.has(key));
+  const issues = hasUnknownPostLicenseKey
+    ? [{ key: "post_license.unknown_declaration", scope: "POST_LICENSE" }]
+    : [];
+  issues.push(...requirements
     .filter((requirement) => requirement.blocking)
     .filter((requirement) => {
       const recordName = requirementAnswerRecord(requirement);
       return !answerSatisfiesRequirement(requirement, normalized[recordName][requirement.key]);
     })
-    .map(requirementIssue);
-
-  if (
-    legalLicenseRequiresBylaws(normalizedInput.licenseType)
-    && !Object.values(normalized.bylawAnswers).some((value) => (
-      value === true
-      || (typeof value === "number" && Number.isFinite(value))
-      || (typeof value === "string" && value.trim().length > 0)
-    ))
-  ) {
-    issues.push({ key: "bylaws.answers", scope: "BYLAWS" });
-  }
-
-  for (const [key, value] of Object.entries(normalized.postLicenseDeclarations)) {
-    if (value !== true) issues.push({ key, scope: "POST_LICENSE" });
-  }
+    .map(requirementIssue));
 
   if (issues.length) throw incompleteRequirements(issues);
   return normalized;
@@ -252,7 +255,6 @@ export function validateLegalLicenseSubmissionRecord(record) {
 export function legalLicenseApplicationWriteData(draft) {
   const {
     founders: _founders,
-    postLicenseDeclarations: _postLicenseDeclarations,
     ...application
   } = normalizeLegalLicenseDraft(draft);
   return application;

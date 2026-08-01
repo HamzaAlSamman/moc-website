@@ -4,6 +4,8 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { LEGAL_LICENSE_DOCUMENT_RULES, LEGAL_LICENSE_TYPES } from "./legal-license.mjs";
 import {
+  LEGAL_LICENSE_BYLAW_ACKNOWLEDGMENT_KEY,
+  LEGAL_LICENSE_POST_LICENSE_DECLARATION_KEY,
   LEGAL_LICENSE_REQUIREMENT_CATEGORIES,
   LEGAL_LICENSE_REQUIREMENT_PROFILES,
   LEGAL_LICENSE_SOURCE_DOCUMENTS,
@@ -75,8 +77,13 @@ test("every guided question has a stable bilingual and attributable contract", (
         assert.equal(typeof question.blocking, "boolean");
         assert.ok(question.label.ar && question.label.en);
         assert.ok(question.help.ar && question.help.en);
-        assert.ok(LEGAL_LICENSE_SOURCE_DOCUMENTS[question.source.document]);
-        assert.ok(question.source.article);
+        if (question.source.kind === "SERVICE_DECLARATION") {
+          assert.equal(question.source.document, undefined);
+          assert.equal(question.source.article, undefined);
+        } else {
+          assert.ok(LEGAL_LICENSE_SOURCE_DOCUMENTS[question.source.document]);
+          assert.ok(question.source.article);
+        }
         assert.equal(Object.isFrozen(question), true);
         assert.equal(Object.isFrozen(question.label), true);
         assert.equal(Object.isFrozen(question.source), true);
@@ -130,16 +137,40 @@ test("types without supplied type-specific conditions remain gated pending offic
   }
 });
 
-test("requirement keys are globally unique and applicable lookups preserve the profile contract", () => {
-  const requirements = Object.values(LEGAL_LICENSE_REQUIREMENT_PROFILES)
-    .flatMap((profile) => getApplicableLegalLicenseRequirements(profile.licenseType));
-  const keys = requirements.map((requirement) => requirement.key);
-  assert.equal(new Set(keys).size, keys.length);
+test("requirement keys are unique per profile and shared definitions keep identical metadata", () => {
+  const sharedDefinitions = new Map();
+  for (const profile of Object.values(LEGAL_LICENSE_REQUIREMENT_PROFILES)) {
+    const requirements = getApplicableLegalLicenseRequirements(profile.licenseType);
+    const keys = requirements.map((requirement) => requirement.key);
+    assert.equal(new Set(keys).size, keys.length, profile.licenseType);
+    for (const requirement of requirements) {
+      if (sharedDefinitions.has(requirement.key)) {
+        assert.strictEqual(requirement, sharedDefinitions.get(requirement.key));
+      } else {
+        sharedDefinitions.set(requirement.key, requirement);
+      }
+    }
+  }
 
   const musicRequirements = getApplicableLegalLicenseRequirements("MUSIC_INSTITUTE");
   assert.ok(musicRequirements.some((item) => item.key === "music.building.soundproof_rooms"));
   assert.equal(getLegalLicenseRequirementProfile("UNKNOWN"), null);
   assert.deepEqual(getApplicableLegalLicenseRequirements("UNKNOWN"), []);
+});
+
+test("central profiles expose one shared service declaration and bylaws only where generated", () => {
+  for (const profile of Object.values(LEGAL_LICENSE_REQUIREMENT_PROFILES)) {
+    assert.deepEqual(
+      profile.postLicenseDeclarations.map((item) => item.key),
+      [LEGAL_LICENSE_POST_LICENSE_DECLARATION_KEY],
+    );
+    assert.equal(profile.postLicenseDeclarations[0].source.kind, "SERVICE_DECLARATION");
+
+    const expectedBylaws = profile.generatesBylaws
+      ? [LEGAL_LICENSE_BYLAW_ACKNOWLEDGMENT_KEY]
+      : [];
+    assert.deepEqual(profile.bylawQuestions.map((item) => item.key), expectedBylaws);
+  }
 });
 
 test("the gallery eligibility question preserves both alternatives and the public-employment condition", () => {

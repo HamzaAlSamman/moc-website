@@ -58,3 +58,19 @@ test("upload routes bound request bodies before parsing and restrict signed lice
   assert.match(admin, /LICENSING_OFFICER/);
   assert.match(admin, /SUPER_ADMIN/);
 });
+test("citizen create and update routes persist drafts through the Prisma-safe write helper", () => {
+  const create = read("../app/api/legal-licenses/route.js");
+  const update = read("../app/api/legal-licenses/[id]/route.js");
+  for (const source of [create, update]) {
+    assert.match(source, /legalLicenseApplicationWriteData/);
+    assert.match(source, /applicationData = legalLicenseApplicationWriteData[(]draft[)]/);
+  }
+});
+
+test("submission preserves structured guided-requirement errors for the citizen", () => {
+  const submit = read("../app/api/legal-licenses/[id]/submit/route.js");
+  assert.match(submit, /LEGAL_LICENSE_REQUIREMENTS_INCOMPLETE/);
+  assert.match(submit, /code: error[.]code/);
+  assert.match(submit, /issues: Array[.]isArray[(]error[.]issues[)]/);
+  assert.match(submit, /status: 400/);
+});
