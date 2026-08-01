@@ -1,3 +1,5 @@
+import { LEGAL_LICENSE_REQUIREMENT_PROFILES } from "./legal-license-requirements.mjs";
+
 const document = (kind, ar, en) => Object.freeze({ kind, label: Object.freeze({ ar, en }) });
 
 export const GENERAL_LEGAL_LICENSE_DOCUMENTS = Object.freeze([
@@ -33,29 +35,16 @@ export const LEGAL_LICENSE_DOCUMENT_RULES = Object.freeze({
   PROGRAM_AND_CURRICULUM: Object.freeze({ owner: "APPLICATION", required: true, label: Object.freeze({ ar: "\u0627\u0644\u0628\u0631\u0646\u0627\u0645\u062c \u0648\u0627\u0644\u0645\u0646\u0647\u0627\u062c", en: "Program and curriculum" }) }),
   GALLERY_PROGRAM: Object.freeze({ owner: "APPLICATION", required: true, label: Object.freeze({ ar: "\u0628\u0631\u0646\u0627\u0645\u062c \u0627\u0644\u0635\u0627\u0644\u0629", en: "Gallery program" }) }),
 });
-const LICENSE_TYPE_DEFINITIONS = [
-  ["CULTURAL_FORUM", "cultural-forum", "ملتقى ثقافي", "Cultural Forum", ["FOUNDERS_MINUTES", "ACTIVITY_PLAN"]],
-  ["CULTURAL_HOUSE", "cultural-house", "دار ثقافية", "Cultural House", ["OWNERSHIP_OR_LEASE", "FLOOR_PLAN", "SAFETY_APPROVAL"]],
-  ["CULTURAL_ASSOCIATION", "cultural-association", "رابطة ثقافية", "Cultural Association", ["ARTICLES_OF_ASSOCIATION", "FOUNDERS_MINUTES"]],
-  ["AMATEUR_TROUPE", "amateur-troupe", "فرقة هواة", "Amateur Troupe", ["MEMBERS_LIST", "ARTISTIC_PROGRAM"]],
-  ["CINEMA_ARTS", "cinema-arts", "فنون سينمائية", "Cinema Arts", ["PROFESSIONAL_CERTIFICATE", "EQUIPMENT_LIST"]],
-  ["FINE_ARTS", "fine-arts", "فنون تشكيلية", "Fine Arts", ["PROFESSIONAL_CERTIFICATE", "ARTWORK_PORTFOLIO"]],
-  ["HERITAGE_MUSEUM", "heritage-museum", "متحف تراثي", "Heritage Museum", ["OWNERSHIP_OR_LEASE", "COLLECTION_INVENTORY", "COLLECTION_PROVENANCE", "FLOOR_PLAN", "SAFETY_APPROVAL"]],
-  ["MUSIC_INSTITUTE", "music-institute", "معهد موسيقي", "Music Institute", ["OWNERSHIP_OR_LEASE", "FLOOR_PLAN", "SAFETY_APPROVAL", "ACADEMIC_QUALIFICATION", "PROGRAM_AND_CURRICULUM", "EQUIPMENT_LIST"]],
-  ["THEATER_INSTITUTE", "theater-institute", "معهد مسرحي", "Theater Institute", ["OWNERSHIP_OR_LEASE", "FLOOR_PLAN", "SAFETY_APPROVAL", "ACADEMIC_QUALIFICATION", "PROGRAM_AND_CURRICULUM", "EQUIPMENT_LIST"]],
-  ["FINE_ARTS_GALLERY", "fine-arts-gallery", "صالة عرض فنون تشكيلية", "Fine Arts Gallery", ["OWNERSHIP_OR_LEASE", "FLOOR_PLAN", "SAFETY_APPROVAL", "GALLERY_PROGRAM"]],
-];
-
 export const LEGAL_LICENSE_TYPES = Object.freeze(Object.fromEntries(
-  LICENSE_TYPE_DEFINITIONS.map(([value, slug, ar, en, additionalDocuments]) => [
-    value,
+  Object.values(LEGAL_LICENSE_REQUIREMENT_PROFILES).map((profile) => [
+    profile.licenseType,
     Object.freeze({
-      value,
-      slug,
-      label: Object.freeze({ ar, en }),
-      additionalDocuments: Object.freeze([...additionalDocuments]),
-      requiredFields: Object.freeze(["entityName", "purpose", "objectives", "activityDescription", "governorate", "address"]),
-      pdfTemplate: "unified-v1",
+      value: profile.licenseType,
+      slug: profile.slug,
+      label: profile.label,
+      additionalDocuments: profile.attachmentKinds,
+      requiredFields: profile.requiredFields,
+      pdfTemplate: profile.pdfTemplate,
     }),
   ]),
 ));

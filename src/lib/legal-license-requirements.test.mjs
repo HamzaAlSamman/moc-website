@@ -1,12 +1,16 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { LEGAL_LICENSE_DOCUMENT_RULES } from "./legal-license.mjs";
+import { LEGAL_LICENSE_DOCUMENT_RULES, LEGAL_LICENSE_TYPES } from "./legal-license.mjs";
 import {
   LEGAL_LICENSE_REQUIREMENT_CATEGORIES,
   LEGAL_LICENSE_REQUIREMENT_PROFILES,
   LEGAL_LICENSE_SOURCE_DOCUMENTS,
+  createLegalLicenseRequirement,
   getApplicableLegalLicenseRequirements,
   getLegalLicenseRequirementProfile,
+  legalLicenseRequirementApplies,
   legalLicenseRequiresBylaws,
 } from "./legal-license-requirements.mjs";
 
@@ -41,7 +45,9 @@ test("the regulatory catalog exposes exactly ten immutable license profiles", ()
     const profile = getLegalLicenseRequirementProfile(type);
     assert.equal(profile.licenseType, type);
     assert.equal(Object.isFrozen(profile), true);
+    assert.equal(Object.isFrozen(profile.label), true);
     assert.equal(Object.isFrozen(profile.attachmentKinds), true);
+    assert.equal(Object.isFrozen(profile.requiredFields), true);
   }
 });
 
@@ -97,8 +103,12 @@ test("the six supplied decisions link each regulated type to the correct public 
   }
 
   const profile = getLegalLicenseRequirementProfile("MUSIC_INSTITUTE");
-  assert.equal(profile.sourceDocuments[0], "music-institutes");
-  assert.ok(profile.eligibility.every((item) => item.source.article));
+  const soundproofRooms = profile.premises.find(
+    (item) => item.key === "music.building.soundproof_rooms",
+  );
+  assert.ok(soundproofRooms);
+  assert.equal(soundproofRooms.source.document, "music-institutes");
+  assert.equal(soundproofRooms.source.article, "المادة 14/5");
   assert.equal(profile.generatesBylaws, false);
 });
 
@@ -139,4 +149,46 @@ test("the gallery eligibility question preserves both alternatives and the publi
   assert.match(question.label.ar, /غير العاملين في الدولة/);
   assert.match(question.label.ar, /عقد/);
   assert.equal(question.source.article, "المادة 3/2-3");
+});
+
+test("applicability metadata is immutable and its predicate covers matching and non-matching context", () => {
+  const fixture = createLegalLicenseRequirement({
+    key: "test.applicability.fixture",
+    category: LEGAL_LICENSE_REQUIREMENT_CATEGORIES.PREMISES,
+    answerType: "BOOLEAN",
+    blocking: true,
+    label: { ar: "بيان اختباري", en: "Test fixture" },
+    help: { ar: "للاختبار فقط", en: "Test-only data" },
+    source: { document: "music-institutes", article: "المادة 14/5" },
+    appliesWhen: { workflowVariant: "test" },
+  });
+
+  assert.deepEqual(fixture.appliesWhen, { workflowVariant: "test" });
+  assert.equal(Object.isFrozen(fixture.appliesWhen), true);
+  assert.equal(legalLicenseRequirementApplies(fixture, { workflowVariant: "test" }), true);
+  assert.equal(legalLicenseRequirementApplies(fixture, { workflowVariant: "other" }), false);
+  assert.equal(legalLicenseRequirementApplies({ key: "always" }, {}), true);
+});
+
+test("legacy legal-license type API is a strict projection of the central profiles", () => {
+  for (const [licenseType, profile] of Object.entries(LEGAL_LICENSE_REQUIREMENT_PROFILES)) {
+    assert.deepEqual(LEGAL_LICENSE_TYPES[licenseType], {
+      value: licenseType,
+      slug: profile.slug,
+      label: profile.label,
+      additionalDocuments: profile.attachmentKinds,
+      requiredFields: profile.requiredFields,
+      pdfTemplate: profile.pdfTemplate,
+    });
+  }
+});
+
+test("recorded source hashes match the actual public legal-license PDFs", () => {
+  for (const source of Object.values(LEGAL_LICENSE_SOURCE_DOCUMENTS)) {
+    const assetUrl = new URL(`../../public${source.publicUrl}`, import.meta.url);
+    const actualHash = createHash("sha256")
+      .update(readFileSync(assetUrl))
+      .digest("hex");
+    assert.equal(actualHash, source.sha256, source.key);
+  }
 });

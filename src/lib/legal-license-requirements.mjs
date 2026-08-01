@@ -66,6 +66,15 @@ export const LEGAL_LICENSE_REQUIREMENT_CATEGORIES = deepFreeze({
   POST_LICENSE: "POST_LICENSE",
 });
 
+const DEFAULT_LICENSE_REQUIRED_FIELDS = Object.freeze([
+  "entityName",
+  "purpose",
+  "objectives",
+  "activityDescription",
+  "governorate",
+  "address",
+]);
+
 const QUESTION_GROUP_BY_CATEGORY = Object.freeze({
   ELIGIBILITY: "eligibility",
   APPLICANT: "applicant",
@@ -76,14 +85,36 @@ const QUESTION_GROUP_BY_CATEGORY = Object.freeze({
   POST_LICENSE: "postLicenseDeclarations",
 });
 
-function requirement({ key, category, label, help, source, answerType = "BOOLEAN", blocking = true }) {
-  return deepFreeze({ key, category, answerType, blocking, label, help, source });
+export function createLegalLicenseRequirement({
+  key,
+  category,
+  label,
+  help,
+  source,
+  answerType = "BOOLEAN",
+  blocking = true,
+  appliesWhen,
+}) {
+  return deepFreeze({
+    key,
+    category,
+    answerType,
+    blocking,
+    label,
+    help,
+    source,
+    ...(appliesWhen ? { appliesWhen: { ...appliesWhen } } : {}),
+  });
 }
 
 function createProfile({
   licenseType,
+  slug,
+  label,
   sourceDocuments = [],
   attachmentKinds,
+  requiredFields = DEFAULT_LICENSE_REQUIRED_FIELDS,
+  pdfTemplate = "unified-v1",
   generatesBylaws = false,
   pendingOfficialGuidance = false,
   requirements = [],
@@ -95,8 +126,12 @@ function createProfile({
 
   return deepFreeze({
     licenseType,
+    slug,
+    label,
     sourceDocuments: [...sourceDocuments],
     attachmentKinds: [...attachmentKinds],
+    requiredFields: [...requiredFields],
+    pdfTemplate,
     generatesBylaws,
     pendingOfficialGuidance,
     gated: pendingOfficialGuidance,
@@ -106,7 +141,7 @@ function createProfile({
   });
 }
 
-const fineArtsBathroomRequirement = requirement({
+const fineArtsBathroomRequirement = createLegalLicenseRequirement({
   key: "fine_arts.building.suitable_bathrooms",
   category: LEGAL_LICENSE_REQUIREMENT_CATEGORIES.PREMISES,
   label: {
@@ -120,7 +155,7 @@ const fineArtsBathroomRequirement = requirement({
   source: { document: "fine-arts", article: "المادة 14/2" },
 });
 
-const cinemaSafetyRequirement = requirement({
+const cinemaSafetyRequirement = createLegalLicenseRequirement({
   key: "cinema.building.safety_systems",
   category: LEGAL_LICENSE_REQUIREMENT_CATEGORIES.PREMISES,
   label: {
@@ -134,7 +169,7 @@ const cinemaSafetyRequirement = requirement({
   source: { document: "cinema-arts", article: "المادة 14/4" },
 });
 
-const museumInventoryRequirement = requirement({
+const museumInventoryRequirement = createLegalLicenseRequirement({
   key: "museum.collection.inventory",
   category: LEGAL_LICENSE_REQUIREMENT_CATEGORIES.EVIDENCE,
   label: {
@@ -148,7 +183,7 @@ const museumInventoryRequirement = requirement({
   source: { document: "heritage-museums", article: "المادة 2/6" },
 });
 
-const musicSoundproofRequirement = requirement({
+const musicSoundproofRequirement = createLegalLicenseRequirement({
   key: "music.building.soundproof_rooms",
   category: LEGAL_LICENSE_REQUIREMENT_CATEGORIES.PREMISES,
   label: {
@@ -162,7 +197,7 @@ const musicSoundproofRequirement = requirement({
   source: { document: "music-institutes", article: "المادة 14/5" },
 });
 
-const theaterSoundproofRequirement = requirement({
+const theaterSoundproofRequirement = createLegalLicenseRequirement({
   key: "theater.building.soundproof_rooms",
   category: LEGAL_LICENSE_REQUIREMENT_CATEGORIES.PREMISES,
   label: {
@@ -176,7 +211,7 @@ const theaterSoundproofRequirement = requirement({
   source: { document: "theater-institutes", article: "المادة 12/5" },
 });
 
-const galleryMembershipOrManagerRequirement = requirement({
+const galleryMembershipOrManagerRequirement = createLegalLicenseRequirement({
   key: "gallery.applicant.union_member_or_manager_contract",
   category: LEGAL_LICENSE_REQUIREMENT_CATEGORIES.ELIGIBILITY,
   label: {
@@ -193,6 +228,8 @@ const galleryMembershipOrManagerRequirement = requirement({
 export const LEGAL_LICENSE_REQUIREMENT_PROFILES = deepFreeze({
   CULTURAL_FORUM: createProfile({
     licenseType: "CULTURAL_FORUM",
+    slug: "cultural-forum",
+    label: { ar: "ملتقى ثقافي", en: "Cultural Forum" },
     sourceDocuments: ["model-cultural-bylaws"],
     attachmentKinds: ["FOUNDERS_MINUTES", "ACTIVITY_PLAN"],
     generatesBylaws: true,
@@ -200,6 +237,8 @@ export const LEGAL_LICENSE_REQUIREMENT_PROFILES = deepFreeze({
   }),
   CULTURAL_HOUSE: createProfile({
     licenseType: "CULTURAL_HOUSE",
+    slug: "cultural-house",
+    label: { ar: "دار ثقافية", en: "Cultural House" },
     sourceDocuments: ["model-cultural-bylaws"],
     attachmentKinds: ["OWNERSHIP_OR_LEASE", "FLOOR_PLAN", "SAFETY_APPROVAL"],
     generatesBylaws: true,
@@ -207,6 +246,8 @@ export const LEGAL_LICENSE_REQUIREMENT_PROFILES = deepFreeze({
   }),
   CULTURAL_ASSOCIATION: createProfile({
     licenseType: "CULTURAL_ASSOCIATION",
+    slug: "cultural-association",
+    label: { ar: "رابطة ثقافية", en: "Cultural Association" },
     sourceDocuments: ["model-cultural-bylaws"],
     attachmentKinds: ["ARTICLES_OF_ASSOCIATION", "FOUNDERS_MINUTES"],
     generatesBylaws: true,
@@ -214,41 +255,55 @@ export const LEGAL_LICENSE_REQUIREMENT_PROFILES = deepFreeze({
   }),
   AMATEUR_TROUPE: createProfile({
     licenseType: "AMATEUR_TROUPE",
+    slug: "amateur-troupe",
+    label: { ar: "فرقة هواة", en: "Amateur Troupe" },
     attachmentKinds: ["MEMBERS_LIST", "ARTISTIC_PROGRAM"],
     pendingOfficialGuidance: true,
   }),
   CINEMA_ARTS: createProfile({
     licenseType: "CINEMA_ARTS",
+    slug: "cinema-arts",
+    label: { ar: "فنون سينمائية", en: "Cinema Arts" },
     sourceDocuments: ["cinema-arts"],
     attachmentKinds: ["PROFESSIONAL_CERTIFICATE", "EQUIPMENT_LIST"],
     requirements: [cinemaSafetyRequirement],
   }),
   FINE_ARTS: createProfile({
     licenseType: "FINE_ARTS",
+    slug: "fine-arts",
+    label: { ar: "فنون تشكيلية", en: "Fine Arts" },
     sourceDocuments: ["fine-arts"],
     attachmentKinds: ["PROFESSIONAL_CERTIFICATE", "ARTWORK_PORTFOLIO"],
     requirements: [fineArtsBathroomRequirement],
   }),
   HERITAGE_MUSEUM: createProfile({
     licenseType: "HERITAGE_MUSEUM",
+    slug: "heritage-museum",
+    label: { ar: "متحف تراثي", en: "Heritage Museum" },
     sourceDocuments: ["heritage-museums"],
     attachmentKinds: ["OWNERSHIP_OR_LEASE", "COLLECTION_INVENTORY", "COLLECTION_PROVENANCE", "FLOOR_PLAN", "SAFETY_APPROVAL"],
     requirements: [museumInventoryRequirement],
   }),
   MUSIC_INSTITUTE: createProfile({
     licenseType: "MUSIC_INSTITUTE",
+    slug: "music-institute",
+    label: { ar: "معهد موسيقي", en: "Music Institute" },
     sourceDocuments: ["music-institutes"],
     attachmentKinds: ["OWNERSHIP_OR_LEASE", "FLOOR_PLAN", "SAFETY_APPROVAL", "ACADEMIC_QUALIFICATION", "PROGRAM_AND_CURRICULUM", "EQUIPMENT_LIST"],
     requirements: [musicSoundproofRequirement],
   }),
   THEATER_INSTITUTE: createProfile({
     licenseType: "THEATER_INSTITUTE",
+    slug: "theater-institute",
+    label: { ar: "معهد مسرحي", en: "Theater Institute" },
     sourceDocuments: ["theater-institutes"],
     attachmentKinds: ["OWNERSHIP_OR_LEASE", "FLOOR_PLAN", "SAFETY_APPROVAL", "ACADEMIC_QUALIFICATION", "PROGRAM_AND_CURRICULUM", "EQUIPMENT_LIST"],
     requirements: [theaterSoundproofRequirement],
   }),
   FINE_ARTS_GALLERY: createProfile({
     licenseType: "FINE_ARTS_GALLERY",
+    slug: "fine-arts-gallery",
+    label: { ar: "صالة عرض فنون تشكيلية", en: "Fine Arts Gallery" },
     sourceDocuments: ["fine-arts-galleries"],
     attachmentKinds: ["OWNERSHIP_OR_LEASE", "FLOOR_PLAN", "SAFETY_APPROVAL", "GALLERY_PROGRAM"],
     requirements: [galleryMembershipOrManagerRequirement],
@@ -261,14 +316,18 @@ export function getLegalLicenseRequirementProfile(licenseType) {
   return LEGAL_LICENSE_REQUIREMENT_PROFILES[licenseType] ?? null;
 }
 
+export function legalLicenseRequirementApplies(requirementItem, context = {}) {
+  if (!requirementItem?.appliesWhen) return true;
+  return Object.entries(requirementItem.appliesWhen)
+    .every(([key, value]) => context[key] === value);
+}
+
 export function getApplicableLegalLicenseRequirements(licenseType, context = {}) {
   const profile = getLegalLicenseRequirementProfile(licenseType);
   if (!profile) return EMPTY_REQUIREMENTS;
-  const applicable = profile.requirements.filter((item) => {
-    if (!item.appliesWhen) return true;
-    return Object.entries(item.appliesWhen).every(([key, value]) => context[key] === value);
-  });
-  return Object.freeze(applicable);
+  return Object.freeze(
+    profile.requirements.filter((item) => legalLicenseRequirementApplies(item, context)),
+  );
 }
 
 export function legalLicenseRequiresBylaws(licenseType) {
