@@ -5,6 +5,7 @@ import {
   legalLicenseFounderWriteData,
   normalizeLegalLicenseDraft,
 } from "@/lib/legal-license-api.mjs";
+import { readLegalLicenseJson } from "@/lib/legal-license-request.mjs";
 import { sendLegalLicenseCitizenEmail } from "@/lib/legal-license-mailer";
 import {
   findCitizenLegalLicense,
@@ -29,7 +30,7 @@ export async function PUT(request, { params }) {
     return NextResponse.json({ error: "Submitted applications are locked" }, { status: 423 });
   }
   try {
-    const body = await request.json();
+    const body = await readLegalLicenseJson(request);
     if (body.expectedUpdatedAt && new Date(body.expectedUpdatedAt).getTime() !== current.updatedAt.getTime()) {
       return NextResponse.json({ error: "The draft changed in another session" }, { status: 409 });
     }

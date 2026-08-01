@@ -67,10 +67,23 @@ test("citizen create and update routes persist drafts through the Prisma-safe wr
   }
 });
 
-test("submission preserves structured guided-requirement errors for the citizen", () => {
+test("submission preserves structured guided-requirement errors through the safe mapper", () => {
   const submit = read("../app/api/legal-licenses/[id]/submit/route.js");
-  assert.match(submit, /LEGAL_LICENSE_REQUIREMENTS_INCOMPLETE/);
-  assert.match(submit, /code: error[.]code/);
-  assert.match(submit, /issues: Array[.]isArray[(]error[.]issues[)]/);
-  assert.match(submit, /status: 400/);
+  const errors = read("./legal-license-errors.mjs");
+  assert.match(submit, /legalLicenseError/);
+  assert.match(errors, /LEGAL_LICENSE_REQUIREMENTS_INCOMPLETE/);
+  assert.match(errors, /issues: safeRequirementIssues[(]error[.]issues[)]/);
+  assert.match(errors, /400/);
+});
+test("citizen JSON routes use the bounded reader and safe error mapper", () => {
+  const sources = [
+    read("../app/api/legal-licenses/route.js"),
+    read("../app/api/legal-licenses/[id]/route.js"),
+    read("../app/api/legal-licenses/[id]/submit/route.js"),
+  ];
+  for (const source of sources) {
+    assert.match(source, /readLegalLicenseJson/);
+    assert.doesNotMatch(source, /request[.]json[(]/);
+    assert.match(source, /legalLicenseError/);
+  }
 });

@@ -4,6 +4,9 @@ import { getSessionOptional } from "@/lib/dal";
 import { can } from "@/lib/permissions";
 import { hashLegalLicenseAccessToken } from "@/lib/legal-license-storage.mjs";
 import { toPublicLegalLicenseApplication } from "@/lib/legal-license.mjs";
+import { legalLicenseError } from "@/lib/legal-license-errors.mjs";
+
+export { legalLicenseError };
 
 export const LEGAL_LICENSE_INCLUDE = Object.freeze({
   founders: { orderBy: { createdAt: "asc" } },

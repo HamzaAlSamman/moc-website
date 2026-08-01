@@ -17,14 +17,14 @@ const answerKey = z.string().trim().min(1).max(256)
   .refine((key) => !["__proto__", "prototype", "constructor"].includes(key), "Unsafe answer key");
 const jsonAnswerValue = z.union([
   z.boolean(),
-  z.string().max(50_000),
+  z.string().max(4_000),
   z.number().finite(),
   z.null(),
 ]);
 const jsonSafeRecord = z.record(answerKey, jsonAnswerValue)
-  .refine((record) => Object.keys(record).length <= 500, "Too many answer keys")
-  .optional()
-  .default({});
+  .refine((record) => Object.keys(record).length <= 100, "Too many answer keys")
+  .nullish()
+  .transform((record) => record ?? {});
 const guidedAnswerRecordFields = {
   eligibilityAnswers: jsonSafeRecord,
   premisesAnswers: jsonSafeRecord,

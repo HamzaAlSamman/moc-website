@@ -45,6 +45,53 @@ test("draft parsing accepts partial guided answers without enforcing submission 
   assert.deepEqual(draft.postLicenseDeclarations, { [LEGAL_LICENSE_POST_LICENSE_DECLARATION_KEY]: false });
 });
 
+test("legacy nullable guided JSON becomes empty records before structured requirement validation", () => {
+  assert.throws(
+    () => validateLegalLicenseGuidedSubmission({
+      licenseType: "AMATEUR_TROUPE",
+      eligibilityAnswers: null,
+      premisesAnswers: null,
+      bylawAnswers: null,
+      postLicenseDeclarations: null,
+    }),
+    (error) => (
+      error.code === "LEGAL_LICENSE_REQUIREMENTS_INCOMPLETE"
+      && error.name !== "ZodError"
+      && error.issues.some((issue) => (
+        issue.key === LEGAL_LICENSE_POST_LICENSE_DECLARATION_KEY
+        && issue.scope === "POST_LICENSE"
+      ))
+    ),
+  );
+});
+
+test("guided answer records enforce key and string limits without shrinking main draft text", () => {
+  assert.doesNotThrow(() => normalizeLegalLicenseDraft({
+    licenseType: "AMATEUR_TROUPE",
+    purpose: "x".repeat(5_000),
+  }));
+
+  assert.throws(
+    () => normalizeLegalLicenseDraft({
+      licenseType: "CULTURAL_FORUM",
+      bylawAnswers: Object.fromEntries(
+        Array.from({ length: 101 }, (_, index) => [`answer.${index}`, true]),
+      ),
+    }),
+    (error) => error.name === "ZodError",
+  );
+
+  assert.throws(
+    () => normalizeLegalLicenseDraft({
+      licenseType: "CULTURAL_FORUM",
+      bylawAnswers: {
+        [LEGAL_LICENSE_BYLAW_ACKNOWLEDGMENT_KEY]: "x".repeat(4_001),
+      },
+    }),
+    (error) => error.name === "ZodError",
+  );
+});
+
 test("guided answer normalization rejects values that are not JSON-safe scalars", () => {
   assert.throws(
     () => normalizeLegalLicenseAnswers("CULTURAL_FORUM", {
