@@ -502,6 +502,22 @@ export function wizardApiErrorMessage(operation, language = "en", response = {})
   return (API_ERROR_MESSAGES[operation] || API_ERROR_MESSAGES.refresh)[locale];
 }
 
+export class WizardUserError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "WizardUserError";
+  }
+}
+
+export function createWizardUserError(operation, language = "en", response = {}) {
+  return new WizardUserError(wizardApiErrorMessage(operation, language, response));
+}
+
+export function wizardFailureMessage(error, operation, language = "en") {
+  return error instanceof WizardUserError
+    ? error.message
+    : wizardApiErrorMessage(operation, language);
+}
 export function isWizardStepEditable(stepIndex, { status, deficiencyScopes } = {}) {
   if (status !== "SUSPENDED") return true;
   return (Array.isArray(deficiencyScopes) ? deficiencyScopes : [])

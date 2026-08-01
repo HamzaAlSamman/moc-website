@@ -160,7 +160,7 @@ test("citizen wizard stores tracking credentials only in a versioned expiring sn
 test("citizen wizard localizes every citizen API failure without exposing raw server errors", () => {
   const wizard = read("../app/[locale]/services/legal-licenses/LegalLicenseWizard.jsx");
   for (const operation of ["save", "upload", "delete", "refresh", "submit", "track", "preview", "download"]) {
-    assert.match(wizard, new RegExp(`wizardApiErrorMessage[(]\"${operation}\"`), operation);
+    assert.match(wizard, new RegExp(`(?:(?:wizardApiErrorMessage|createWizardUserError)[(]\"${operation}\"|reportWizardFailure[(][^\\n]+, \\"${operation}\\")`), operation);
   }
   assert.doesNotMatch(wizard, /data[.]error\s*[|][|]/);
   assert.doesNotMatch(wizard, /refreshData[.]error\s*[|][|]/);
@@ -171,5 +171,14 @@ test("wizard rail exposes localized screen-reader state text", () => {
   assert.match(wizard, /sr-only/);
   for (const label of ["Current", "Completed", "Incomplete", "Not required"]) {
     assert.match(wizard, new RegExp(label));
+  }
+});
+
+test("wizard catch paths never expose raw transport Error.message", () => {
+  const wizard = read("../app/[locale]/services/legal-licenses/LegalLicenseWizard.jsx");
+  assert.doesNotMatch(wizard, /setError[(][^\n;]*Error[.]message/);
+  assert.match(wizard, /createWizardUserError/);
+  for (const operation of ["save", "upload", "delete", "submit", "track"]) {
+    assert.match(wizard, new RegExp(`reportWizardFailure[(][^\n]*\"${operation}\"`), operation);
   }
 });

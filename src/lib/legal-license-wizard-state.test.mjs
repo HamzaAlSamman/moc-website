@@ -21,7 +21,10 @@ import {
   LOCAL_TRACKING_SNAPSHOT_TTL_MS,
   LOCAL_WIZARD_MAX_CLOCK_SKEW_MS,
   LOCAL_WIZARD_SNAPSHOT_TTL_MS,
+  WizardUserError,
+  createWizardUserError,
   wizardApiErrorMessage,
+  wizardFailureMessage,
   wizardIncompleteMessage,
   wizardStepStatus,
 } from "./legal-license-wizard-state.mjs";
@@ -367,4 +370,19 @@ test("wizard API errors are localized and map structured fields to their step", 
     wizardApiErrorMessage("submit", "en", { fields: { fieldErrors: { nationalId: ["Invalid"] } } }),
     wizardIncompleteMessage(2, "en"),
   );
+});
+
+test("wizard catch messages preserve only explicitly marked user messages", () => {
+  const intended = createWizardUserError("track", "ar", { status: 404, error: "Raw server error" });
+  assert.equal(intended instanceof WizardUserError, true);
+  assert.equal(wizardFailureMessage(intended, "track", "ar"), wizardApiErrorMessage("track", "ar"));
+
+  const transport = new Error("Failed to fetch internal.example");
+  const arabicFallback = wizardFailureMessage(transport, "save", "ar");
+  assert.equal(arabicFallback, wizardApiErrorMessage("save", "ar"));
+  assert.doesNotMatch(arabicFallback, /Failed to fetch|internal[.]example/);
+  assert.equal(wizardFailureMessage(transport, "upload", "en"), wizardApiErrorMessage("upload", "en"));
+
+  const explicit = new WizardUserError(wizardIncompleteMessage(2, "ar"));
+  assert.equal(wizardFailureMessage(explicit, "submit", "ar"), wizardIncompleteMessage(2, "ar"));
 });

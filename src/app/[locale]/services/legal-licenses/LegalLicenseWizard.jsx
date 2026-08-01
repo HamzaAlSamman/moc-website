@@ -8,11 +8,13 @@ import { GENERAL_LEGAL_LICENSE_DOCUMENTS, LEGAL_LICENSE_DOCUMENT_RULES } from "@
 import { LEGAL_LICENSE_SOURCE_DOCUMENTS, getLegalLicenseRequirementProfile } from "@/lib/legal-license-requirements.mjs";
 import {
   LEGAL_LICENSE_WIZARD_STEPS,
+  WizardUserError,
   buildLocalTrackingSnapshot,
   buildLocalWizardSnapshot,
   buildTrackedWizardResult,
   canNavigateToWizardStep,
   createWizardMutationLock,
+  createWizardUserError,
   firstIncompleteWizardStep,
   firstDeficientWizardStep,
   firstServerIssueWizardStep,
@@ -22,7 +24,7 @@ import {
   isWizardStepEditable,
   parseLocalTrackingSnapshot,
   parseLocalWizardSnapshot,
-  wizardApiErrorMessage,
+  wizardFailureMessage,
   wizardIncompleteMessage,
   wizardStepStatus,
 } from "@/lib/legal-license-wizard-state.mjs";
@@ -89,6 +91,21 @@ async function downloadProtectedBlob(url, accessToken, fileName) {
   setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
 }
 
+async function readWizardResponse(response, operation, language) {
+  try {
+    return await response.json();
+  } catch (transportError) {
+    console.error(`[legal-license:${operation}] Invalid JSON response`, transportError);
+    throw createWizardUserError(operation, language);
+  }
+}
+
+function reportWizardFailure(error, operation, language, setUserError) {
+  if (!(error instanceof WizardUserError)) {
+    console.error(`[legal-license:${operation}] Transport failure`, error);
+  }
+  setUserError(wizardFailureMessage(error, operation, language));
+}
 export default function LegalLicenseWizard({ locale = "ar" }) {
   const isRtl = locale === "ar";
   const language = isRtl ? "ar" : "en";
@@ -150,8 +167,8 @@ export default function LegalLicenseWizard({ locale = "ar" }) {
       fetch("/api/legal-licenses/track", {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(credentials),
       }).then(async (response) => {
-        const data = await response.json();
-        if (!response.ok) throw new Error(wizardApiErrorMessage("track", language, { ...data, status: response.status }));
+        const data = await readWizardResponse(response, "track", language);
+        if (!response.ok) throw createWizardUserError("track", language, { ...data, status: response.status });
         if (cancelled) return;
         if (["DRAFT", "SUSPENDED"].includes(data.application.status)) resumeApplication(data.application, accessToken);
         else {
@@ -161,7 +178,7 @@ export default function LegalLicenseWizard({ locale = "ar" }) {
       }).catch((resumeError) => {
         if (!cancelled) {
           setTrackedResult(null);
-          setError(resumeError.message);
+          reportWizardFailure(resumeError, "track", language, setError);
         }
       });
     }
@@ -242,14 +259,14 @@ export default function LegalLicenseWizard({ locale = "ar" }) {
     setMode("new");
   }
   async function saveDraftUnlocked() {
-    if (!form.licenseType) throw new Error(wizardIncompleteMessage(0, language));
+    if (!form.licenseType) throw new WizardUserError(wizardIncompleteMessage(0, language));
     const response = await fetch(application ? `/api/legal-licenses/${application.id}` : "/api/legal-licenses", {
       method: application ? "PUT" : "POST",
       headers: { "Content-Type": "application/json", ...(token ? { "x-legal-license-token": token } : {}) },
       body: JSON.stringify(application ? { draft: form, expectedUpdatedAt: application.updatedAt } : form),
     });
-    const data = await response.json();
-    if (!response.ok) throw new Error(wizardApiErrorMessage("save", language, { ...data, status: response.status }));
+    const data = await readWizardResponse(response, "save", language);
+    if (!response.ok) throw createWizardUserError("save", language, { ...data, status: response.status });
     const nextToken = data.accessToken || token;
     setApplication(data.application);
     setToken(nextToken);
@@ -266,7 +283,7 @@ export default function LegalLicenseWizard({ locale = "ar" }) {
     try {
       return await saveDraftUnlocked();
     } catch (saveError) {
-      setError(saveError.message);
+      reportWizardFailure(saveError, "save", language, setError);
       return null;
     } finally {
       setBusy(false);
@@ -313,8 +330,8 @@ export default function LegalLicenseWizard({ locale = "ar" }) {
       const response = await fetch(`/api/legal-licenses/${application.id}/attachments`, {
         method: "POST", headers: { "x-legal-license-token": token }, body,
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(wizardApiErrorMessage("upload", language, { ...data, status: response.status }));
+      const data = await readWizardResponse(response, "upload", language);
+      if (!response.ok) throw createWizardUserError("upload", language, { ...data, status: response.status });
       setApplication((current) => ({
         ...current,
         revision: data.revision,
@@ -325,7 +342,7 @@ export default function LegalLicenseWizard({ locale = "ar" }) {
         ))],
       }));
     } catch (uploadError) {
-      setError(uploadError.message);
+      reportWizardFailure(uploadError, "upload", language, setError);
     } finally {
       setBusyDocument("");
       endDraftMutation(owner);
@@ -341,14 +358,14 @@ export default function LegalLicenseWizard({ locale = "ar" }) {
       const response = await fetch(`/api/legal-licenses/${application.id}/attachments/${attachment.id}`, {
         method: "DELETE", headers: { "x-legal-license-token": token },
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(wizardApiErrorMessage("delete", language, { ...data, status: response.status }));
+      const data = await readWizardResponse(response, "delete", language);
+      if (!response.ok) throw createWizardUserError("delete", language, { ...data, status: response.status });
       const refreshed = await fetch(`/api/legal-licenses/${application.id}`, { headers: { "x-legal-license-token": token } });
-      const refreshData = await refreshed.json();
-      if (!refreshed.ok) throw new Error(wizardApiErrorMessage("refresh", language, { ...refreshData, status: refreshed.status }));
+      const refreshData = await readWizardResponse(refreshed, "refresh", language);
+      if (!refreshed.ok) throw createWizardUserError("refresh", language, { ...refreshData, status: refreshed.status });
       setApplication(refreshData.application);
     } catch (deleteError) {
-      setError(deleteError.message);
+      reportWizardFailure(deleteError, "delete", language, setError);
     } finally {
       setBusyDocument("");
       endDraftMutation(owner);
@@ -358,8 +375,8 @@ export default function LegalLicenseWizard({ locale = "ar" }) {
     if (!application || mutationLockRef.current.locked()) return;
     try {
       await downloadProtectedBlob(`/api/legal-licenses/${application.id}/pdf`, token, `${application.referenceNo || "legal-license"}.pdf`);
-    } catch {
-      setError(wizardApiErrorMessage("preview", language));
+    } catch (previewError) {
+      reportWizardFailure(previewError, "preview", language, setError);
     }
   }
   async function submit() {
@@ -380,14 +397,14 @@ export default function LegalLicenseWizard({ locale = "ar" }) {
         headers: { "Content-Type": "application/json", "x-legal-license-token": saved.token },
         body: JSON.stringify({ expectedRevision: saved.application.revision, expectedUpdatedAt: saved.application.updatedAt }),
       });
-      const data = await response.json();
+      const data = await readWizardResponse(response, "submit", language);
       if (!response.ok) {
         const issueStep = firstServerIssueWizardStep(data);
         if (issueStep !== null) {
           setStep(issueStep);
-          throw new Error(wizardIncompleteMessage(issueStep, language));
+          throw new WizardUserError(wizardIncompleteMessage(issueStep, language));
         }
-        throw new Error(wizardApiErrorMessage("submit", language, { ...data, status: response.status }));
+        throw createWizardUserError("submit", language, { ...data, status: response.status });
 
       }
       setApplication(data.application);
@@ -398,7 +415,7 @@ export default function LegalLicenseWizard({ locale = "ar" }) {
       localStorage.removeItem(LEGACY_STORAGE_KEY);
       localStorage.setItem(TRACKING_KEY, JSON.stringify(buildLocalTrackingSnapshot({ referenceNo: data.application.referenceNo, accessToken: saved.token })));
     } catch (submitError) {
-      setError(submitError.message);
+      reportWizardFailure(submitError, "submit", language, setError);
     } finally {
       setBusy(false);
       endDraftMutation(owner);
@@ -414,16 +431,16 @@ export default function LegalLicenseWizard({ locale = "ar" }) {
       const response = await fetch("/api/legal-licenses/track", {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(credentials),
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(wizardApiErrorMessage("track", language, { ...data, status: response.status }));
+      const data = await readWizardResponse(response, "track", language);
+      if (!response.ok) throw createWizardUserError("track", language, { ...data, status: response.status });
       const result = buildTrackedWizardResult(data.application, credentials.accessToken);
-      if (!result) throw new Error(isRtl ? "تعذر تثبيت بيانات المتابعة." : "Unable to bind tracking credentials.");
+      if (!result) throw createWizardUserError("track", language);
       setTrackedResult(result);
       setTrack(credentials);
       localStorage.setItem(TRACKING_KEY, JSON.stringify(buildLocalTrackingSnapshot(credentials)));
     } catch (trackError) {
       setTrackedResult(null);
-      setError(trackError.message);
+      reportWizardFailure(trackError, "track", language, setError);
     } finally {
       setBusy(false);
     }
@@ -659,7 +676,7 @@ function TrackingCard({ trackedResult, isRtl, onResume, onError }) {
             `/api/legal-licenses/${application.id}/attachments/${attachment.id}`,
             accessToken,
             attachment.originalName,
-          ).catch(() => onError(wizardApiErrorMessage("download", language)))}
+          ).catch((downloadError) => reportWizardFailure(downloadError, "download", language, onError))}
           className="mt-4 inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-[#054239] outline-none focus-visible:ring-4 focus-visible:ring-[#b9a779]/20">
           <FileText className="h-4 w-4" />{attachment.originalName}
         </button>)}
