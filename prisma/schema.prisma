@@ -81,7 +81,19 @@ enum LegalLicenseAttachmentKind {
   PROGRAM_AND_CURRICULUM
   GALLERY_PROGRAM
   APPLICATION_PDF
+  APPLICATION_DOCX
+  BYLAWS_PDF
+  BYLAWS_DOCX
+  REQUIREMENTS_CHECKLIST_PDF
+  TECHNICAL_SUMMARY_PDF
   ISSUED_LICENSE
+}
+
+enum LegalLicenseReviewStatus {
+  PENDING
+  ACCEPTED
+  DEFICIENT
+  NOT_APPLICABLE
 }
 
 enum PostStatus {
@@ -159,9 +171,16 @@ model LegalLicenseApplication {
   issuedAt                  DateTime?
   completedAt               DateTime?
   archivedAt                DateTime?
+  eligibilityAnswers        Json?
+  premisesAnswers           Json?
+  bylawAnswers              Json?
+  requirementSnapshot       Json?
+  deficiencyScopes          Json?
+  documentTemplateVersion   String?
   founders                  LegalLicenseFounder[]
   attachments               LegalLicenseAttachment[]
   history                   LegalLicenseHistory[]
+  reviewItems               LegalLicenseReviewItem[]
   createdAt                 DateTime           @default(now())
   updatedAt                 DateTime           @updatedAt
 
@@ -201,9 +220,12 @@ model LegalLicenseAttachment {
   originalName  String
   mimeType      String
   size          Int
-  storageKey    String   @unique
-  version       Int      @default(1)
-  createdAt     DateTime @default(now())
+  storageKey       String    @unique
+  version          Int       @default(1)
+  templateVersion  String?
+  verificationCode String?   @unique
+  generatedAt      DateTime?
+  createdAt        DateTime  @default(now())
   updatedAt     DateTime @updatedAt
 
   @@index([applicationId])
@@ -228,6 +250,28 @@ model LegalLicenseHistory {
 
   @@index([applicationId])
   @@index([createdAt])
+}
+
+model LegalLicenseReviewItem {
+  id                  String                   @id @default(cuid())
+  applicationId       String
+  applicationRevision Int
+  requirementKey      String
+  scope               String
+  subjectRef          String?
+  status              LegalLicenseReviewStatus @default(PENDING)
+  note                String?                  @db.Text
+  publicNote          String?                  @db.Text
+  reviewerId          String?
+  reviewerEmail       String?
+  reviewerName        String?
+  reviewedAt          DateTime?
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+  application         LegalLicenseApplication  @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+
+  @@unique([applicationId, applicationRevision, requirementKey, subjectRef], map: "LLReview_app_revision_requirement_subject_key")
+  @@index([applicationId, applicationRevision])
 }
 
 model EventKind {

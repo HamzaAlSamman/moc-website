@@ -9,6 +9,13 @@ export const LEGAL_LICENSE_INCLUDE = Object.freeze({
   founders: { orderBy: { createdAt: "asc" } },
   attachments: { orderBy: [{ kind: "asc" }, { version: "desc" }] },
   history: { orderBy: { createdAt: "asc" } },
+  reviewItems: {
+    orderBy: [
+      { applicationRevision: "asc" },
+      { scope: "asc" },
+      { requirementKey: "asc" },
+    ],
+  },
 });
 
 export function legalLicenseTokenFromRequest(request) {
