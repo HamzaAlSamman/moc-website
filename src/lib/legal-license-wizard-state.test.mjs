@@ -11,6 +11,7 @@ import {
   firstIncompleteWizardStep,
   firstServerIssueWizardStep,
   firstDeficientWizardStep,
+  hydrateLocalWizardSnapshot,
   isWizardAttachmentEditable,
   isWizardFieldEditable,
   isWizardRequirementEditable,
@@ -385,4 +386,62 @@ test("wizard catch messages preserve only explicitly marked user messages", () =
 
   const explicit = new WizardUserError(wizardIncompleteMessage(2, "ar"));
   assert.equal(wizardFailureMessage(explicit, "submit", "ar"), wizardIncompleteMessage(2, "ar"));
+});
+
+test("suspended local snapshots hydrate the authoritative signature and deficiency step", () => {
+  const context = completeWizardContext("CULTURAL_FORUM");
+  const now = Date.UTC(2026, 7, 2, 12);
+  const serverApplication = {
+    ...context.form,
+    id: "app-1",
+    referenceNo: "LIC-2026-0001",
+    status: "SUSPENDED",
+    revision: 3,
+    updatedAt: "2026-08-02T12:00:00.000Z",
+    attachments: context.application.attachments,
+    deficiencyScopes: [{ scope: "ATTACHMENT", attachmentKind: "AUTHORIZATION" }],
+  };
+  const snapshot = buildLocalWizardSnapshot({
+    form: { ...context.form, purpose: "Locally edited purpose" },
+    application: serverApplication,
+    token: "secret-token",
+    step: 7,
+    now,
+  });
+  assert.equal(snapshot.form.applicantSignature, null);
+
+  const hydrated = hydrateLocalWizardSnapshot(snapshot, serverApplication);
+  assert.equal(hydrated.application, serverApplication);
+  assert.equal(hydrated.form.applicantSignature, context.form.applicantSignature);
+  assert.equal(hydrated.form.purpose, "Locally edited purpose");
+  assert.equal(hydrated.step, 4);
+  assert.equal(hydrated.token, "secret-token");
+  assert.equal(isWizardFieldEditable("applicantSignature", {
+    status: hydrated.application.status,
+    deficiencyScopes: hydrated.application.deficiencyScopes,
+  }), false);
+  assert.equal(isWizardAttachmentEditable("AUTHORIZATION", null, {
+    status: hydrated.application.status,
+    deficiencyScopes: hydrated.application.deficiencyScopes,
+  }), true);
+  assert.equal(wizardStepStatus("declaration", {
+    profile: context.profile,
+    form: hydrated.form,
+    application: hydrated.application,
+  }).completed, true);
+  assert.equal(hydrateLocalWizardSnapshot(snapshot, { ...serverApplication, id: "other-app" }), null);
+});
+
+test("trim-only optional founder and manager contacts are treated as empty", () => {
+  const context = completeWizardContext("CULTURAL_FORUM");
+  context.form.founders[0].phone = "   ";
+  context.form.founders[0].email = " \t ";
+  context.form.managerDetails = {
+    enabled: true,
+    fullName: "Manager",
+    nationalId: "",
+    phone: "   ",
+    email: " \t ",
+  };
+  assert.equal(wizardStepStatus("people", context).completed, true);
 });

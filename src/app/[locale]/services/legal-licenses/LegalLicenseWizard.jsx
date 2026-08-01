@@ -18,6 +18,7 @@ import {
   firstIncompleteWizardStep,
   firstDeficientWizardStep,
   firstServerIssueWizardStep,
+  hydrateLocalWizardSnapshot,
   isWizardAttachmentEditable,
   isWizardFieldEditable,
   isWizardRequirementEditable,
@@ -138,15 +139,9 @@ export default function LegalLicenseWizard({ locale = "ar" }) {
     let cancelled = false;
     const rawSnapshot = localStorage.getItem(STORAGE_KEY);
     const saved = parseLocalWizardSnapshot(rawSnapshot);
-    if (saved) {
-      setForm({ ...freshEmptyForm(), ...saved.form });
-      setApplication(saved.application);
-      setToken(saved.token);
-      setStep(saved.step);
-    } else if (rawSnapshot) {
-      localStorage.removeItem(STORAGE_KEY);
-    }
+    if (!saved && rawSnapshot) localStorage.removeItem(STORAGE_KEY);
     localStorage.removeItem(LEGACY_STORAGE_KEY);
+
     const rawTracking = localStorage.getItem(TRACKING_KEY);
     const tracking = parseLocalTrackingSnapshot(rawTracking);
     if (tracking) {
@@ -157,10 +152,20 @@ export default function LegalLicenseWizard({ locale = "ar" }) {
 
     const hash = new URLSearchParams(window.location.hash.slice(1));
     const query = new URLSearchParams(window.location.search);
-    const accessToken = hash.get("token");
-    const referenceNo = query.get("track");
-    if (accessToken && referenceNo) {
-      const credentials = { referenceNo, accessToken };
+    const hashAccessToken = hash.get("token");
+    const hashReferenceNo = query.get("track");
+    const hashCredentials = hashAccessToken && hashReferenceNo
+      ? { referenceNo: hashReferenceNo, accessToken: hashAccessToken }
+      : null;
+    const savedNeedsHydration = Boolean(saved?.application?.id && saved.token);
+    const savedReferenceNo = saved?.application?.referenceNo || tracking?.referenceNo || "";
+    const savedCredentials = savedNeedsHydration && savedReferenceNo
+      ? { referenceNo: savedReferenceNo, accessToken: saved.token }
+      : null;
+    const credentials = hashCredentials || savedCredentials;
+    const localSnapshot = hashCredentials ? null : savedNeedsHydration ? saved : null;
+
+    if (credentials) {
       setTrack(credentials);
       setTrackedResult(null);
       localStorage.setItem(TRACKING_KEY, JSON.stringify(buildLocalTrackingSnapshot(credentials)));
@@ -168,19 +173,33 @@ export default function LegalLicenseWizard({ locale = "ar" }) {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(credentials),
       }).then(async (response) => {
         const data = await readWizardResponse(response, "track", language);
-        if (!response.ok) throw createWizardUserError("track", language, { ...data, status: response.status });
         if (cancelled) return;
-        if (["DRAFT", "SUSPENDED"].includes(data.application.status)) resumeApplication(data.application, accessToken);
-        else {
-          setTrackedResult(buildTrackedWizardResult(data.application, accessToken));
+        if (!response.ok) throw createWizardUserError("track", language, { ...data, status: response.status });
+        if (localSnapshot && data.application.id !== localSnapshot.application.id) {
+          throw createWizardUserError("track", language);
+        }
+        if (["DRAFT", "SUSPENDED"].includes(data.application.status)) {
+          if (!resumeApplication(data.application, credentials.accessToken, localSnapshot)) {
+            throw createWizardUserError("track", language);
+          }
+        } else {
+          setTrackedResult(buildTrackedWizardResult(data.application, credentials.accessToken));
           setMode("track");
         }
       }).catch((resumeError) => {
         if (!cancelled) {
           setTrackedResult(null);
+          setMode("track");
           reportWizardFailure(resumeError, "track", language, setError);
         }
       });
+    } else if (savedNeedsHydration) {
+      setTrack({ referenceNo: savedReferenceNo, accessToken: saved.token });
+      setMode("track");
+      reportWizardFailure(createWizardUserError("track", language), "track", language, setError);
+    } else if (saved) {
+      setForm({ ...freshEmptyForm(), ...saved.form });
+      setStep(saved.step);
     }
     return () => { cancelled = true; };
   }, []);
@@ -227,17 +246,22 @@ export default function LegalLicenseWizard({ locale = "ar" }) {
     setTrack((current) => ({ ...current, [field]: value }));
     setError("");
   }
-  function resumeApplication(nextApplication, accessToken) {
-    const credentials = { referenceNo: nextApplication.referenceNo, accessToken };
+  function resumeApplication(nextApplication, accessToken, localSnapshot = null) {
+    const hydrated = localSnapshot ? hydrateLocalWizardSnapshot(localSnapshot, nextApplication) : null;
+    if (localSnapshot && (!hydrated || hydrated.token !== accessToken.trim())) return false;
+    const nextToken = hydrated?.token || accessToken;
+    const credentials = { referenceNo: nextApplication.referenceNo, accessToken: nextToken };
     setApplication(nextApplication);
-    setForm(draftFromApplication(nextApplication));
-    setToken(accessToken);
+    setForm(hydrated ? { ...freshEmptyForm(), ...hydrated.form } : draftFromApplication(nextApplication));
+    setToken(nextToken);
     setTrack(credentials);
     setTrackedResult(null);
     setSent(false);
+    setError("");
     setMode("new");
-    setStep(nextApplication.status === "SUSPENDED" ? firstDeficientWizardStep(nextApplication.deficiencyScopes) : 0);
+    setStep(hydrated?.step ?? (nextApplication.status === "SUSPENDED" ? firstDeficientWizardStep(nextApplication.deficiencyScopes) : 0));
     localStorage.setItem(TRACKING_KEY, JSON.stringify(buildLocalTrackingSnapshot(credentials)));
+    return true;
   }
   function resetNewApplication() {
     if (mutationLockRef.current.locked()) return;

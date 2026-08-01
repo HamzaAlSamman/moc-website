@@ -182,3 +182,12 @@ test("wizard catch paths never expose raw transport Error.message", () => {
     assert.match(wizard, new RegExp(`reportWizardFailure[(][^\n]*\"${operation}\"`), operation);
   }
 });
+
+test("stored editable applications hydrate from protected tracking before resume", () => {
+  const wizard = read("../app/[locale]/services/legal-licenses/LegalLicenseWizard.jsx");
+  assert.match(wizard, /hydrateLocalWizardSnapshot/);
+  assert.match(wizard, /saved[?][.]application[?][.]id/);
+  assert.match(wizard, /data[.]application[.]id/);
+  assert.match(wizard, /if [(]cancelled[)] return/);
+  assert.doesNotMatch(wizard, /setApplication[(]saved[.]application[)]/);
+});

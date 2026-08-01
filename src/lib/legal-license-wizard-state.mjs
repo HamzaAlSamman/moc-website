@@ -122,7 +122,9 @@ export function wizardEligibility(profile, form = {}) {
 }
 
 function optionalValueIsValid(value, validator) {
-  return !value || validator(value);
+  if (value === null || value === undefined) return true;
+  if (typeof value !== "string") return false;
+  return !value.trim() || validator(value);
 }
 
 function managerCompleted(manager, usedNationalIds) {
@@ -420,6 +422,32 @@ export function parseLocalTrackingSnapshot(raw, now = Date.now()) {
   }
 }
 
+export function hydrateLocalWizardSnapshot(snapshot, serverApplication) {
+  if (!isRecord(snapshot) || !isRecord(snapshot.application) || !isRecord(serverApplication)
+    || !nonEmpty(snapshot.application.id) || !nonEmpty(serverApplication.id)
+    || snapshot.application.id !== serverApplication.id
+    || !nonEmpty(snapshot.token)) return null;
+  if (nonEmpty(snapshot.application.referenceNo)
+    && snapshot.application.referenceNo !== serverApplication.referenceNo) return null;
+
+  const localForm = sanitizeSnapshotForm(snapshot.form);
+  const serverForm = sanitizeSnapshotForm(serverApplication);
+  if (!localForm || !serverForm) return null;
+  return {
+    application: serverApplication,
+    token: snapshot.token.trim(),
+    form: {
+      ...serverForm,
+      ...localForm,
+      applicantSignature: isValidLegalLicenseVisualSignature(serverApplication.applicantSignature)
+        ? serverApplication.applicantSignature
+        : null,
+    },
+    step: serverApplication.status === "SUSPENDED"
+      ? firstDeficientWizardStep(serverApplication.deficiencyScopes)
+      : snapshot.step,
+  };
+}
 export function buildTrackedWizardResult(application, accessToken) {
   if (!isRecord(application) || !nonEmpty(application.id) || !nonEmpty(accessToken)) return null;
   return { application, accessToken: accessToken.trim() };
