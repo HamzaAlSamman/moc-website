@@ -1,4 +1,5 @@
-export const LEGAL_LICENSE_MAX_JSON_BYTES = 512 * 1024;
+export const LEGAL_LICENSE_MAX_JSON_BYTES = 3 * 1024 * 1024;
+export const LEGAL_LICENSE_TRACK_MAX_JSON_BYTES = 16 * 1024;
 
 function legalLicenseRequestError(code, status) {
   const error = new Error(
@@ -19,10 +20,10 @@ function requestTooLarge() {
   return legalLicenseRequestError("LEGAL_LICENSE_REQUEST_TOO_LARGE", 413);
 }
 
-export async function readLegalLicenseJson(
-  request,
-  maxBytes = LEGAL_LICENSE_MAX_JSON_BYTES,
-) {
+export async function readLegalLicenseJson(request, options = {}) {
+  const maxBytes = typeof options === "number"
+    ? options
+    : options?.maxBytes ?? LEGAL_LICENSE_MAX_JSON_BYTES;
   if (!Number.isSafeInteger(maxBytes) || maxBytes <= 0) throw invalidRequest();
 
   const rawContentLength = request?.headers?.get?.("content-length");

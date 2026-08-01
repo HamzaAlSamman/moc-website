@@ -3,8 +3,27 @@ import test from "node:test";
 
 import {
   LEGAL_LICENSE_MAX_JSON_BYTES,
+  LEGAL_LICENSE_TRACK_MAX_JSON_BYTES,
   readLegalLicenseJson,
 } from "./legal-license-request.mjs";
+import { normalizeLegalLicenseDraft } from "./legal-license-api.mjs";
+
+test("default JSON limit accepts the largest schema-valid visual signature", async () => {
+  const prefix = "data:image/png;base64,";
+  const applicantSignature = prefix + "a".repeat(2_000_000 - prefix.length);
+  const payload = JSON.stringify({
+    licenseType: "AMATEUR_TROUPE",
+    applicantSignature,
+  });
+  assert.ok(new TextEncoder().encode(payload).byteLength < LEGAL_LICENSE_MAX_JSON_BYTES);
+
+  const request = new Request("http://localhost/legal-licenses", {
+    method: "POST",
+    body: payload,
+  });
+  const draft = normalizeLegalLicenseDraft(await readLegalLicenseJson(request));
+  assert.equal(draft.applicantSignature.length, 2_000_000);
+});
 
 test("limited JSON reader rejects an oversized declared content length before reading", async () => {
   const request = new Request("http://localhost/legal-licenses", {
@@ -70,4 +89,25 @@ test("limited JSON reader rejects empty, null, and array bodies as invalid reque
       body || "empty",
     );
   }
+});
+test("limited JSON reader accepts a smaller per-route maxBytes option", async () => {
+  const payload = JSON.stringify({ referenceNo: "LIC-2026-0001", accessToken: "x".repeat(100) });
+  assert.ok(new TextEncoder().encode(payload).byteLength < LEGAL_LICENSE_TRACK_MAX_JSON_BYTES);
+  const accepted = new Request("http://localhost/legal-licenses/track", {
+    method: "POST",
+    body: payload,
+  });
+  assert.deepEqual(
+    await readLegalLicenseJson(accepted, { maxBytes: LEGAL_LICENSE_TRACK_MAX_JSON_BYTES }),
+    { referenceNo: "LIC-2026-0001", accessToken: "x".repeat(100) },
+  );
+
+  const rejected = new Request("http://localhost/legal-licenses/track", {
+    method: "POST",
+    body: payload,
+  });
+  await assert.rejects(
+    () => readLegalLicenseJson(rejected, { maxBytes: 32 }),
+    (error) => error.code === "LEGAL_LICENSE_REQUEST_TOO_LARGE" && error.status === 413,
+  );
 });

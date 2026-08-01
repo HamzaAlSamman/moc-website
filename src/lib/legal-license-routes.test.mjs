@@ -93,3 +93,10 @@ test("legal-license server re-exports the safe mapper without a duplicate bindin
   assert.match(server, /export [{] legalLicenseError [}]/);
   assert.doesNotMatch(server, /export function legalLicenseError[(]/);
 });
+test("public tracking uses the bounded small JSON reader and safe error mapper", () => {
+  const track = read("../app/api/legal-licenses/track/route.js");
+  assert.match(track, /readLegalLicenseJson/);
+  assert.match(track, /LEGAL_LICENSE_TRACK_MAX_JSON_BYTES/);
+  assert.match(track, /legalLicenseError/);
+  assert.doesNotMatch(track, /request[.]json[(]/);
+});
