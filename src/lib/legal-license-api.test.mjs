@@ -4,8 +4,12 @@ import test from "node:test";
 import { LEGAL_LICENSE_DOCUMENT_RULES } from "./legal-license.mjs";
 
 import {
+  buildRequirementSnapshot,
+  evaluateLegalLicenseEligibility,
+  normalizeLegalLicenseAnswers,
   normalizeLegalLicenseDraft,
   requiredLegalLicenseDocumentKinds,
+  validateLegalLicenseGuidedSubmission,
   validateLegalLicenseSubmissionRecord,
 } from "./legal-license-api.mjs";
 
@@ -21,6 +25,121 @@ test("draft parsing keeps only known fields and supplies safe empty defaults", (
   assert.equal(draft.email, "citizen@example.com");
   assert.equal(draft.entityName, "");
   assert.equal(Object.hasOwn(draft, "injected"), false);
+});
+
+test("draft parsing accepts partial guided answers without enforcing submission requirements", () => {
+  const draft = normalizeLegalLicenseDraft({
+    licenseType: "MUSIC_INSTITUTE",
+    premisesAnswers: {},
+    postLicenseDeclarations: { reportingCommitment: false },
+  });
+
+  assert.deepEqual(draft.eligibilityAnswers, {});
+  assert.deepEqual(draft.premisesAnswers, {});
+  assert.deepEqual(draft.bylawAnswers, {});
+  assert.deepEqual(draft.postLicenseDeclarations, { reportingCommitment: false });
+});
+
+test("guided answer normalization rejects values that are not JSON-safe scalars", () => {
+  assert.throws(
+    () => normalizeLegalLicenseAnswers("CULTURAL_FORUM", {
+      bylawAnswers: { unsafe: () => true },
+    }),
+    (error) => error.name === "ZodError",
+  );
+});
+
+test("guided answer normalization strips unknown and non-applicable requirement keys", () => {
+  const answers = normalizeLegalLicenseAnswers("MUSIC_INSTITUTE", {
+    eligibilityAnswers: {
+      "gallery.applicant.union_member_or_manager_contract": true,
+      injected: true,
+    },
+    premisesAnswers: {
+      "music.building.soundproof_rooms": true,
+      "theater.building.soundproof_rooms": true,
+      injected: "ignore",
+    },
+  });
+
+  assert.deepEqual(answers.eligibilityAnswers, {});
+  assert.deepEqual(answers.premisesAnswers, {
+    "music.building.soundproof_rooms": true,
+  });
+});
+
+test("guided submission requires every applicable blocking answer", () => {
+  assert.throws(
+    () => validateLegalLicenseGuidedSubmission({
+      licenseType: "MUSIC_INSTITUTE",
+      premisesAnswers: {},
+      postLicenseDeclarations: { continuingCompliance: true },
+    }),
+    (error) => {
+      assert.equal(error.code, "LEGAL_LICENSE_REQUIREMENTS_INCOMPLETE");
+      assert.deepEqual(error.issues, [{
+        key: "music.building.soundproof_rooms",
+        scope: "PREMISES",
+      }]);
+      return true;
+    },
+  );
+});
+
+test("a false blocking eligibility answer reports its stable central requirement key", () => {
+  const evaluation = evaluateLegalLicenseEligibility("FINE_ARTS_GALLERY", {
+    "gallery.applicant.union_member_or_manager_contract": false,
+  });
+  assert.deepEqual(evaluation, {
+    eligible: false,
+    issues: [{
+      key: "gallery.applicant.union_member_or_manager_contract",
+      scope: "ELIGIBILITY",
+    }],
+  });
+});
+
+test("bylaw answers are required only for profiles that generate bylaws", () => {
+  for (const licenseType of ["CULTURAL_FORUM", "CULTURAL_ASSOCIATION", "CULTURAL_HOUSE"]) {
+    assert.throws(
+      () => validateLegalLicenseGuidedSubmission({
+        licenseType,
+        bylawAnswers: {},
+        postLicenseDeclarations: { continuingCompliance: true },
+      }),
+      (error) => error.code === "LEGAL_LICENSE_REQUIREMENTS_INCOMPLETE"
+        && error.issues.some((issue) => issue.key === "bylaws.answers" && issue.scope === "BYLAWS"),
+    );
+  }
+
+  assert.doesNotThrow(() => validateLegalLicenseGuidedSubmission({
+    licenseType: "AMATEUR_TROUPE",
+    bylawAnswers: {},
+    postLicenseDeclarations: { continuingCompliance: true },
+  }));
+});
+
+test("all submitted post-license declarations must be true", () => {
+  assert.throws(
+    () => validateLegalLicenseGuidedSubmission({
+      licenseType: "AMATEUR_TROUPE",
+      postLicenseDeclarations: {
+        continuingCompliance: true,
+        notifyMaterialChanges: false,
+      },
+    }),
+    (error) => error.code === "LEGAL_LICENSE_REQUIREMENTS_INCOMPLETE"
+      && error.issues.some((issue) => issue.key === "notifyMaterialChanges" && issue.scope === "POST_LICENSE"),
+  );
+});
+
+test("requirement snapshots contain only the selected profile's applicable stable requirements", () => {
+  const snapshot = buildRequirementSnapshot("MUSIC_INSTITUTE");
+  assert.equal(snapshot.licenseType, "MUSIC_INSTITUTE");
+  assert.equal(snapshot.templateVersion, "guided-v1");
+  assert.deepEqual(snapshot.requirements.map((item) => item.key), [
+    "music.building.soundproof_rooms",
+  ]);
 });
 
 test("required document kinds combine shared and license-specific requirements", () => {
@@ -49,6 +168,8 @@ test("submission validation rejects missing required attachments", () => {
     declarationAccuracy: true,
     declarationResponsibility: true,
     declarationPrivacy: true,
+    bylawAnswers: { governanceModel: "Model bylaws" },
+    postLicenseDeclarations: { continuingCompliance: true },
     applicantSignature: "data:image/png;base64,abc",
     founders: [{
       id: "founder-1",

@@ -5,10 +5,34 @@ import {
   LEGAL_LICENSE_TYPES,
   validateLegalLicenseApplication,
 } from "./legal-license.mjs";
+import {
+  getApplicableLegalLicenseRequirements,
+  getLegalLicenseRequirementProfile,
+  legalLicenseRequiresBylaws,
+} from "./legal-license-requirements.mjs";
 
 const text = (max = 500) => z.string().trim().max(max).optional().default("");
 const optionalEmail = z.string().trim().max(320).optional().default("").transform((value) => value.toLowerCase());
 const licenseTypes = Object.keys(LEGAL_LICENSE_TYPES);
+const answerKey = z.string().trim().min(1).max(256)
+  .refine((key) => !["__proto__", "prototype", "constructor"].includes(key), "Unsafe answer key");
+const jsonAnswerValue = z.union([
+  z.boolean(),
+  z.string().max(50_000),
+  z.number().finite(),
+  z.null(),
+]);
+const jsonSafeRecord = z.record(answerKey, jsonAnswerValue)
+  .refine((record) => Object.keys(record).length <= 500, "Too many answer keys")
+  .optional()
+  .default({});
+const guidedAnswerRecordFields = {
+  eligibilityAnswers: jsonSafeRecord,
+  premisesAnswers: jsonSafeRecord,
+  bylawAnswers: jsonSafeRecord,
+  postLicenseDeclarations: jsonSafeRecord,
+};
+const guidedAnswersSchema = z.object(guidedAnswerRecordFields).strip();
 
 const founderDraftSchema = z.object({
   id: z.string().trim().max(128).optional(),
@@ -41,10 +65,150 @@ export const legalLicenseDraftSchema = z.object({
   declarationPrivacy: z.boolean().optional().default(false),
   applicantSignature: z.string().max(2_000_000).nullable().optional().default(null),
   founders: z.array(founderDraftSchema).max(100).optional().default([]),
+  ...guidedAnswerRecordFields,
 }).strip();
 
+function copyAllowedAnswers(record, allowedKeys) {
+  return Object.fromEntries(
+    Object.entries(record || {}).filter(([key]) => allowedKeys.has(key)),
+  );
+}
+
+function requirementAnswerRecord(requirement) {
+  return requirement.category === "ELIGIBILITY"
+    ? "eligibilityAnswers"
+    : requirement.category === "BYLAWS"
+      ? "bylawAnswers"
+      : requirement.category === "POST_LICENSE"
+        ? "postLicenseDeclarations"
+        : "premisesAnswers";
+}
+
+function answerSatisfiesRequirement(requirement, value) {
+  if (requirement.answerType === "BOOLEAN") return value === true;
+  if (requirement.answerType === "NUMBER") return typeof value === "number" && Number.isFinite(value);
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function requirementIssue(requirement) {
+  return { key: requirement.key, scope: requirement.category };
+}
+
+function incompleteRequirements(issues) {
+  const error = new Error("Legal-license requirements are incomplete");
+  error.code = "LEGAL_LICENSE_REQUIREMENTS_INCOMPLETE";
+  error.issues = issues;
+  return error;
+}
+
+export function normalizeLegalLicenseAnswers(licenseType, input = {}, context = input) {
+  const profile = getLegalLicenseRequirementProfile(licenseType);
+  if (!profile) throw new Error("Invalid legal-license type");
+  const parsed = guidedAnswersSchema.parse(input);
+
+  const applicable = getApplicableLegalLicenseRequirements(licenseType, context);
+  const eligibilityKeys = new Set(
+    applicable.filter((item) => item.category === "ELIGIBILITY").map((item) => item.key),
+  );
+  const premisesKeys = new Set(
+    applicable
+      .filter((item) => !["ELIGIBILITY", "BYLAWS", "POST_LICENSE"].includes(item.category))
+      .map((item) => item.key),
+  );
+
+  return {
+    eligibilityAnswers: copyAllowedAnswers(parsed.eligibilityAnswers, eligibilityKeys),
+    premisesAnswers: copyAllowedAnswers(parsed.premisesAnswers, premisesKeys),
+    bylawAnswers: { ...parsed.bylawAnswers },
+    postLicenseDeclarations: { ...parsed.postLicenseDeclarations },
+  };
+}
+
 export function normalizeLegalLicenseDraft(input) {
-  return legalLicenseDraftSchema.parse(input);
+  const parsed = legalLicenseDraftSchema.parse(input);
+  return {
+    ...parsed,
+    ...normalizeLegalLicenseAnswers(parsed.licenseType, parsed, parsed),
+  };
+}
+
+export function evaluateLegalLicenseEligibility(licenseType, eligibilityAnswers = {}, context = {}) {
+  const requirements = getApplicableLegalLicenseRequirements(licenseType, context)
+    .filter((item) => item.category === "ELIGIBILITY" && item.blocking);
+  const normalized = normalizeLegalLicenseAnswers(
+    licenseType,
+    { eligibilityAnswers },
+    context,
+  ).eligibilityAnswers;
+  const issues = requirements
+    .filter((requirement) => !answerSatisfiesRequirement(requirement, normalized[requirement.key]))
+    .map(requirementIssue);
+  return { eligible: issues.length === 0, issues };
+}
+
+export function validateLegalLicenseGuidedSubmission(record, context = record) {
+  if (!record || typeof record !== "object" || Array.isArray(record)) {
+    throw new Error("Legal-license record is required");
+  }
+
+  const normalizedInput = legalLicenseDraftSchema.pick({
+    licenseType: true,
+    eligibilityAnswers: true,
+    premisesAnswers: true,
+    bylawAnswers: true,
+    postLicenseDeclarations: true,
+  }).parse(record);
+  const normalized = normalizeLegalLicenseAnswers(
+    normalizedInput.licenseType,
+    normalizedInput,
+    context,
+  );
+  const requirements = getApplicableLegalLicenseRequirements(normalizedInput.licenseType, context);
+  const issues = requirements
+    .filter((requirement) => requirement.blocking)
+    .filter((requirement) => {
+      const recordName = requirementAnswerRecord(requirement);
+      return !answerSatisfiesRequirement(requirement, normalized[recordName][requirement.key]);
+    })
+    .map(requirementIssue);
+
+  if (
+    legalLicenseRequiresBylaws(normalizedInput.licenseType)
+    && !Object.values(normalized.bylawAnswers).some((value) => (
+      value === true
+      || (typeof value === "number" && Number.isFinite(value))
+      || (typeof value === "string" && value.trim().length > 0)
+    ))
+  ) {
+    issues.push({ key: "bylaws.answers", scope: "BYLAWS" });
+  }
+
+  for (const [key, value] of Object.entries(normalized.postLicenseDeclarations)) {
+    if (value !== true) issues.push({ key, scope: "POST_LICENSE" });
+  }
+
+  if (issues.length) throw incompleteRequirements(issues);
+  return normalized;
+}
+
+export function buildRequirementSnapshot(licenseType, context = {}) {
+  const profile = getLegalLicenseRequirementProfile(licenseType);
+  if (!profile) throw new Error("Invalid legal-license type");
+  return {
+    licenseType,
+    templateVersion: profile.templateVersion,
+    sourceDocuments: [...profile.sourceDocuments],
+    requirements: getApplicableLegalLicenseRequirements(licenseType, context).map((requirement) => ({
+      key: requirement.key,
+      category: requirement.category,
+      answerType: requirement.answerType,
+      blocking: requirement.blocking,
+      label: { ...requirement.label },
+      help: { ...requirement.help },
+      source: { ...requirement.source },
+      ...(requirement.appliesWhen ? { appliesWhen: { ...requirement.appliesWhen } } : {}),
+    })),
+  };
 }
 
 export function requiredLegalLicenseDocumentKinds(licenseType) {
@@ -58,6 +222,7 @@ export function requiredLegalLicenseDocumentKinds(licenseType) {
 
 export function validateLegalLicenseSubmissionRecord(record) {
   const normalized = validateLegalLicenseApplication(record);
+  validateLegalLicenseGuidedSubmission(record);
   const attachments = Array.isArray(record.attachments) ? record.attachments : [];
   const requiredKinds = requiredLegalLicenseDocumentKinds(record.licenseType);
   const applicationKinds = requiredKinds.filter((kind) => LEGAL_LICENSE_DOCUMENT_RULES[kind]?.owner === "APPLICATION");
@@ -78,11 +243,18 @@ export function validateLegalLicenseSubmissionRecord(record) {
   }
 
   if (missing.length) throw new Error(`Missing required attachments: ${missing.join(", ")}`);
-  return normalized;
+  return {
+    ...normalized,
+    ...normalizeLegalLicenseAnswers(record.licenseType, record, record),
+  };
 }
 
 export function legalLicenseApplicationWriteData(draft) {
-  const { founders: _founders, ...application } = normalizeLegalLicenseDraft(draft);
+  const {
+    founders: _founders,
+    postLicenseDeclarations: _postLicenseDeclarations,
+    ...application
+  } = normalizeLegalLicenseDraft(draft);
   return application;
 }
 
