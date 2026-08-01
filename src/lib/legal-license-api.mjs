@@ -3,6 +3,10 @@ import {
   GENERAL_LEGAL_LICENSE_DOCUMENTS,
   LEGAL_LICENSE_DOCUMENT_RULES,
   LEGAL_LICENSE_TYPES,
+  isValidLegalLicenseEmail,
+  isValidLegalLicenseNationalId,
+  isValidLegalLicensePhone,
+  normalizeLegalLicensePhone,
   validateLegalLicenseApplication,
 } from "./legal-license.mjs";
 import {
@@ -245,9 +249,6 @@ export function requiredLegalLicenseDocumentKinds(licenseType) {
   ])];
 }
 
-const MANAGER_NATIONAL_ID_PATTERN = /^\d{11}$/;
-const MANAGER_PHONE_PATTERN = /^\+?\d{8,15}$/;
-const MANAGER_EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function managerRequiredText(value, field) {
   if (typeof value !== "string" || !value.trim()) throw new Error(field + " is required");
@@ -264,7 +265,7 @@ export function validateLegalLicenseManagerDetailsForSubmission(managerInput, re
   };
   if (manager.nationalId) {
     normalized.nationalId = manager.nationalId.trim();
-    if (!MANAGER_NATIONAL_ID_PATTERN.test(normalized.nationalId)) {
+    if (!isValidLegalLicenseNationalId(normalized.nationalId)) {
       throw new Error("managerDetails.nationalId is invalid");
     }
     const usedNationalIds = new Set([
@@ -276,14 +277,14 @@ export function validateLegalLicenseManagerDetailsForSubmission(managerInput, re
     }
   }
   if (manager.phone) {
-    normalized.phone = manager.phone.trim().replace(/[\s()-]/g, "");
-    if (!MANAGER_PHONE_PATTERN.test(normalized.phone)) {
+    normalized.phone = normalizeLegalLicensePhone(manager.phone);
+    if (!isValidLegalLicensePhone(normalized.phone)) {
       throw new Error("managerDetails.phone is invalid");
     }
   }
   if (manager.email) {
     normalized.email = manager.email.trim().toLowerCase();
-    if (!MANAGER_EMAIL_PATTERN.test(normalized.email)) {
+    if (!isValidLegalLicenseEmail(normalized.email)) {
       throw new Error("managerDetails.email is invalid");
     }
   }
@@ -292,7 +293,7 @@ export function validateLegalLicenseManagerDetailsForSubmission(managerInput, re
 
 export function validateLegalLicenseSubmissionRecord(record) {
   const normalized = validateLegalLicenseApplication(record);
-  const managerDetails = validateLegalLicenseManagerDetailsForSubmission(record.managerDetails, record);
+  const managerDetails = validateLegalLicenseManagerDetailsForSubmission(record.managerDetails, normalized);
   validateLegalLicenseGuidedSubmission(record);
   const attachments = Array.isArray(record.attachments) ? record.attachments : [];
   const requiredKinds = requiredLegalLicenseDocumentKinds(record.licenseType);

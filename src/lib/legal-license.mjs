@@ -121,6 +121,30 @@ const DECLARATION_FIELDS = [
 const NATIONAL_ID_PATTERN = /^\d{11}$/;
 const PHONE_PATTERN = /^\+?\d{8,15}$/;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const VISUAL_SIGNATURE_PATTERN = /^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/;
+const MAX_VISUAL_SIGNATURE_LENGTH = 2_000_000;
+
+export function isValidLegalLicenseNationalId(value) {
+  return typeof value === "string" && NATIONAL_ID_PATTERN.test(value.trim());
+}
+
+export function normalizeLegalLicensePhone(value) {
+  return typeof value === "string" ? value.trim().replace(/[\s()-]/g, "") : "";
+}
+
+export function isValidLegalLicensePhone(value) {
+  return PHONE_PATTERN.test(normalizeLegalLicensePhone(value));
+}
+
+export function isValidLegalLicenseEmail(value) {
+  return typeof value === "string" && EMAIL_PATTERN.test(value.trim().toLowerCase());
+}
+
+export function isValidLegalLicenseVisualSignature(value) {
+  return typeof value === "string"
+    && value.length <= MAX_VISUAL_SIGNATURE_LENGTH
+    && VISUAL_SIGNATURE_PATTERN.test(value);
+}
 
 function requiredText(value, field) {
   if (typeof value !== "string" || !value.trim()) throw new Error(`${field} is required`);
@@ -129,19 +153,19 @@ function requiredText(value, field) {
 
 function validateNationalId(value, field) {
   const normalized = requiredText(value, field);
-  if (!NATIONAL_ID_PATTERN.test(normalized)) throw new Error(`${field} is invalid`);
+  if (!isValidLegalLicenseNationalId(normalized)) throw new Error(`${field} is invalid`);
   return normalized;
 }
 
 function validatePhone(value, field) {
-  const normalized = requiredText(value, field).replace(/[\s()-]/g, "");
-  if (!PHONE_PATTERN.test(normalized)) throw new Error(`${field} is invalid`);
+  const normalized = normalizeLegalLicensePhone(requiredText(value, field));
+  if (!isValidLegalLicensePhone(normalized)) throw new Error(`${field} is invalid`);
   return normalized;
 }
 
 function validateEmail(value, field) {
   const normalized = requiredText(value, field).toLowerCase();
-  if (!EMAIL_PATTERN.test(normalized)) throw new Error(`${field} is invalid`);
+  if (!isValidLegalLicenseEmail(normalized)) throw new Error(`${field} is invalid`);
   return normalized;
 }
 
@@ -189,7 +213,7 @@ export function validateLegalLicenseApplication(data) {
     if (data[field] !== true) throw new Error(`${field} must be accepted`);
   }
   normalized.applicantSignature = requiredText(data.applicantSignature, "applicantSignature");
-  if (!/^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(normalized.applicantSignature) || normalized.applicantSignature.length > 2_000_000) {
+  if (!isValidLegalLicenseVisualSignature(normalized.applicantSignature)) {
     throw new Error("applicantSignature is invalid");
   }
 

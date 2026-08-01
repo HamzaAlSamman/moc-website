@@ -8,6 +8,7 @@ import { GENERAL_LEGAL_LICENSE_DOCUMENTS, LEGAL_LICENSE_DOCUMENT_RULES } from "@
 import { LEGAL_LICENSE_SOURCE_DOCUMENTS, getLegalLicenseRequirementProfile } from "@/lib/legal-license-requirements.mjs";
 import {
   LEGAL_LICENSE_WIZARD_STEPS,
+  buildLocalTrackingSnapshot,
   buildLocalWizardSnapshot,
   buildTrackedWizardResult,
   canNavigateToWizardStep,
@@ -19,7 +20,9 @@ import {
   isWizardFieldEditable,
   isWizardRequirementEditable,
   isWizardStepEditable,
+  parseLocalTrackingSnapshot,
   parseLocalWizardSnapshot,
+  wizardApiErrorMessage,
   wizardIncompleteMessage,
   wizardStepStatus,
 } from "@/lib/legal-license-wizard-state.mjs";
@@ -127,10 +130,11 @@ export default function LegalLicenseWizard({ locale = "ar" }) {
       localStorage.removeItem(STORAGE_KEY);
     }
     localStorage.removeItem(LEGACY_STORAGE_KEY);
-    try {
-      const tracking = JSON.parse(localStorage.getItem(TRACKING_KEY) || "null");
-      if (tracking?.referenceNo && tracking?.accessToken) setTrack(tracking);
-    } catch {
+    const rawTracking = localStorage.getItem(TRACKING_KEY);
+    const tracking = parseLocalTrackingSnapshot(rawTracking);
+    if (tracking) {
+      setTrack({ referenceNo: tracking.referenceNo, accessToken: tracking.accessToken });
+    } else if (rawTracking) {
       localStorage.removeItem(TRACKING_KEY);
     }
 
@@ -142,12 +146,12 @@ export default function LegalLicenseWizard({ locale = "ar" }) {
       const credentials = { referenceNo, accessToken };
       setTrack(credentials);
       setTrackedResult(null);
-      localStorage.setItem(TRACKING_KEY, JSON.stringify(credentials));
+      localStorage.setItem(TRACKING_KEY, JSON.stringify(buildLocalTrackingSnapshot(credentials)));
       fetch("/api/legal-licenses/track", {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(credentials),
       }).then(async (response) => {
         const data = await response.json();
-        if (!response.ok) throw new Error(data.error || "Unable to resume application");
+        if (!response.ok) throw new Error(wizardApiErrorMessage("track", language, { ...data, status: response.status }));
         if (cancelled) return;
         if (["DRAFT", "SUSPENDED"].includes(data.application.status)) resumeApplication(data.application, accessToken);
         else {
@@ -216,7 +220,7 @@ export default function LegalLicenseWizard({ locale = "ar" }) {
     setSent(false);
     setMode("new");
     setStep(nextApplication.status === "SUSPENDED" ? firstDeficientWizardStep(nextApplication.deficiencyScopes) : 0);
-    localStorage.setItem(TRACKING_KEY, JSON.stringify(credentials));
+    localStorage.setItem(TRACKING_KEY, JSON.stringify(buildLocalTrackingSnapshot(credentials)));
   }
   function resetNewApplication() {
     if (mutationLockRef.current.locked()) return;
@@ -245,12 +249,12 @@ export default function LegalLicenseWizard({ locale = "ar" }) {
       body: JSON.stringify(application ? { draft: form, expectedUpdatedAt: application.updatedAt } : form),
     });
     const data = await response.json();
-    if (!response.ok) throw new Error(data.error || (isRtl ? "تعذر حفظ المسودة." : "Draft save failed."));
+    if (!response.ok) throw new Error(wizardApiErrorMessage("save", language, { ...data, status: response.status }));
     const nextToken = data.accessToken || token;
     setApplication(data.application);
     setToken(nextToken);
     setTrack({ referenceNo: data.application.referenceNo, accessToken: nextToken });
-    localStorage.setItem(TRACKING_KEY, JSON.stringify({ referenceNo: data.application.referenceNo, accessToken: nextToken }));
+    localStorage.setItem(TRACKING_KEY, JSON.stringify(buildLocalTrackingSnapshot({ referenceNo: data.application.referenceNo, accessToken: nextToken })));
     setForm((current) => ({ ...current, founders: data.application.founders || current.founders }));
     return { application: data.application, token: nextToken };
   }
@@ -310,7 +314,7 @@ export default function LegalLicenseWizard({ locale = "ar" }) {
         method: "POST", headers: { "x-legal-license-token": token }, body,
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || (isRtl ? "تعذر رفع الوثيقة." : "Document upload failed."));
+      if (!response.ok) throw new Error(wizardApiErrorMessage("upload", language, { ...data, status: response.status }));
       setApplication((current) => ({
         ...current,
         revision: data.revision,
@@ -338,10 +342,10 @@ export default function LegalLicenseWizard({ locale = "ar" }) {
         method: "DELETE", headers: { "x-legal-license-token": token },
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || (isRtl ? "تعذر حذف الوثيقة." : "Document delete failed."));
+      if (!response.ok) throw new Error(wizardApiErrorMessage("delete", language, { ...data, status: response.status }));
       const refreshed = await fetch(`/api/legal-licenses/${application.id}`, { headers: { "x-legal-license-token": token } });
       const refreshData = await refreshed.json();
-      if (!refreshed.ok) throw new Error(refreshData.error || "Refresh failed");
+      if (!refreshed.ok) throw new Error(wizardApiErrorMessage("refresh", language, { ...refreshData, status: refreshed.status }));
       setApplication(refreshData.application);
     } catch (deleteError) {
       setError(deleteError.message);
@@ -355,7 +359,7 @@ export default function LegalLicenseWizard({ locale = "ar" }) {
     try {
       await downloadProtectedBlob(`/api/legal-licenses/${application.id}/pdf`, token, `${application.referenceNo || "legal-license"}.pdf`);
     } catch {
-      setError(isRtl ? "تعذرت المعاينة." : "Preview failed.");
+      setError(wizardApiErrorMessage("preview", language));
     }
   }
   async function submit() {
@@ -383,9 +387,8 @@ export default function LegalLicenseWizard({ locale = "ar" }) {
           setStep(issueStep);
           throw new Error(wizardIncompleteMessage(issueStep, language));
         }
-        throw new Error(isRtl
-          ? "تعذر إرسال الطلب. راجع البيانات وحاول مجدداً."
-          : "Unable to submit the application. Review the data and try again.");
+        throw new Error(wizardApiErrorMessage("submit", language, { ...data, status: response.status }));
+
       }
       setApplication(data.application);
       setTrack({ referenceNo: data.application.referenceNo, accessToken: saved.token });
@@ -393,7 +396,7 @@ export default function LegalLicenseWizard({ locale = "ar" }) {
       setSent(true);
       localStorage.removeItem(STORAGE_KEY);
       localStorage.removeItem(LEGACY_STORAGE_KEY);
-      localStorage.setItem(TRACKING_KEY, JSON.stringify({ referenceNo: data.application.referenceNo, accessToken: saved.token }));
+      localStorage.setItem(TRACKING_KEY, JSON.stringify(buildLocalTrackingSnapshot({ referenceNo: data.application.referenceNo, accessToken: saved.token })));
     } catch (submitError) {
       setError(submitError.message);
     } finally {
@@ -412,12 +415,12 @@ export default function LegalLicenseWizard({ locale = "ar" }) {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(credentials),
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || (isRtl ? "لم يتم العثور على الطلب." : "Application not found."));
+      if (!response.ok) throw new Error(wizardApiErrorMessage("track", language, { ...data, status: response.status }));
       const result = buildTrackedWizardResult(data.application, credentials.accessToken);
       if (!result) throw new Error(isRtl ? "تعذر تثبيت بيانات المتابعة." : "Unable to bind tracking credentials.");
       setTrackedResult(result);
       setTrack(credentials);
-      localStorage.setItem(TRACKING_KEY, JSON.stringify(credentials));
+      localStorage.setItem(TRACKING_KEY, JSON.stringify(buildLocalTrackingSnapshot(credentials)));
     } catch (trackError) {
       setTrackedResult(null);
       setError(trackError.message);
@@ -572,17 +575,26 @@ function DossierRail({ steps, currentStep, profile, form, application, isRtl, mu
           const status = wizardStepStatus(item.id, { profile, form, application });
           const available = !mutationBusy && canNavigateToWizardStep(index, { profile, form, application });
           const active = index === currentStep;
+          const stateLabels = isRtl
+            ? { current: "الحالية", completed: "مكتملة", incomplete: "غير مكتملة", notRequired: "غير مطلوبة" }
+            : { current: "Current", completed: "Completed", incomplete: "Incomplete", notRequired: "Not required" };
+          const stateText = [
+            active ? stateLabels.current : null,
+            status.notRequired ? stateLabels.notRequired : status.completed ? stateLabels.completed : stateLabels.incomplete,
+          ].filter(Boolean).join(isRtl ? "، " : ", ");
           return (
             <li key={item.id} className="relative">
               {index < steps.length - 1 ? <span className="absolute bottom-0 top-9 w-px bg-slate-200 ltr:left-[18px] rtl:right-[18px]" aria-hidden="true" /> : null}
               <button type="button" onClick={() => available && onNavigate(index)} disabled={!available}
                 aria-current={active ? "step" : undefined}
+                aria-label={`${item.label[language]} — ${stateText}`}
                 className={`relative flex w-full items-start gap-3 rounded-xl px-2 py-3 text-start text-xs font-bold outline-none focus-visible:ring-4 focus-visible:ring-[#b9a779]/20 disabled:cursor-not-allowed ${active ? "bg-[#054239]/8 text-[#054239]" : available ? "text-slate-700 hover:bg-slate-50" : "text-slate-400"}`}>
                 <span className={`z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border ${active ? "border-[#054239] bg-[#054239] text-[#b9a779]" : status.completed ? "border-emerald-600 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-white text-slate-500"}`}>
                   {status.completed ? <Check className="h-4 w-4" /> : index + 1}
                 </span>
                 <span className="min-w-0 pt-1">
                   <span className="block">{item.label[language]}</span>
+                  <span className="sr-only">{stateText}</span>
                   {status.notRequired ? <span className="mt-1 block text-[10px] font-normal text-slate-400">{isRtl ? "غير مطلوب · مكتمل" : "Not required · complete"}</span> : null}
                 </span>
               </button>
@@ -647,7 +659,7 @@ function TrackingCard({ trackedResult, isRtl, onResume, onError }) {
             `/api/legal-licenses/${application.id}/attachments/${attachment.id}`,
             accessToken,
             attachment.originalName,
-          ).catch(() => onError(isRtl ? "تعذر تنزيل الوثيقة." : "Document download failed."))}
+          ).catch(() => onError(wizardApiErrorMessage("download", language)))}
           className="mt-4 inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-[#054239] outline-none focus-visible:ring-4 focus-visible:ring-[#b9a779]/20">
           <FileText className="h-4 w-4" />{attachment.originalName}
         </button>)}

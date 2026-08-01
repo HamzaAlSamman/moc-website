@@ -147,3 +147,29 @@ test("protected blob downloads use a downloadable anchor and revoke their object
   assert.match(wizard, /URL[.]revokeObjectURL/);
   assert.doesNotMatch(wizard, /window[.]open[(]url/);
 });
+
+test("citizen wizard stores tracking credentials only in a versioned expiring snapshot", () => {
+  const wizard = read("../app/[locale]/services/legal-licenses/LegalLicenseWizard.jsx");
+  assert.match(wizard, /buildLocalTrackingSnapshot/);
+  assert.match(wizard, /parseLocalTrackingSnapshot/);
+  assert.doesNotMatch(wizard, /JSON[.]parse[(]localStorage[.]getItem[(]TRACKING_KEY/);
+  assert.doesNotMatch(wizard, /localStorage[.]setItem[(]TRACKING_KEY,\s*JSON[.]stringify[(]credentials[)]/);
+  assert.doesNotMatch(wizard, /JSON[.]stringify[(][{] referenceNo:/);
+});
+
+test("citizen wizard localizes every citizen API failure without exposing raw server errors", () => {
+  const wizard = read("../app/[locale]/services/legal-licenses/LegalLicenseWizard.jsx");
+  for (const operation of ["save", "upload", "delete", "refresh", "submit", "track", "preview", "download"]) {
+    assert.match(wizard, new RegExp(`wizardApiErrorMessage[(]\"${operation}\"`), operation);
+  }
+  assert.doesNotMatch(wizard, /data[.]error\s*[|][|]/);
+  assert.doesNotMatch(wizard, /refreshData[.]error\s*[|][|]/);
+});
+
+test("wizard rail exposes localized screen-reader state text", () => {
+  const wizard = read("../app/[locale]/services/legal-licenses/LegalLicenseWizard.jsx");
+  assert.match(wizard, /sr-only/);
+  for (const label of ["Current", "Completed", "Incomplete", "Not required"]) {
+    assert.match(wizard, new RegExp(label));
+  }
+});

@@ -5,10 +5,27 @@ import {
   GENERAL_LEGAL_LICENSE_DOCUMENTS,
   LEGAL_LICENSE_TYPES,
   canTransitionLegalLicense,
+  isValidLegalLicenseEmail,
+  isValidLegalLicenseNationalId,
+  isValidLegalLicensePhone,
+  isValidLegalLicenseVisualSignature,
+  normalizeLegalLicensePhone,
   toPublicLegalLicenseApplication,
   validateLegalLicenseApplication,
 } from "./legal-license.mjs";
 
+test("shared legal-license identity, contact and signature predicates match server rules", () => {
+  assert.equal(isValidLegalLicenseNationalId("01234567890"), true);
+  assert.equal(isValidLegalLicenseNationalId("123"), false);
+  assert.equal(normalizeLegalLicensePhone("+963 (944) 444-444"), "+963944444444");
+  assert.equal(isValidLegalLicensePhone("+963 (944) 444-444"), true);
+  assert.equal(isValidLegalLicensePhone("123"), false);
+  assert.equal(isValidLegalLicenseEmail(" Citizen@Example.com "), true);
+  assert.equal(isValidLegalLicenseEmail("invalid"), false);
+  assert.equal(isValidLegalLicenseVisualSignature("data:image/png;base64,iVBORw0KGgo="), true);
+  assert.equal(isValidLegalLicenseVisualSignature("data:text/plain;base64,YQ=="), false);
+  assert.equal(isValidLegalLicenseVisualSignature(`data:image/png;base64,${"a".repeat(2_000_000)}`), false);
+});
 const VALID_APPLICATION = {
   applicantName: "أحمد محمد",
   nationalId: "01234567890",

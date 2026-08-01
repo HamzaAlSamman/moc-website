@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   LEGAL_LICENSE_WIZARD_STEPS,
+  buildLocalTrackingSnapshot,
   buildLocalWizardSnapshot,
   buildTrackedWizardResult,
   canNavigateToWizardStep,
@@ -15,8 +16,12 @@ import {
   isWizardRequirementEditable,
   isWizardStepEditable,
   mapDeficiencyToWizardStep,
+  parseLocalTrackingSnapshot,
   parseLocalWizardSnapshot,
+  LOCAL_TRACKING_SNAPSHOT_TTL_MS,
+  LOCAL_WIZARD_MAX_CLOCK_SKEW_MS,
   LOCAL_WIZARD_SNAPSHOT_TTL_MS,
+  wizardApiErrorMessage,
   wizardIncompleteMessage,
   wizardStepStatus,
 } from "./legal-license-wizard-state.mjs";
@@ -264,11 +269,102 @@ test("structured server issues map to the earliest human wizard step", () => {
   }), 2);
   assert.equal(firstServerIssueWizardStep({ code: "OTHER" }), null);
 });
-test("a suspended deficiency makes its owning step incomplete and blocks forward navigation", () => {
+test("a suspended deficiency is complete after the citizen supplies its current replacement", () => {
   const context = completeWizardContext("CULTURAL_FORUM");
   context.application.status = "SUSPENDED";
   context.application.deficiencyScopes = [{ scope: "ATTACHMENT", attachmentKind: "AUTHORIZATION" }];
-  assert.equal(wizardStepStatus("documents", context).completed, false);
-  assert.equal(firstIncompleteWizardStep(context), 4);
-  assert.equal(canNavigateToWizardStep(5, context), false);
+  assert.equal(firstDeficientWizardStep(context.application.deficiencyScopes), 4);
+  assert.equal(wizardStepStatus("documents", context).completed, true);
+  assert.equal(firstIncompleteWizardStep(context), null);
+  assert.equal(canNavigateToWizardStep(5, context), true);
+});
+
+test("people completeness matches server identity and contact validation", () => {
+  const valid = completeWizardContext("CULTURAL_FORUM");
+  assert.equal(wizardStepStatus("people", valid).completed, true);
+
+  for (const [field, value] of [["nationalId", "123"], ["phone", "bad"], ["email", "bad"]]) {
+    const context = structuredClone(valid);
+    context.form[field] = value;
+    assert.equal(wizardStepStatus("people", context).completed, false, field);
+  }
+
+  for (const [field, value] of [["nationalId", "bad"], ["phone", "bad"], ["email", "bad"]]) {
+    const context = structuredClone(valid);
+    context.form.founders[0][field] = value;
+    assert.equal(wizardStepStatus("people", context).completed, false, `founder ${field}`);
+  }
+
+  const duplicateApplicant = structuredClone(valid);
+  duplicateApplicant.form.founders[0].nationalId = duplicateApplicant.form.nationalId;
+  assert.equal(wizardStepStatus("people", duplicateApplicant).completed, false);
+
+  const duplicateFounders = structuredClone(valid);
+  duplicateFounders.form.founders.push({
+    id: "founder-2", fullName: "Second", nationalId: duplicateFounders.form.founders[0].nationalId,
+    phone: "", email: "", isAuthorizedRepresentative: false,
+  });
+  assert.equal(wizardStepStatus("people", duplicateFounders).completed, false);
+
+  const managerDuplicate = structuredClone(valid);
+  managerDuplicate.form.managerDetails = {
+    enabled: true, fullName: "Manager", nationalId: valid.form.nationalId,
+    phone: "+963 944 444 444", email: "manager@example.com",
+  };
+  assert.equal(wizardStepStatus("people", managerDuplicate).completed, false);
+
+  const managerValid = structuredClone(valid);
+  managerValid.form.managerDetails = {
+    enabled: true, fullName: "Manager", nationalId: "22345678901",
+    phone: "+963 944 444 444", email: "manager@example.com",
+  };
+  assert.equal(wizardStepStatus("people", managerValid).completed, true);
+});
+
+test("declaration completeness requires a valid bounded visual signature", () => {
+  const context = completeWizardContext("CULTURAL_FORUM");
+  context.form.applicantSignature = "not-a-data-image";
+  assert.equal(wizardStepStatus("declaration", context).completed, false);
+  context.form.applicantSignature = "data:image/webp;base64,YWJj";
+  assert.equal(wizardStepStatus("declaration", context).completed, true);
+});
+
+test("draft and tracking snapshots reject corrupt, expired and future-dated credentials", () => {
+  const now = Date.UTC(2026, 7, 2, 10);
+  const draft = buildLocalWizardSnapshot({ form: { licenseType: "FINE_ARTS" }, now });
+  const futureDraftSavedAt = now + LOCAL_WIZARD_MAX_CLOCK_SKEW_MS + 1;
+  assert.equal(parseLocalWizardSnapshot({
+    ...draft,
+    savedAt: futureDraftSavedAt,
+    expiresAt: futureDraftSavedAt + LOCAL_WIZARD_SNAPSHOT_TTL_MS,
+  }, now), null);
+  assert.equal(parseLocalWizardSnapshot({ ...draft, savedAt: Number.NaN }, now), null);
+
+  const tracking = buildLocalTrackingSnapshot({ referenceNo: "LIC-2026-0001", accessToken: "secret-token", now });
+  assert.equal(tracking.expiresAt, now + LOCAL_TRACKING_SNAPSHOT_TTL_MS);
+  assert.deepEqual(parseLocalTrackingSnapshot(JSON.stringify(tracking), now + 1), tracking);
+  assert.equal(parseLocalTrackingSnapshot({ ...tracking, version: 99 }, now), null);
+  assert.equal(parseLocalTrackingSnapshot({ ...tracking, accessToken: "" }, now), null);
+  const futureTrackingSavedAt = now + LOCAL_WIZARD_MAX_CLOCK_SKEW_MS + 1;
+  assert.equal(parseLocalTrackingSnapshot({
+    ...tracking,
+    savedAt: futureTrackingSavedAt,
+    expiresAt: futureTrackingSavedAt + LOCAL_TRACKING_SNAPSHOT_TTL_MS,
+  }, now), null);
+  assert.equal(parseLocalTrackingSnapshot(buildLocalTrackingSnapshot({
+    referenceNo: "LIC-2026-0001", accessToken: "x".repeat(5000), now,
+  }), now), null);
+  assert.equal(parseLocalTrackingSnapshot(tracking, tracking.expiresAt + 1), null);
+});
+
+test("wizard API errors are localized and map structured fields to their step", () => {
+  assert.equal(
+    wizardApiErrorMessage("save", "ar", { status: 500, error: "Raw English server detail" }).includes("Raw English"),
+    false,
+  );
+  assert.match(wizardApiErrorMessage("save", "en", { status: 409 }), /changed|refresh/i);
+  assert.equal(
+    wizardApiErrorMessage("submit", "en", { fields: { fieldErrors: { nationalId: ["Invalid"] } } }),
+    wizardIncompleteMessage(2, "en"),
+  );
 });

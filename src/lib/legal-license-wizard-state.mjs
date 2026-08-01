@@ -5,6 +5,10 @@ import {
 import {
   GENERAL_LEGAL_LICENSE_DOCUMENTS,
   LEGAL_LICENSE_DOCUMENT_RULES,
+  isValidLegalLicenseEmail,
+  isValidLegalLicenseNationalId,
+  isValidLegalLicensePhone,
+  isValidLegalLicenseVisualSignature,
 } from "./legal-license.mjs";
 
 const STEP_DEFINITIONS = [
@@ -23,7 +27,10 @@ export const LEGAL_LICENSE_WIZARD_STEPS = Object.freeze(
 );
 
 export const LOCAL_WIZARD_SNAPSHOT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+export const LOCAL_TRACKING_SNAPSHOT_TTL_MS = LOCAL_WIZARD_SNAPSHOT_TTL_MS;
+export const LOCAL_WIZARD_MAX_CLOCK_SKEW_MS = 5 * 60 * 1000;
 const LOCAL_WIZARD_SNAPSHOT_VERSION = 3;
+const LOCAL_TRACKING_SNAPSHOT_VERSION = 1;
 
 const STEP_BY_SCOPE = Object.freeze({
   ELIGIBILITY: 1,
@@ -76,9 +83,6 @@ const ANSWER_RECORD_FIELDS = Object.freeze([
   "eligibilityAnswers", "premisesAnswers", "bylawAnswers", "postLicenseDeclarations",
 ]);
 const ANSWER_KEY = /^[a-zA-Z0-9_.:-]{1,256}$/;
-const NATIONAL_ID = /^\d{11}$/;
-const PHONE = /^\+?\d{8,15}$/;
-const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function isRecord(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -117,23 +121,41 @@ export function wizardEligibility(profile, form = {}) {
   return { eligible: Boolean(profile) && issues.length === 0, issues };
 }
 
-function managerCompleted(manager) {
+function optionalValueIsValid(value, validator) {
+  return !value || validator(value);
+}
+
+function managerCompleted(manager, usedNationalIds) {
   if (!isRecord(manager) || manager.enabled !== true) return !manager || manager.enabled === false;
   if (!nonEmpty(manager.fullName)) return false;
-  if (manager.nationalId && !NATIONAL_ID.test(String(manager.nationalId).trim())) return false;
-  if (manager.phone && !PHONE.test(String(manager.phone).trim().replace(/[\s()-]/g, ""))) return false;
-  if (manager.email && !EMAIL.test(String(manager.email).trim())) return false;
-  return MANAGER_TEXT_FIELDS.every((field) => manager[field] === undefined || typeof manager[field] === "string");
+  if (!MANAGER_TEXT_FIELDS.every((field) => manager[field] === undefined || typeof manager[field] === "string")) return false;
+  if (!optionalValueIsValid(manager.nationalId, isValidLegalLicenseNationalId)) return false;
+  if (manager.nationalId && usedNationalIds.has(manager.nationalId.trim())) return false;
+  if (!optionalValueIsValid(manager.phone, isValidLegalLicensePhone)) return false;
+  if (!optionalValueIsValid(manager.email, isValidLegalLicenseEmail)) return false;
+  return true;
 }
 
 function peopleCompleted(form) {
+  if (!nonEmpty(form.applicantName) || !nonEmpty(form.capacity)
+    || !isValidLegalLicenseNationalId(form.nationalId)
+    || !isValidLegalLicensePhone(form.phone)
+    || !isValidLegalLicenseEmail(form.email)) return false;
+
   const founders = Array.isArray(form.founders) ? form.founders : [];
+  if (founders.length === 0) return false;
+  const usedNationalIds = new Set([form.nationalId.trim()]);
+  for (const founder of founders) {
+    if (!isRecord(founder) || !nonEmpty(founder.fullName)
+      || !isValidLegalLicenseNationalId(founder.nationalId)
+      || !optionalValueIsValid(founder.phone, isValidLegalLicensePhone)
+      || !optionalValueIsValid(founder.email, isValidLegalLicenseEmail)) return false;
+    const nationalId = founder.nationalId.trim();
+    if (usedNationalIds.has(nationalId)) return false;
+    usedNationalIds.add(nationalId);
+  }
   const representativeCount = founders.filter((founder) => founder?.isAuthorizedRepresentative === true).length;
-  return ["applicantName", "nationalId", "phone", "email", "capacity"].every((field) => nonEmpty(form[field]))
-    && founders.length > 0
-    && founders.every((founder) => isRecord(founder) && nonEmpty(founder.fullName) && nonEmpty(founder.nationalId))
-    && representativeCount === 1
-    && managerCompleted(form.managerDetails);
+  return representativeCount === 1 && managerCompleted(form.managerDetails, usedNationalIds);
 }
 
 function entityCompleted(profile, form) {
@@ -179,7 +201,7 @@ function declarationCompleted(profile, form) {
   return form.declarationAccuracy === true
     && form.declarationResponsibility === true
     && form.declarationPrivacy === true
-    && nonEmpty(form.applicantSignature)
+    && isValidLegalLicenseVisualSignature(form.applicantSignature)
     && requirementsSatisfied(requirements, form.postLicenseDeclarations);
 }
 
@@ -194,12 +216,6 @@ function baseStepCompleted(stepId, { profile, form = {}, application } = {}) {
   return false;
 }
 
-function stepHasOpenDeficiency(stepId, context) {
-  if (context.application?.status !== "SUSPENDED") return false;
-  const stepIndex = LEGAL_LICENSE_WIZARD_STEPS.find((step) => step.id === stepId)?.index;
-  return Number.isInteger(stepIndex) && (context.application.deficiencyScopes || [])
-    .some((scope) => mapDeficiencyToWizardStep(scope) === stepIndex);
-}
 
 export function wizardStepStatus(stepId, context = {}) {
   let status;
@@ -215,7 +231,7 @@ export function wizardStepStatus(stepId, context = {}) {
   } else {
     return { required: false, completed: false, notRequired: true };
   }
-  return stepHasOpenDeficiency(stepId, context) ? { ...status, completed: false } : status;
+  return status;
 }
 
 export function firstIncompleteWizardStep(context = {}) {
@@ -345,15 +361,21 @@ export function buildLocalWizardSnapshot({ form, application = null, token = "",
   };
 }
 
+function validSnapshotTimes(snapshot, now, ttl) {
+  return Number.isFinite(snapshot.savedAt)
+    && Number.isFinite(snapshot.expiresAt)
+    && snapshot.savedAt >= 0
+    && snapshot.savedAt <= now + LOCAL_WIZARD_MAX_CLOCK_SKEW_MS
+    && snapshot.expiresAt === snapshot.savedAt + ttl
+    && snapshot.expiresAt > now;
+}
+
 export function parseLocalWizardSnapshot(raw, now = Date.now()) {
   try {
     const snapshot = typeof raw === "string" ? JSON.parse(raw) : raw;
     if (!isRecord(snapshot)
       || snapshot.version !== LOCAL_WIZARD_SNAPSHOT_VERSION
-      || !Number.isFinite(snapshot.savedAt)
-      || !Number.isFinite(snapshot.expiresAt)
-      || snapshot.expiresAt !== snapshot.savedAt + LOCAL_WIZARD_SNAPSHOT_TTL_MS
-      || snapshot.expiresAt <= now
+      || !validSnapshotTimes(snapshot, now, LOCAL_WIZARD_SNAPSHOT_TTL_MS)
       || typeof snapshot.token !== "string"
       || snapshot.token.length > 4096
       || !Number.isInteger(snapshot.step)
@@ -363,6 +385,36 @@ export function parseLocalWizardSnapshot(raw, now = Date.now()) {
     const application = sanitizeSnapshotApplication(snapshot.application);
     if (!form || (snapshot.application !== null && !application)) return null;
     return { ...snapshot, form, application };
+  } catch {
+    return null;
+  }
+}
+
+export function buildLocalTrackingSnapshot({ referenceNo, accessToken, now = Date.now() } = {}) {
+  return {
+    version: LOCAL_TRACKING_SNAPSHOT_VERSION,
+    savedAt: now,
+    expiresAt: now + LOCAL_TRACKING_SNAPSHOT_TTL_MS,
+    referenceNo: typeof referenceNo === "string" && referenceNo.trim().length <= 128 ? referenceNo.trim() : "",
+    accessToken: typeof accessToken === "string" && accessToken.trim().length <= 4096 ? accessToken.trim() : "",
+  };
+}
+
+export function parseLocalTrackingSnapshot(raw, now = Date.now()) {
+  try {
+    const snapshot = typeof raw === "string" ? JSON.parse(raw) : raw;
+    if (!isRecord(snapshot)
+      || snapshot.version !== LOCAL_TRACKING_SNAPSHOT_VERSION
+      || !validSnapshotTimes(snapshot, now, LOCAL_TRACKING_SNAPSHOT_TTL_MS)
+      || !nonEmpty(snapshot.referenceNo)
+      || snapshot.referenceNo.length > 128
+      || !nonEmpty(snapshot.accessToken)
+      || snapshot.accessToken.length > 4096) return null;
+    return {
+      ...snapshot,
+      referenceNo: snapshot.referenceNo.trim(),
+      accessToken: snapshot.accessToken.trim(),
+    };
   } catch {
     return null;
   }
@@ -424,6 +476,30 @@ export function firstServerIssueWizardStep(response) {
     }
   }
   return mapped.length ? Math.min(...mapped) : null;
+}
+
+
+const API_ERROR_MESSAGES = Object.freeze({
+  save: { ar: "تعذر حفظ المسودة. حاول مرة أخرى.", en: "Unable to save the draft. Try again." },
+  upload: { ar: "تعذر رفع الوثيقة. تحقق من الملف وحاول مرة أخرى.", en: "Unable to upload the document. Check the file and try again." },
+  delete: { ar: "تعذر حذف الوثيقة. حاول مرة أخرى.", en: "Unable to delete the document. Try again." },
+  submit: { ar: "تعذر إرسال الطلب. راجع البيانات وحاول مرة أخرى.", en: "Unable to submit the application. Review the data and try again." },
+  track: { ar: "تعذر العثور على الطلب. تحقق من الرقم المرجعي ورمز الوصول.", en: "Unable to find the application. Check the reference number and access code." },
+  refresh: { ar: "تعذر تحديث بيانات الطلب. أعد المحاولة.", en: "Unable to refresh the application. Try again." },
+  preview: { ar: "تعذرت معاينة الطلب.", en: "Unable to preview the application." },
+  download: { ar: "تعذر تنزيل الوثيقة.", en: "Unable to download the document." },
+});
+
+export function wizardApiErrorMessage(operation, language = "en", response = {}) {
+  const locale = language === "ar" ? "ar" : "en";
+  const issueStep = firstServerIssueWizardStep(response);
+  if (issueStep !== null) return wizardIncompleteMessage(issueStep, locale);
+  if (response?.status === 409 || response?.code === "CONFLICT") {
+    return locale === "ar"
+      ? "تم تعديل الطلب في جلسة أخرى. حدّث الطلب ثم أعد المحاولة."
+      : "The application changed in another session. Refresh it and try again.";
+  }
+  return (API_ERROR_MESSAGES[operation] || API_ERROR_MESSAGES.refresh)[locale];
 }
 
 export function isWizardStepEditable(stepIndex, { status, deficiencyScopes } = {}) {
