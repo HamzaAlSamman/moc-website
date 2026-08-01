@@ -213,6 +213,7 @@ const PUBLIC_APPLICATION_FIELDS = [
   "governorate", "address", "status", "revision", "declarationAccuracy",
   "declarationResponsibility", "declarationPrivacy", "applicantSignature",
   "deficiencyNote", "licenseNumber",
+  "eligibilityAnswers", "premisesAnswers", "bylawAnswers", "postLicenseDeclarations",
   "licenseDate", "submittedAt", "issuedAt", "completedAt", "createdAt", "updatedAt",
 ];
 
@@ -228,6 +229,18 @@ const PUBLIC_ATTACHMENT_FIELDS = [
 const PUBLIC_HISTORY_FIELDS = [
   "id", "fromStatus", "toStatus", "action", "publicNote", "createdAt",
 ];
+
+const PUBLIC_DEFICIENCY_SCOPE_FIELDS = [
+  "scope", "field", "requirementKey", "attachmentKind", "subjectRef",
+];
+
+function publicDeficiencyScopes(scopes) {
+  return Array.isArray(scopes)
+    ? scopes
+        .filter((item) => item && typeof item === "object" && !Array.isArray(item))
+        .map((item) => pick(item, PUBLIC_DEFICIENCY_SCOPE_FIELDS))
+    : [];
+}
 
 function pick(source, fields) {
   return Object.fromEntries(
@@ -245,6 +258,7 @@ export function toPublicLegalLicenseApplication(application) {
   dto.attachments = Array.isArray(application?.attachments)
     ? application.attachments.map((attachment) => pick(attachment, PUBLIC_ATTACHMENT_FIELDS))
     : [];
+  dto.deficiencyScopes = publicDeficiencyScopes(application?.deficiencyScopes);
   dto.history = Array.isArray(application?.history)
     ? application.history.map((entry) => pick(entry, PUBLIC_HISTORY_FIELDS))
     : [];

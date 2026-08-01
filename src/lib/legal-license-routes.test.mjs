@@ -25,16 +25,26 @@ test("admin legal-license routes provide list/detail/workflow and never hard-del
 });
 
 test("public and admin legal-license pages are present", () => {
-  assert.match(read("../app/[locale]/services/legal-licenses/page.js"), /LEGAL_LICENSE_TYPES/);
+  const page = read("../app/[locale]/services/legal-licenses/page.js");
+  const wizard = read("../app/[locale]/services/legal-licenses/LegalLicenseWizard.jsx");
+  assert.match(page, /LegalLicenseWizard/);
+  assert.match(wizard, /LEGAL_LICENSE_SOURCE_DOCUMENTS/);
+  assert.match(wizard, /expectedUpdatedAt/);
+  assert.match(wizard, /expectedRevision/);
+  assert.match(wizard, /TrackingCard/);
+  for (const step of [
+    "LicenseGuideStep", "EligibilityStep", "ApplicantFoundersStep", "EntityPremisesStep",
+    "DocumentsStep", "BylawsStep", "ReviewStep", "DeclarationStep",
+  ]) assert.match(wizard, new RegExp(step));
   assert.match(read("../app/admin/legal-licenses/page.js"), /LegalLicense/);
   assert.match(read("../app/admin/legal-licenses/[id]/page.js"), /LegalLicense/);
 });
 test("citizen resume keeps the secret token and reopens editable drafts", () => {
-  const page = read("../app/[locale]/services/legal-licenses/page.js");
-  assert.match(page, /TRACKING_KEY/);
-  assert.match(page, /resumeApplication/);
-  assert.match(page, /application\?\.referenceNo/);
-  assert.match(page, /token/);
+  const wizard = read("../app/[locale]/services/legal-licenses/LegalLicenseWizard.jsx");
+  assert.match(wizard, /TRACKING_KEY/);
+  assert.match(wizard, /resumeApplication/);
+  assert.match(wizard, /application\?\.referenceNo/);
+  assert.match(wizard, /token/);
   assert.match(read("../app/[locale]/services/legal-licenses/gate/page.js"), /window\.location\.hash/);
 });
 

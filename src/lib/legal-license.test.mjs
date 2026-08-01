@@ -168,6 +168,11 @@ test("public legal-license DTO strips tokens, storage keys and internal review d
     status: "SUSPENDED",
     revision: 2,
     deficiencyNote: "صورة الهوية غير واضحة",
+    eligibilityAnswers: { eligible: true },
+    premisesAnswers: { premises: "ready" },
+    bylawAnswers: { bylaws: true },
+    postLicenseDeclarations: { compliance: true },
+    deficiencyScopes: [{ scope: "ATTACHMENT", attachmentKind: "NATIONAL_ID_FRONT", subjectRef: "founder-1" }],
     accessTokenHash: "secret-token-hash",
     committeeRecommendation: "internal committee recommendation",
     ministerDecision: "internal minister decision",
@@ -210,6 +215,11 @@ test("public legal-license DTO strips tokens, storage keys and internal review d
 
   assert.equal(dto.referenceNo, "LIC-2026-0001");
   assert.equal(dto.deficiencyNote, "صورة الهوية غير واضحة");
+  assert.deepEqual(dto.eligibilityAnswers, { eligible: true });
+  assert.deepEqual(dto.premisesAnswers, { premises: "ready" });
+  assert.deepEqual(dto.bylawAnswers, { bylaws: true });
+  assert.deepEqual(dto.postLicenseDeclarations, { compliance: true });
+  assert.equal(dto.deficiencyScopes[0].attachmentKind, "NATIONAL_ID_FRONT");
   assert.deepEqual(Object.keys(dto.attachments[0]), [
     "id", "founderId", "kind", "originalName", "mimeType", "size", "version", "createdAt",
   ]);
