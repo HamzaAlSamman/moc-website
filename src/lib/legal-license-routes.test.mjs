@@ -87,3 +87,9 @@ test("citizen JSON routes use the bounded reader and safe error mapper", () => {
     assert.match(source, /legalLicenseError/);
   }
 });
+test("legal-license server re-exports the safe mapper without a duplicate binding", () => {
+  const server = read("./legal-license-server.js");
+  assert.match(server, /import [{] legalLicenseError [}] from/);
+  assert.match(server, /export [{] legalLicenseError [}]/);
+  assert.doesNotMatch(server, /export function legalLicenseError[(]/);
+});

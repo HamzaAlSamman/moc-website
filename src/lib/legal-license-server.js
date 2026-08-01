@@ -57,10 +57,3 @@ export async function canStaffAccessLegalLicenses() {
 export function legalLicenseJson(application, extra = {}) {
   return { application: toPublicLegalLicenseApplication(application), ...extra };
 }
-
-export function legalLicenseError(error, fallback = "Unable to process legal-license request") {
-  if (error?.name === "ZodError") {
-    return { status: 400, body: { error: "Invalid draft data", fields: error.flatten() } };
-  }
-  return { status: 400, body: { error: error?.message || fallback } };
-}
