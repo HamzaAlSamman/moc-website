@@ -1,3 +1,5 @@
+import { LEGAL_LICENSE_REQUIREMENT_PROFILES } from "./legal-license-requirements.mjs";
+
 const document = (kind, ar, en) => Object.freeze({ kind, label: Object.freeze({ ar, en }) });
 
 export const GENERAL_LEGAL_LICENSE_DOCUMENTS = Object.freeze([
@@ -33,29 +35,16 @@ export const LEGAL_LICENSE_DOCUMENT_RULES = Object.freeze({
   PROGRAM_AND_CURRICULUM: Object.freeze({ owner: "APPLICATION", required: true, label: Object.freeze({ ar: "\u0627\u0644\u0628\u0631\u0646\u0627\u0645\u062c \u0648\u0627\u0644\u0645\u0646\u0647\u0627\u062c", en: "Program and curriculum" }) }),
   GALLERY_PROGRAM: Object.freeze({ owner: "APPLICATION", required: true, label: Object.freeze({ ar: "\u0628\u0631\u0646\u0627\u0645\u062c \u0627\u0644\u0635\u0627\u0644\u0629", en: "Gallery program" }) }),
 });
-const LICENSE_TYPE_DEFINITIONS = [
-  ["CULTURAL_FORUM", "cultural-forum", "ملتقى ثقافي", "Cultural Forum", ["FOUNDERS_MINUTES", "ACTIVITY_PLAN"]],
-  ["CULTURAL_HOUSE", "cultural-house", "دار ثقافية", "Cultural House", ["OWNERSHIP_OR_LEASE", "FLOOR_PLAN", "SAFETY_APPROVAL"]],
-  ["CULTURAL_ASSOCIATION", "cultural-association", "رابطة ثقافية", "Cultural Association", ["ARTICLES_OF_ASSOCIATION", "FOUNDERS_MINUTES"]],
-  ["AMATEUR_TROUPE", "amateur-troupe", "فرقة هواة", "Amateur Troupe", ["MEMBERS_LIST", "ARTISTIC_PROGRAM"]],
-  ["CINEMA_ARTS", "cinema-arts", "فنون سينمائية", "Cinema Arts", ["PROFESSIONAL_CERTIFICATE", "EQUIPMENT_LIST"]],
-  ["FINE_ARTS", "fine-arts", "فنون تشكيلية", "Fine Arts", ["PROFESSIONAL_CERTIFICATE", "ARTWORK_PORTFOLIO"]],
-  ["HERITAGE_MUSEUM", "heritage-museum", "متحف تراثي", "Heritage Museum", ["OWNERSHIP_OR_LEASE", "COLLECTION_INVENTORY", "COLLECTION_PROVENANCE", "FLOOR_PLAN", "SAFETY_APPROVAL"]],
-  ["MUSIC_INSTITUTE", "music-institute", "معهد موسيقي", "Music Institute", ["OWNERSHIP_OR_LEASE", "FLOOR_PLAN", "SAFETY_APPROVAL", "ACADEMIC_QUALIFICATION", "PROGRAM_AND_CURRICULUM", "EQUIPMENT_LIST"]],
-  ["THEATER_INSTITUTE", "theater-institute", "معهد مسرحي", "Theater Institute", ["OWNERSHIP_OR_LEASE", "FLOOR_PLAN", "SAFETY_APPROVAL", "ACADEMIC_QUALIFICATION", "PROGRAM_AND_CURRICULUM", "EQUIPMENT_LIST"]],
-  ["FINE_ARTS_GALLERY", "fine-arts-gallery", "صالة عرض فنون تشكيلية", "Fine Arts Gallery", ["OWNERSHIP_OR_LEASE", "FLOOR_PLAN", "SAFETY_APPROVAL", "GALLERY_PROGRAM"]],
-];
-
 export const LEGAL_LICENSE_TYPES = Object.freeze(Object.fromEntries(
-  LICENSE_TYPE_DEFINITIONS.map(([value, slug, ar, en, additionalDocuments]) => [
-    value,
+  Object.values(LEGAL_LICENSE_REQUIREMENT_PROFILES).map((profile) => [
+    profile.licenseType,
     Object.freeze({
-      value,
-      slug,
-      label: Object.freeze({ ar, en }),
-      additionalDocuments: Object.freeze([...additionalDocuments]),
-      requiredFields: Object.freeze(["entityName", "purpose", "objectives", "activityDescription", "governorate", "address"]),
-      pdfTemplate: "unified-v1",
+      value: profile.licenseType,
+      slug: profile.slug,
+      label: profile.label,
+      additionalDocuments: profile.attachmentKinds,
+      requiredFields: profile.requiredFields,
+      pdfTemplate: profile.pdfTemplate,
     }),
   ]),
 ));
@@ -132,6 +121,30 @@ const DECLARATION_FIELDS = [
 const NATIONAL_ID_PATTERN = /^\d{11}$/;
 const PHONE_PATTERN = /^\+?\d{8,15}$/;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const VISUAL_SIGNATURE_PATTERN = /^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/;
+const MAX_VISUAL_SIGNATURE_LENGTH = 2_000_000;
+
+export function isValidLegalLicenseNationalId(value) {
+  return typeof value === "string" && NATIONAL_ID_PATTERN.test(value.trim());
+}
+
+export function normalizeLegalLicensePhone(value) {
+  return typeof value === "string" ? value.trim().replace(/[\s()-]/g, "") : "";
+}
+
+export function isValidLegalLicensePhone(value) {
+  return PHONE_PATTERN.test(normalizeLegalLicensePhone(value));
+}
+
+export function isValidLegalLicenseEmail(value) {
+  return typeof value === "string" && EMAIL_PATTERN.test(value.trim().toLowerCase());
+}
+
+export function isValidLegalLicenseVisualSignature(value) {
+  return typeof value === "string"
+    && value.length <= MAX_VISUAL_SIGNATURE_LENGTH
+    && VISUAL_SIGNATURE_PATTERN.test(value);
+}
 
 function requiredText(value, field) {
   if (typeof value !== "string" || !value.trim()) throw new Error(`${field} is required`);
@@ -140,19 +153,19 @@ function requiredText(value, field) {
 
 function validateNationalId(value, field) {
   const normalized = requiredText(value, field);
-  if (!NATIONAL_ID_PATTERN.test(normalized)) throw new Error(`${field} is invalid`);
+  if (!isValidLegalLicenseNationalId(normalized)) throw new Error(`${field} is invalid`);
   return normalized;
 }
 
 function validatePhone(value, field) {
-  const normalized = requiredText(value, field).replace(/[\s()-]/g, "");
-  if (!PHONE_PATTERN.test(normalized)) throw new Error(`${field} is invalid`);
+  const normalized = normalizeLegalLicensePhone(requiredText(value, field));
+  if (!isValidLegalLicensePhone(normalized)) throw new Error(`${field} is invalid`);
   return normalized;
 }
 
 function validateEmail(value, field) {
   const normalized = requiredText(value, field).toLowerCase();
-  if (!EMAIL_PATTERN.test(normalized)) throw new Error(`${field} is invalid`);
+  if (!isValidLegalLicenseEmail(normalized)) throw new Error(`${field} is invalid`);
   return normalized;
 }
 
@@ -200,7 +213,7 @@ export function validateLegalLicenseApplication(data) {
     if (data[field] !== true) throw new Error(`${field} must be accepted`);
   }
   normalized.applicantSignature = requiredText(data.applicantSignature, "applicantSignature");
-  if (!/^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(normalized.applicantSignature) || normalized.applicantSignature.length > 2_000_000) {
+  if (!isValidLegalLicenseVisualSignature(normalized.applicantSignature)) {
     throw new Error("applicantSignature is invalid");
   }
 
@@ -224,6 +237,7 @@ const PUBLIC_APPLICATION_FIELDS = [
   "governorate", "address", "status", "revision", "declarationAccuracy",
   "declarationResponsibility", "declarationPrivacy", "applicantSignature",
   "deficiencyNote", "licenseNumber",
+  "eligibilityAnswers", "premisesAnswers", "bylawAnswers", "postLicenseDeclarations",
   "licenseDate", "submittedAt", "issuedAt", "completedAt", "createdAt", "updatedAt",
 ];
 
@@ -239,6 +253,35 @@ const PUBLIC_ATTACHMENT_FIELDS = [
 const PUBLIC_HISTORY_FIELDS = [
   "id", "fromStatus", "toStatus", "action", "publicNote", "createdAt",
 ];
+
+const PUBLIC_MANAGER_DETAIL_FIELDS = [
+  "fullName", "nationalId", "phone", "email", "occupation", "qualification",
+];
+
+function publicManagerDetails(manager) {
+  if (!manager || typeof manager !== "object" || Array.isArray(manager) || manager.enabled !== true) {
+    return { enabled: false };
+  }
+  return {
+    enabled: true,
+    ...Object.fromEntries(PUBLIC_MANAGER_DETAIL_FIELDS.map((field) => [
+      field,
+      typeof manager[field] === "string" ? manager[field] : "",
+    ])),
+  };
+}
+
+const PUBLIC_DEFICIENCY_SCOPE_FIELDS = [
+  "scope", "field", "requirementKey", "attachmentKind", "subjectRef",
+];
+
+function publicDeficiencyScopes(scopes) {
+  return Array.isArray(scopes)
+    ? scopes
+        .filter((item) => item && typeof item === "object" && !Array.isArray(item))
+        .map((item) => pick(item, PUBLIC_DEFICIENCY_SCOPE_FIELDS))
+    : [];
+}
 
 function pick(source, fields) {
   return Object.fromEntries(
@@ -256,6 +299,8 @@ export function toPublicLegalLicenseApplication(application) {
   dto.attachments = Array.isArray(application?.attachments)
     ? application.attachments.map((attachment) => pick(attachment, PUBLIC_ATTACHMENT_FIELDS))
     : [];
+  dto.managerDetails = publicManagerDetails(application?.managerDetails);
+  dto.deficiencyScopes = publicDeficiencyScopes(application?.deficiencyScopes);
   dto.history = Array.isArray(application?.history)
     ? application.history.map((entry) => pick(entry, PUBLIC_HISTORY_FIELDS))
     : [];

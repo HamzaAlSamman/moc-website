@@ -4,11 +4,21 @@ import { getSessionOptional } from "@/lib/dal";
 import { can } from "@/lib/permissions";
 import { hashLegalLicenseAccessToken } from "@/lib/legal-license-storage.mjs";
 import { toPublicLegalLicenseApplication } from "@/lib/legal-license.mjs";
+import { legalLicenseError } from "@/lib/legal-license-errors.mjs";
+
+export { legalLicenseError };
 
 export const LEGAL_LICENSE_INCLUDE = Object.freeze({
   founders: { orderBy: { createdAt: "asc" } },
   attachments: { orderBy: [{ kind: "asc" }, { version: "desc" }] },
   history: { orderBy: { createdAt: "asc" } },
+  reviewItems: {
+    orderBy: [
+      { applicationRevision: "asc" },
+      { scope: "asc" },
+      { requirementKey: "asc" },
+    ],
+  },
 });
 
 export function legalLicenseTokenFromRequest(request) {
@@ -46,11 +56,4 @@ export async function canStaffAccessLegalLicenses() {
 
 export function legalLicenseJson(application, extra = {}) {
   return { application: toPublicLegalLicenseApplication(application), ...extra };
-}
-
-export function legalLicenseError(error, fallback = "Unable to process legal-license request") {
-  if (error?.name === "ZodError") {
-    return { status: 400, body: { error: "Invalid draft data", fields: error.flatten() } };
-  }
-  return { status: 400, body: { error: error?.message || fallback } };
 }

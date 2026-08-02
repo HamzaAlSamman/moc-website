@@ -5,10 +5,27 @@ import {
   GENERAL_LEGAL_LICENSE_DOCUMENTS,
   LEGAL_LICENSE_TYPES,
   canTransitionLegalLicense,
+  isValidLegalLicenseEmail,
+  isValidLegalLicenseNationalId,
+  isValidLegalLicensePhone,
+  isValidLegalLicenseVisualSignature,
+  normalizeLegalLicensePhone,
   toPublicLegalLicenseApplication,
   validateLegalLicenseApplication,
 } from "./legal-license.mjs";
 
+test("shared legal-license identity, contact and signature predicates match server rules", () => {
+  assert.equal(isValidLegalLicenseNationalId("01234567890"), true);
+  assert.equal(isValidLegalLicenseNationalId("123"), false);
+  assert.equal(normalizeLegalLicensePhone("+963 (944) 444-444"), "+963944444444");
+  assert.equal(isValidLegalLicensePhone("+963 (944) 444-444"), true);
+  assert.equal(isValidLegalLicensePhone("123"), false);
+  assert.equal(isValidLegalLicenseEmail(" Citizen@Example.com "), true);
+  assert.equal(isValidLegalLicenseEmail("invalid"), false);
+  assert.equal(isValidLegalLicenseVisualSignature("data:image/png;base64,iVBORw0KGgo="), true);
+  assert.equal(isValidLegalLicenseVisualSignature("data:text/plain;base64,YQ=="), false);
+  assert.equal(isValidLegalLicenseVisualSignature(`data:image/png;base64,${"a".repeat(2_000_000)}`), false);
+});
 const VALID_APPLICATION = {
   applicantName: "أحمد محمد",
   nationalId: "01234567890",
@@ -168,6 +185,12 @@ test("public legal-license DTO strips tokens, storage keys and internal review d
     status: "SUSPENDED",
     revision: 2,
     deficiencyNote: "صورة الهوية غير واضحة",
+    eligibilityAnswers: { eligible: true },
+    premisesAnswers: { premises: "ready" },
+    bylawAnswers: { bylaws: true },
+    postLicenseDeclarations: { compliance: true },
+    managerDetails: { enabled: true, fullName: "Manager", email: "manager@example.com", internalNote: "secret" },
+    deficiencyScopes: [{ scope: "ATTACHMENT", attachmentKind: "NATIONAL_ID_FRONT", subjectRef: "founder-1" }],
     accessTokenHash: "secret-token-hash",
     committeeRecommendation: "internal committee recommendation",
     ministerDecision: "internal minister decision",
@@ -210,6 +233,13 @@ test("public legal-license DTO strips tokens, storage keys and internal review d
 
   assert.equal(dto.referenceNo, "LIC-2026-0001");
   assert.equal(dto.deficiencyNote, "صورة الهوية غير واضحة");
+  assert.deepEqual(dto.eligibilityAnswers, { eligible: true });
+  assert.deepEqual(dto.premisesAnswers, { premises: "ready" });
+  assert.deepEqual(dto.bylawAnswers, { bylaws: true });
+  assert.deepEqual(dto.postLicenseDeclarations, { compliance: true });
+  assert.deepEqual(dto.managerDetails, { enabled: true, fullName: "Manager", nationalId: "", phone: "", email: "manager@example.com", occupation: "", qualification: "" });
+  assert.equal("internalNote" in dto.managerDetails, false);
+  assert.equal(dto.deficiencyScopes[0].attachmentKind, "NATIONAL_ID_FRONT");
   assert.deepEqual(Object.keys(dto.attachments[0]), [
     "id", "founderId", "kind", "originalName", "mimeType", "size", "version", "createdAt",
   ]);
@@ -251,4 +281,111 @@ test("legal-license persistence schema and reference prefix are declared", () =>
   assert.match(migration, /CREATE TABLE IF NOT EXISTS "LegalLicenseApplication"/);
   assert.match(migration, /ADD VALUE IF NOT EXISTS 'LICENSING_OFFICER'/);
   assert.match(migration, /ADD VALUE IF NOT EXISTS 'LICENSING_COMMITTEE'/);
+});
+
+test("guided legal-license persistence declares review state and structured review items", () => {
+  const schema = readFileSync(new URL("../../prisma/schema.prisma", import.meta.url), "utf8");
+  const migration = readFileSync(
+    new URL("../../prisma/migrations_manual/2026-07-31_legal_license_guided_documents.sql", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(
+    schema,
+    /enum LegalLicenseReviewStatus\s*{\s*PENDING\s+ACCEPTED\s+DEFICIENT\s+NOT_APPLICABLE\s*}/s,
+  );
+  assert.match(schema, /model LegalLicenseReviewItem\s*{[\s\S]*?id\s+String\s+@id\s+@default\(cuid\(\)\)/);
+  for (const field of [
+    "applicationId\\s+String",
+    "applicationRevision\\s+Int",
+    "requirementKey\\s+String",
+    "scope\\s+String",
+    "subjectRef\\s+String\\?",
+    "status\\s+LegalLicenseReviewStatus\\s+@default\\(PENDING\\)",
+    "note\\s+String\\?\\s+@db\\.Text",
+    "publicNote\\s+String\\?\\s+@db\\.Text",
+    "reviewerId\\s+String\\?",
+    "reviewerEmail\\s+String\\?",
+    "reviewerName\\s+String\\?",
+    "reviewedAt\\s+DateTime\\?",
+    "createdAt\\s+DateTime\\s+@default\\(now\\(\\)\\)",
+    "updatedAt\\s+DateTime\\s+@updatedAt",
+  ]) {
+    assert.match(schema, new RegExp(field));
+  }
+  assert.match(
+    schema,
+    /application\s+LegalLicenseApplication\s+@relation\(fields:\s*\[applicationId\],\s*references:\s*\[id\],\s*onDelete:\s*Restrict\)/,
+  );
+  assert.match(schema, /@@unique\(\[applicationId, applicationRevision, requirementKey, subjectRef\], map: "LLReview_app_revision_requirement_subject_key"\)/);
+  assert.match(schema, /@@index\(\[applicationId, applicationRevision\]\)/);
+  assert.match(schema, /reviewItems\s+LegalLicenseReviewItem\[\]/);
+  assert.match(
+    schema,
+    /model LegalLicenseHistory\s*{[\s\S]*?application\s+LegalLicenseApplication\s+@relation\([^\n]*onDelete:\s*Restrict\)/,
+  );
+
+  assert.match(migration, /CREATE TYPE "LegalLicenseReviewStatus"/);
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS "LegalLicenseReviewItem"/);
+  assert.match(migration, /ON DELETE RESTRICT/);
+  assert.match(
+    migration,
+    /CREATE UNIQUE INDEX IF NOT EXISTS "LLReview_app_revision_requirement_null_subject_key"[\s\S]*WHERE "subjectRef" IS NULL/,
+  );
+});
+
+test("guided answers and generated document metadata are additive and nullable", () => {
+  const schema = readFileSync(new URL("../../prisma/schema.prisma", import.meta.url), "utf8");
+  const migration = readFileSync(
+    new URL("../../prisma/migrations_manual/2026-07-31_legal_license_guided_documents.sql", import.meta.url),
+    "utf8",
+  );
+
+  for (const field of [
+    "eligibilityAnswers", "premisesAnswers", "bylawAnswers", "postLicenseDeclarations", "requirementSnapshot", "deficiencyScopes", "managerDetails",
+  ]) {
+    assert.match(schema, new RegExp(`${field}\\s+Json\\?`));
+    assert.match(migration, new RegExp(`ADD COLUMN IF NOT EXISTS "${field}" JSONB`));
+  }
+  assert.match(schema, /documentTemplateVersion\s+String\?/);
+  assert.match(migration, /ADD COLUMN IF NOT EXISTS "documentTemplateVersion" TEXT/);
+
+  for (const kind of [
+    "APPLICATION_DOCX",
+    "BYLAWS_PDF",
+    "BYLAWS_DOCX",
+    "REQUIREMENTS_CHECKLIST_PDF",
+    "TECHNICAL_SUMMARY_PDF",
+  ]) {
+    assert.match(schema, new RegExp(`\\b${kind}\\b`));
+    assert.match(migration, new RegExp(`ADD VALUE IF NOT EXISTS '${kind}'`));
+  }
+
+  assert.match(schema, /templateVersion\s+String\?/);
+  assert.match(schema, /verificationCode\s+String\?\s+@unique/);
+  assert.match(schema, /generatedAt\s+DateTime\?/);
+  assert.match(migration, /ADD COLUMN IF NOT EXISTS "templateVersion" TEXT/);
+  assert.match(migration, /ADD COLUMN IF NOT EXISTS "verificationCode" TEXT/);
+  assert.match(migration, /ADD COLUMN IF NOT EXISTS "generatedAt" TIMESTAMP\(3\)/);
+});
+
+test("legal-license server loads review items in deterministic revision and requirement order", () => {
+  const server = readFileSync(new URL("./legal-license-server.js", import.meta.url), "utf8");
+  assert.match(
+    server,
+    /reviewItems:\s*{\s*orderBy:\s*\[\s*{\s*applicationRevision:\s*"asc"\s*},\s*{\s*scope:\s*"asc"\s*},\s*{\s*requirementKey:\s*"asc"\s*},?\s*\]\s*,?\s*}\s*,?/s,
+  );
+});
+
+test("guided review migration uses PostgreSQL-safe index and constraint names", () => {
+  const migration = readFileSync(
+    new URL("../../prisma/migrations_manual/2026-07-31_legal_license_guided_documents.sql", import.meta.url),
+    "utf8",
+  );
+  const declaredNames = [...migration.matchAll(/(?:CONSTRAINT|INDEX IF NOT EXISTS)\s+"([^"]+)"/g)]
+    .map((match) => match[1]);
+  assert.ok(declaredNames.length > 0);
+  for (const name of declaredNames) {
+    assert.ok(name.length <= 63, `${name} exceeds PostgreSQL's 63-byte identifier limit`);
+  }
 });

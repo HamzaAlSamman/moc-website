@@ -6,7 +6,12 @@ import {
   createLegalLicenseAccessToken,
   hashLegalLicenseAccessToken,
 } from "@/lib/legal-license-storage.mjs";
-import { normalizeLegalLicenseDraft, legalLicenseFounderWriteData } from "@/lib/legal-license-api.mjs";
+import {
+  legalLicenseApplicationWriteData,
+  legalLicenseFounderWriteData,
+  normalizeLegalLicenseDraft,
+} from "@/lib/legal-license-api.mjs";
+import { readLegalLicenseJson } from "@/lib/legal-license-request.mjs";
 import { LEGAL_LICENSE_INCLUDE, legalLicenseError, legalLicenseJson } from "@/lib/legal-license-server";
 import { sendLegalLicenseCitizenEmail } from "@/lib/legal-license-mailer";
 
@@ -15,10 +20,11 @@ export async function POST(request) {
     return NextResponse.json({ error: "Too many draft requests" }, { status: 429 });
   }
   try {
-    const draft = normalizeLegalLicenseDraft(await request.json());
+    const draft = normalizeLegalLicenseDraft(await readLegalLicenseJson(request));
     const accessToken = createLegalLicenseAccessToken();
     const referenceNo = await nextReferenceNumber(REFERENCE_SCOPES.LEGAL_LICENSE);
-    const { founders, ...applicationData } = draft;
+    const { founders } = draft;
+    const applicationData = legalLicenseApplicationWriteData(draft);
     const application = await prisma.legalLicenseApplication.create({
       data: {
         ...applicationData,

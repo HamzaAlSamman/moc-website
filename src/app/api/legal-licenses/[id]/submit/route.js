@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { notifyByRole } from "@/lib/notify";
 import { validateLegalLicenseSubmissionRecord } from "@/lib/legal-license-api.mjs";
+import { readLegalLicenseJson } from "@/lib/legal-license-request.mjs";
 import { generateLegalLicensePdf } from "@/lib/legal-license-pdf";
 import { sendLegalLicenseCitizenEmail } from "@/lib/legal-license-mailer";
 import {
@@ -12,6 +13,7 @@ import {
 import {
   findCitizenLegalLicense,
   LEGAL_LICENSE_INCLUDE,
+  legalLicenseError,
   legalLicenseJson,
   legalLicenseTokenFromRequest,
 } from "@/lib/legal-license-server";
@@ -23,7 +25,13 @@ export async function POST(request, { params }) {
   if (!["DRAFT", "SUSPENDED"].includes(application.status)) {
     return NextResponse.json({ error: "Application was already submitted" }, { status: 409 });
   }
-  const body = await request.json().catch(() => ({}));
+  let body;
+  try {
+    body = await readLegalLicenseJson(request);
+  } catch (error) {
+    const response = legalLicenseError(error, "Unable to submit application");
+    return NextResponse.json(response.body, { status: response.status });
+  }
   const expectedUpdatedAt = new Date(body.expectedUpdatedAt || "");
   if (
     Number(body.expectedRevision) !== application.revision ||
@@ -97,8 +105,10 @@ export async function POST(request, { params }) {
   } catch (error) {
     if (storageKey) await removeLegalLicensePrivateFile(storageKey).catch(() => {});
     console.error("Legal-license submission failed:", error);
-    const message = error?.message || "Unable to submit application";
-    const status = /Chromium|PDF/i.test(message) ? 503 : 400;
-    return NextResponse.json({ error: message }, { status });
+    const response = legalLicenseError(error, "Unable to submit application");
+    const status = /Chromium|PDF/i.test(error?.message || "")
+      ? 503
+      : response.status;
+    return NextResponse.json(response.body, { status });
   }
 }

@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { normalizeLegalLicenseDraft, legalLicenseFounderWriteData } from "@/lib/legal-license-api.mjs";
+import {
+  legalLicenseApplicationWriteData,
+  legalLicenseFounderWriteData,
+  normalizeLegalLicenseDraft,
+} from "@/lib/legal-license-api.mjs";
+import { readLegalLicenseJson } from "@/lib/legal-license-request.mjs";
 import { sendLegalLicenseCitizenEmail } from "@/lib/legal-license-mailer";
 import {
   findCitizenLegalLicense,
@@ -25,12 +30,13 @@ export async function PUT(request, { params }) {
     return NextResponse.json({ error: "Submitted applications are locked" }, { status: 423 });
   }
   try {
-    const body = await request.json();
+    const body = await readLegalLicenseJson(request);
     if (body.expectedUpdatedAt && new Date(body.expectedUpdatedAt).getTime() !== current.updatedAt.getTime()) {
       return NextResponse.json({ error: "The draft changed in another session" }, { status: 409 });
     }
     const draft = normalizeLegalLicenseDraft(body.draft || body);
-    const { founders, ...applicationData } = draft;
+    const { founders } = draft;
+    const applicationData = legalLicenseApplicationWriteData(draft);
     const application = await prisma.$transaction(async (tx) => {
       const updated = await tx.legalLicenseApplication.updateMany({
         where: { id, status: current.status, updatedAt: current.updatedAt },
