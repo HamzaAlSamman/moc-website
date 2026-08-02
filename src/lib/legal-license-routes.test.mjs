@@ -188,6 +188,19 @@ test("stored editable applications hydrate from protected tracking before resume
   assert.match(wizard, /hydrateLocalWizardSnapshot/);
   assert.match(wizard, /saved[?][.]application[?][.]id/);
   assert.match(wizard, /data[.]application[.]id/);
-  assert.match(wizard, /if [(]cancelled[)] return/);
+  assert.match(wizard, /hydrationGuardRef[.]current[.]isCurrent/);
   assert.doesNotMatch(wizard, /setApplication[(]saved[.]application[)]/);
+});
+
+test("initial hydration is guarded, abortable, and blocks wizard interaction", () => {
+  const wizard = read("../app/[locale]/services/legal-licenses/LegalLicenseWizard.jsx");
+  assert.match(wizard, /createWizardHydrationGuard/);
+  assert.match(wizard, /hydrationGuardRef[.]current[.]begin/);
+  assert.match(wizard, /signal:\s*hydrationAttempt[.]signal/);
+  assert.match(wizard, /hydrationGuardRef[.]current[.]isCurrent/);
+  assert.match(wizard, /function resetNewApplication[(][)] {[\s\S]*?hydrationGuardRef[.]current[.]cancel/);
+  assert.match(wizard, /AbortError/);
+  assert.match(wizard, /hydrating\s*[?]/);
+  assert.match(wizard, /Restoring saved application/);
+  assert.match(wizard, /mutationBusy\s*[|][|]\s*hydrating/);
 });

@@ -7,6 +7,7 @@ import {
   buildLocalWizardSnapshot,
   buildTrackedWizardResult,
   canNavigateToWizardStep,
+  createWizardHydrationGuard,
   createWizardMutationLock,
   firstIncompleteWizardStep,
   firstServerIssueWizardStep,
@@ -444,4 +445,26 @@ test("trim-only optional founder and manager contacts are treated as empty", () 
     email: " \t ",
   };
   assert.equal(wizardStepStatus("people", context).completed, true);
+});
+
+test("stale hydration cannot restore an application after reset invalidates the attempt", async () => {
+  const hydration = createWizardHydrationGuard();
+  const attempt = hydration.begin();
+  let resolveFetch;
+  const deferredFetch = new Promise((resolve) => { resolveFetch = resolve; });
+  const visible = { application: null, token: "" };
+
+  const completion = deferredFetch.then(({ application, token }) => {
+    if (!hydration.isCurrent(attempt.id)) return;
+    visible.application = application;
+    visible.token = token;
+  });
+
+  hydration.cancel();
+  resolveFetch({ application: { id: "old-app" }, token: "old-token" });
+  await completion;
+
+  assert.equal(attempt.signal.aborted, true);
+  assert.equal(hydration.isCurrent(attempt.id), false);
+  assert.deepEqual(visible, { application: null, token: "" });
 });

@@ -453,6 +453,32 @@ export function buildTrackedWizardResult(application, accessToken) {
   return { application, accessToken: accessToken.trim() };
 }
 
+export function createWizardHydrationGuard() {
+  let generation = 0;
+  let controller = null;
+  return Object.freeze({
+    begin() {
+      controller?.abort();
+      controller = new AbortController();
+      generation += 1;
+      return Object.freeze({ id: generation, signal: controller.signal });
+    },
+    isCurrent(id) {
+      return Number.isInteger(id) && id === generation && controller !== null && !controller.signal.aborted;
+    },
+    finish(id) {
+      if (!Number.isInteger(id) || id !== generation || controller === null || controller.signal.aborted) return false;
+      controller = null;
+      return true;
+    },
+    cancel() {
+      generation += 1;
+      controller?.abort();
+      controller = null;
+    },
+  });
+}
+
 export function createWizardMutationLock() {
   let owner = null;
   return Object.freeze({

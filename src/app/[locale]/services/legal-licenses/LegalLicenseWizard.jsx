@@ -13,6 +13,7 @@ import {
   buildLocalWizardSnapshot,
   buildTrackedWizardResult,
   canNavigateToWizardStep,
+  createWizardHydrationGuard,
   createWizardMutationLock,
   createWizardUserError,
   firstIncompleteWizardStep,
@@ -121,6 +122,8 @@ export default function LegalLicenseWizard({ locale = "ar" }) {
   const [sent, setSent] = useState(false);
   const [track, setTrack] = useState({ referenceNo: "", accessToken: "" });
   const [trackedResult, setTrackedResult] = useState(null);
+  const [hydrating, setHydrating] = useState(true);
+  const hydrationGuardRef = useRef(createWizardHydrationGuard());
   const mutationLockRef = useRef(createWizardMutationLock());
   const [mutationCount, setMutationCount] = useState(0);
   const mutationBusy = mutationCount > 0;
@@ -136,7 +139,6 @@ export default function LegalLicenseWizard({ locale = "ar" }) {
   const deficiencyContext = { status: application?.status, deficiencyScopes: application?.deficiencyScopes || [] };
 
   useEffect(() => {
-    let cancelled = false;
     const rawSnapshot = localStorage.getItem(STORAGE_KEY);
     const saved = parseLocalWizardSnapshot(rawSnapshot);
     if (!saved && rawSnapshot) localStorage.removeItem(STORAGE_KEY);
@@ -166,14 +168,19 @@ export default function LegalLicenseWizard({ locale = "ar" }) {
     const localSnapshot = hashCredentials ? null : savedNeedsHydration ? saved : null;
 
     if (credentials) {
+      const hydrationAttempt = hydrationGuardRef.current.begin();
+      setHydrating(true);
       setTrack(credentials);
       setTrackedResult(null);
       localStorage.setItem(TRACKING_KEY, JSON.stringify(buildLocalTrackingSnapshot(credentials)));
       fetch("/api/legal-licenses/track", {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(credentials),
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(credentials),
+        signal: hydrationAttempt.signal,
       }).then(async (response) => {
         const data = await readWizardResponse(response, "track", language);
-        if (cancelled) return;
+        if (!hydrationGuardRef.current.isCurrent(hydrationAttempt.id)) return;
         if (!response.ok) throw createWizardUserError("track", language, { ...data, status: response.status });
         if (localSnapshot && data.application.id !== localSnapshot.application.id) {
           throw createWizardUserError("track", language);
@@ -187,21 +194,26 @@ export default function LegalLicenseWizard({ locale = "ar" }) {
           setMode("track");
         }
       }).catch((resumeError) => {
-        if (!cancelled) {
-          setTrackedResult(null);
-          setMode("track");
-          reportWizardFailure(resumeError, "track", language, setError);
-        }
+        if (resumeError?.name === "AbortError"
+          || !hydrationGuardRef.current.isCurrent(hydrationAttempt.id)) return;
+        setTrackedResult(null);
+        setMode("track");
+        reportWizardFailure(resumeError, "track", language, setError);
+      }).finally(() => {
+        if (hydrationGuardRef.current.finish(hydrationAttempt.id)) setHydrating(false);
       });
-    } else if (savedNeedsHydration) {
-      setTrack({ referenceNo: savedReferenceNo, accessToken: saved.token });
-      setMode("track");
-      reportWizardFailure(createWizardUserError("track", language), "track", language, setError);
-    } else if (saved) {
-      setForm({ ...freshEmptyForm(), ...saved.form });
-      setStep(saved.step);
+    } else {
+      if (savedNeedsHydration) {
+        setTrack({ referenceNo: savedReferenceNo, accessToken: saved.token });
+        setMode("track");
+        reportWizardFailure(createWizardUserError("track", language), "track", language, setError);
+      } else if (saved) {
+        setForm({ ...freshEmptyForm(), ...saved.form });
+        setStep(saved.step);
+      }
+      setHydrating(false);
     }
-    return () => { cancelled = true; };
+    return () => { hydrationGuardRef.current.cancel(); };
   }, []);
 
   useEffect(() => {
@@ -269,6 +281,8 @@ export default function LegalLicenseWizard({ locale = "ar" }) {
       ? "سيتم نسيان المسودة والبيانات المحفوظة مؤقتاً على هذا الجهاز. هل تريد بدء طلب جديد؟"
       : "This will forget the draft and data temporarily saved on this device. Start a new application?");
     if (!confirmed) return;
+    hydrationGuardRef.current.cancel();
+    setHydrating(false);
     localStorage.removeItem(STORAGE_KEY);
     localStorage.removeItem(LEGACY_STORAGE_KEY);
     localStorage.removeItem(TRACKING_KEY);
@@ -516,10 +530,10 @@ export default function LegalLicenseWizard({ locale = "ar" }) {
         isRtl={isRtl} />
       <main className="mx-auto w-full max-w-[1200px] px-4 py-10 sm:px-6 lg:px-8">
         <div className="mb-4 grid grid-cols-2 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-sm">
-          <ModeButton active={mode === "new"} disabled={mutationBusy} onClick={() => switchMode("new")}>
+          <ModeButton active={mode === "new"} disabled={mutationBusy || hydrating} onClick={() => switchMode("new")}>
             {isRtl ? "الطلب الحالي" : "Current application"}
           </ModeButton>
-          <ModeButton active={mode === "track"} disabled={mutationBusy} onClick={() => switchMode("track")}>
+          <ModeButton active={mode === "track"} disabled={mutationBusy || hydrating} onClick={() => switchMode("track")}>
             {isRtl ? "متابعة طلب سابق" : "Track application"}
           </ModeButton>
         </div>
@@ -537,7 +551,19 @@ export default function LegalLicenseWizard({ locale = "ar" }) {
         </div>
         {error ? <div role="alert" className="mb-5 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700">{error}</div> : null}
 
-        {mode === "track" ? (
+        {hydrating ? (
+          <section role="status" aria-live="polite" aria-busy="true"
+            className="relative min-h-[320px] rounded-3xl border border-slate-100 bg-white p-8 text-center shadow-sm">
+            <DecorativeCorners />
+            <div className="mx-auto mt-14 h-10 w-10 animate-spin rounded-full border-4 border-[#b9a779]/30 border-t-[#054239]" aria-hidden="true" />
+            <h2 className="mt-5 font-qomra text-xl font-black text-[#054239]">
+              {isRtl ? "جارٍ استعادة الطلب المحفوظ…" : "Restoring saved application…"}
+            </h2>
+            <p className="mt-2 text-sm text-slate-500">
+              {isRtl ? "يرجى الانتظار حتى نتحقق من النسخة الآمنة على الخادم." : "Please wait while the secure server copy is verified."}
+            </p>
+          </section>
+        ) : mode === "track" ? (
           <TrackingPanel track={track} onTrackChange={changeTrackField} trackedResult={trackedResult}
             busy={busy} isRtl={isRtl} onSubmit={doTrack}
             onResume={() => trackedResult && resumeApplication(trackedResult.application, trackedResult.accessToken)}
