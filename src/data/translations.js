@@ -149,8 +149,8 @@ export const translations = {
     },
     aboutMinistryPage: {
       hero: {
-        title: "رؤيتنا",
-        description: "ترسيخ مكانة سوريا كقلب للعالم وصياغة مستقبل مزدهر ومتجدد"
+        title: "حول وزارة الثقافة",
+        description: "الجهة الوطنية المعنية بصون التراث الحضاري السوري، ورعاية الفنون والإبداع، وتعميق الوعي والهوية الوطنية."
       },
       whoWeAre: {
         title: "من نحن",
@@ -385,8 +385,8 @@ export const translations = {
     },
     aboutMinistryPage: {
       hero: {
-        title: "Our Vision",
-        description: "Consolidating Syria's position as the heart of the world and shaping a prosperous and renewed future"
+        title: "About the Ministry",
+        description: "The national body responsible for preserving Syrian cultural heritage, supporting arts and creativity, and deeping national awareness and identity."
       },
       whoWeAre: {
         title: "Who We Are",

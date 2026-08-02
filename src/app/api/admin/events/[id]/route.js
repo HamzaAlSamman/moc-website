@@ -5,6 +5,7 @@ import { can } from "@/lib/permissions";
 import { sanitizeRichText } from "@/lib/sanitize";
 import { parseDateAsUTC } from "@/lib/dates";
 import { notifyByPermission } from "@/lib/notify";
+import { assertValidEvent } from "@/lib/business-rules.mjs";
 
 export async function PUT(request, { params }) {
   const session = await verifySession();
@@ -12,7 +13,7 @@ export async function PUT(request, { params }) {
 
   const existing = await prisma.event.findUnique({
     where: { id },
-    select: { createdById: true, reviewStatus: true },
+    select: { createdById: true, reviewStatus: true, status: true },
   });
   if (!existing) return NextResponse.json({ error: "غير موجود" }, { status: 404 });
 
@@ -24,6 +25,25 @@ export async function PUT(request, { params }) {
   if (!canEdit) return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
 
   const data = await request.json();
+  if (!data.titleAr?.trim() || !data.startDate) {
+    return NextResponse.json({ error: "titleAr and startDate are required" }, { status: 400 });
+  }
+  let dates;
+  const nextStatus = data.status ?? existing.status;
+  try {
+    dates = assertValidEvent({ ...data, status: nextStatus });
+  } catch (error) {
+    return NextResponse.json({ error: error.message }, { status: 400 });
+  }
+  const eventCategoryId = data.eventCategoryId || data.eventTypeId || null;
+  const eventKindId = data.eventKindId || null;
+  const [category, kind] = await Promise.all([
+    eventCategoryId ? prisma.eventCategory.findUnique({ where: { id: eventCategoryId }, select: { id: true } }) : null,
+    eventKindId ? prisma.eventKind.findUnique({ where: { id: eventKindId }, select: { id: true } }) : null,
+  ]);
+  if ((eventCategoryId && !category) || (eventKindId && !kind)) {
+    return NextResponse.json({ error: "Invalid event category or kind" }, { status: 400 });
+  }
 
   // An owner who self-publishes (PUBLISH_EVENT, e.g. DIRECTORATE) keeps its event
   // live on every save — and promotes a legacy pending/rejected one to APPROVED.
@@ -43,12 +63,12 @@ export async function PUT(request, { params }) {
       locationEn: data.locationEn || null,
       governorate: data.governorate || null,
       governorateEn: data.governorateEn || null,
-      startDate: parseDateAsUTC(data.startDate),
-      endDate: data.endDate ? parseDateAsUTC(data.endDate) : null,
+      startDate: parseDateAsUTC(dates.startDate),
+      endDate: dates.endDate ? parseDateAsUTC(dates.endDate) : null,
       featuredImage: data.featuredImage || null,
-      status: data.status,
-      eventCategoryId: data.eventCategoryId || data.eventTypeId || null,
-      eventKindId: data.eventKindId || null,
+      status: nextStatus,
+      eventCategoryId,
+      eventKindId,
       // Self-publishers land as APPROVED; a resubmission re-enters review;
       // reviewers editing others' events leave the review state untouched.
       ...(ownerDirect

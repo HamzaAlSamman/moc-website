@@ -6,6 +6,7 @@ import Link from "next/link";
 import DecorativeCorners from "./DecorativeCorners";
 import ImageWithFallback from "./ImageWithFallback";
 import { translations } from "../data/translations";
+import SubpageHero from "./SubpageHero";
 
 /* ─────────────────────────────────────────────
    EVENT TYPE PALETTE
@@ -35,7 +36,7 @@ const GOVERNORATES = [
 
 const DAYS_SHORT_AR = ["أحد", "اثنين", "ثلاثاء", "أربعاء", "خميس", "جمعة", "سبت"];
 const DAYS_SHORT_EN = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const DAYS_MOBILE_AR = ["ح", "ن", "ث", "ر", "خ", "ج", "س"];
+const DAYS_MOBILE_AR = ["أح", "اث", "ثل", "أر", "خم", "جم", "سب"];
 const MONTHS_AR = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
 const MONTHS_EN = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
@@ -139,14 +140,46 @@ function buildCalendarGrid(year, month) {
   return cells;
 }
 
-function getEventStatus(year, month, day, timeStr) {
+/* Normalize any date input to the numeric value of its UTC calendar day (midnight). */
+function utcDayValue(dateStr) {
+  const d = new Date(dateStr);
+  if (isNaN(d)) return NaN;
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+}
+
+/* Status across the WHOLE event range: an event stays "ongoing" until its
+   end date has passed, so a multi-day event is not marked "finished" on day one. */
+function getEventStatus(startStr, endStr) {
   const now = new Date();
-  const eventDate = new Date(year, month - 1, day);
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  
-  if (eventDate < today) return "finished";
-  if (eventDate > today) return "upcoming";
-  return "ongoing";
+  const today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+
+  const startVal = utcDayValue(startStr);
+  if (isNaN(startVal)) return "upcoming";
+  const endVal = endStr && !isNaN(utcDayValue(endStr)) ? utcDayValue(endStr) : startVal;
+
+  if (endVal < today) return "finished";   // entire event is in the past
+  if (startVal > today) return "upcoming";  // event has not started yet
+  return "ongoing";                          // today falls within [start, end]
+}
+
+/* True when the given calendar day (year/month/day) falls within the event's
+   [startDate, endDate] range — used so multi-day events appear on every day. */
+function eventCoversDay(ev, year, month, day) {
+  const target = Date.UTC(year, month - 1, day);
+  const startVal = utcDayValue(ev.startDate);
+  if (isNaN(startVal)) return false;
+  const endVal = ev.endDate && !isNaN(utcDayValue(ev.endDate)) ? utcDayValue(ev.endDate) : startVal;
+  return target >= startVal && target <= endVal;
+}
+
+/* True when the event's range overlaps any day of the given month. */
+function eventOverlapsMonth(ev, year, month) {
+  const startVal = utcDayValue(ev.startDate);
+  if (isNaN(startVal)) return false;
+  const endVal = ev.endDate && !isNaN(utcDayValue(ev.endDate)) ? utcDayValue(ev.endDate) : startVal;
+  const monthStart = Date.UTC(year, month - 1, 1);
+  const monthEnd = Date.UTC(year, month, 0); // day 0 of next month = last day of this month
+  return startVal <= monthEnd && endVal >= monthStart;
 }
 
 /* ─────────────────────────────────────────────
@@ -199,7 +232,23 @@ export default function CulturalCalendarSection({ locale, isDedicated = false })
   const [selectedStatus, setSelectedStatus] = useState("all"); // all, upcoming, past
   
   const [eventsData, setEventsData] = useState([]);
-  const [eventTypesList, setEventTypesList] = useState([]);
+  const [eventTypesList, setEventTypesList] = useState([
+    { id: "mock-1", nameAr: "أمسية شعرية", nameEn: "Poetry Evening", color: "#8B4513" },
+    { id: "mock-2", nameAr: "تراثية \\ ثقافية", nameEn: "Heritage / Cultural", color: "#FF69B4" },
+    { id: "mock-3", nameAr: "فعالية مجتمعية", nameEn: "Community Event", color: "#D4AF37" },
+    { id: "mock-4", nameAr: "مؤتمر", nameEn: "Conference", color: "#800000" },
+    { id: "mock-5", nameAr: "مسابقة ثقافية", nameEn: "Cultural Competition", color: "#20B2AA" },
+    { id: "mock-6", nameAr: "معرض", nameEn: "Exhibition", color: "#008080" },
+    { id: "mock-7", nameAr: "ملتقى ثقافي", nameEn: "Cultural Forum", color: "#4B0082" },
+    { id: "mock-8", nameAr: "مهرجان", nameEn: "Festival", color: "#708090" },
+    { id: "mock-9", nameAr: "ندوة ومحاضرة", nameEn: "Seminar & Lecture", color: "#32CD32" },
+    { id: "mock-10", nameAr: "ورشة عمل وتدريب", nameEn: "Workshop & Training", color: "#483D8B" },
+    { id: "mock-11", nameAr: "حفل غنائي وموسيقى", nameEn: "Concert & Music", color: "#E74C3C" },
+    { id: "mock-12", nameAr: "عرض سينمائي", nameEn: "Cinema Screening", color: "#2ECC71" },
+    { id: "mock-13", nameAr: "توقيع كتاب ورواية", nameEn: "Book Signing", color: "#3498DB" },
+    { id: "mock-14", nameAr: "معرض فنون تشكيلية", nameEn: "Fine Arts Exhibition", color: "#C0392B" },
+    { id: "mock-15", nameAr: "صالون أدبي فكري", nameEn: "Literary Salon", color: "#F39C12" },
+  ]);
   const [eventKindsList, setEventKindsList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [detailEvent, setDetailEvent] = useState(null); // Selected event for Detail Modal
@@ -218,7 +267,30 @@ export default function CulturalCalendarSection({ locale, isDedicated = false })
     ])
       .then(([events, types, kinds]) => {
         if (Array.isArray(types)) {
-          setEventTypesList(types);
+          const mockCategories = [
+            { id: "mock-1", nameAr: "أمسية شعرية", nameEn: "Poetry Evening", color: "#8B4513" },
+            { id: "mock-2", nameAr: "تراثية \\ ثقافية", nameEn: "Heritage / Cultural", color: "#FF69B4" },
+            { id: "mock-3", nameAr: "فعالية مجتمعية", nameEn: "Community Event", color: "#D4AF37" },
+            { id: "mock-4", nameAr: "مؤتمر", nameEn: "Conference", color: "#800000" },
+            { id: "mock-5", nameAr: "مسابقة ثقافية", nameEn: "Cultural Competition", color: "#20B2AA" },
+            { id: "mock-6", nameAr: "معرض", nameEn: "Exhibition", color: "#008080" },
+            { id: "mock-7", nameAr: "ملتقى ثقافي", nameEn: "Cultural Forum", color: "#4B0082" },
+            { id: "mock-8", nameAr: "مهرجان", nameEn: "Festival", color: "#708090" },
+            { id: "mock-9", nameAr: "ندوة ومحاضرة", nameEn: "Seminar & Lecture", color: "#32CD32" },
+            { id: "mock-10", nameAr: "ورشة عمل وتدريب", nameEn: "Workshop & Training", color: "#483D8B" },
+            { id: "mock-11", nameAr: "حفل غنائي وموسيقى", nameEn: "Concert & Music", color: "#E74C3C" },
+            { id: "mock-12", nameAr: "عرض سينمائي", nameEn: "Cinema Screening", color: "#2ECC71" },
+            { id: "mock-13", nameAr: "توقيع كتاب ورواية", nameEn: "Book Signing", color: "#3498DB" },
+            { id: "mock-14", nameAr: "معرض فنون تشكيلية", nameEn: "Fine Arts Exhibition", color: "#C0392B" },
+            { id: "mock-15", nameAr: "صالون أدبي فكري", nameEn: "Literary Salon", color: "#F39C12" },
+          ];
+          const merged = [...types];
+          mockCategories.forEach(mc => {
+            if (!merged.some(c => c.nameAr === mc.nameAr)) {
+              merged.push(mc);
+            }
+          });
+          setEventTypesList(merged);
         }
         if (Array.isArray(kinds)) {
           setEventKindsList(kinds);
@@ -280,24 +352,31 @@ export default function CulturalCalendarSection({ locale, isDedicated = false })
   const days = isRtl ? DAYS_SHORT_AR : DAYS_SHORT_EN;
   const monthName = isRtl ? MONTHS_AR[month - 1] : MONTHS_EN[month - 1];
 
-  // Group events for calendar dots
+  // Group events for calendar dots — a multi-day event is registered on EVERY
+  // calendar day it spans, not only its start day.
   const calendarEvents = {};
   eventsData.forEach((ev) => {
-    const d = new Date(ev.startDate);
-    const key = `${d.getUTCFullYear()}-${d.getUTCMonth() + 1}`;
-    const day = d.getUTCDate();
-    if (!calendarEvents[key]) calendarEvents[key] = {};
-    if (!calendarEvents[key][day]) calendarEvents[key][day] = [];
-    calendarEvents[key][day].push(ev);
+    const start = new Date(ev.startDate);
+    if (isNaN(start)) return;
+    const endSource = ev.endDate && !isNaN(new Date(ev.endDate)) ? new Date(ev.endDate) : start;
+
+    let cursor = Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate());
+    const last = Date.UTC(endSource.getUTCFullYear(), endSource.getUTCMonth(), endSource.getUTCDate());
+    let guard = 0;
+    while (cursor <= last && guard < 400) {
+      const c = new Date(cursor);
+      const key = `${c.getUTCFullYear()}-${c.getUTCMonth() + 1}`;
+      const day = c.getUTCDate();
+      if (!calendarEvents[key]) calendarEvents[key] = {};
+      if (!calendarEvents[key][day]) calendarEvents[key][day] = [];
+      calendarEvents[key][day].push(ev);
+      cursor += 86400000; // advance one UTC day (DST-safe)
+      guard++;
+    }
   });
 
   // Helper to filter events based on current dropdowns & search query
   const matchesEventFilters = useCallback((ev) => {
-    const evDate = new Date(ev.startDate);
-    const evYear = evDate.getUTCFullYear();
-    const evMonth = evDate.getUTCMonth() + 1;
-    const evDay = evDate.getUTCDate();
-
     // Search query match
     const title = isRtl ? ev.titleAr : (ev.titleEn || ev.titleAr);
     const desc = isRtl ? ev.descriptionAr : (ev.descriptionEn || ev.descriptionAr);
@@ -335,8 +414,8 @@ export default function CulturalCalendarSection({ locale, isDedicated = false })
       ev.eventKind?.id === selectedKind ||
       ev.eventKind?.nameAr === selectedKind;
 
-    // Status match
-    const status = getEventStatus(evYear, evMonth, evDay, "");
+    // Status match — based on the whole event range
+    const status = getEventStatus(ev.startDate, ev.endDate);
     const matchesStatus =
       selectedStatus === "all" ||
       (selectedStatus === "upcoming" && (status === "upcoming" || status === "ongoing")) ||
@@ -347,16 +426,11 @@ export default function CulturalCalendarSection({ locale, isDedicated = false })
 
   // Filter events list
   const filteredEvents = eventsData.filter((ev) => {
-    const evDate = new Date(ev.startDate);
-    const evYear = evDate.getUTCFullYear();
-    const evMonth = evDate.getUTCMonth() + 1;
-    const evDay = evDate.getUTCDate();
-
-    // Date / Calendar Selection match
+    // Date / Calendar Selection match — a multi-day event matches any day it spans.
     const matchesCalendarDay =
       selectedDay === null
-        ? (evYear === year && evMonth === month)
-        : (evYear === year && evMonth === month && evDay === selectedDay);
+        ? eventOverlapsMonth(ev, year, month)
+        : eventCoversDay(ev, year, month, selectedDay);
 
     return matchesCalendarDay && matchesEventFilters(ev);
   });
@@ -364,7 +438,7 @@ export default function CulturalCalendarSection({ locale, isDedicated = false })
   const calendarContent = (
     <>
       {/* ── Filter bar ── */}
-      <div className="bg-white rounded-3xl p-4 sm:p-6 border border-slate-100 shadow-md mb-8 xl:mb-12 flex flex-col sm:flex-row gap-3 sm:gap-4 items-stretch relative z-20 flex-wrap">
+      <div className="bg-white rounded-3xl px-7 pt-8 pb-6 sm:p-6 border border-slate-100 shadow-md mb-8 xl:mb-12 flex flex-col sm:flex-row gap-3 sm:gap-4 items-stretch relative z-20 flex-wrap">
         <DecorativeCorners />
         
         {/* Search Input */}
@@ -449,7 +523,7 @@ export default function CulturalCalendarSection({ locale, isDedicated = false })
         </div>
 
         {/* Status buttons */}
-        <div className="flex bg-slate-100 rounded-2xl p-1 shrink-0 gap-1">
+        <div className="flex bg-slate-100 rounded-2xl p-1 shrink-0 gap-1 w-full sm:w-auto">
           {[
             { id: "all", ar: "الكل", en: "All" },
             { id: "upcoming", ar: "القادمة", en: "Upcoming" },
@@ -458,7 +532,7 @@ export default function CulturalCalendarSection({ locale, isDedicated = false })
             <button
               key={st.id}
               onClick={() => setSelectedStatus(st.id)}
-              className={`px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+              className={`flex-1 px-4 py-2 text-center text-xs font-bold rounded-xl transition-all cursor-pointer ${
                 selectedStatus === st.id
                   ? "bg-[#002723] text-white shadow-sm"
                   : "text-slate-500 hover:text-slate-800"
@@ -475,12 +549,12 @@ export default function CulturalCalendarSection({ locale, isDedicated = false })
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] xl:grid-cols-[1fr_440px] gap-6 xl:gap-8 items-stretch relative z-10 w-full">
         
         {/* Column 1: Calendar Grid */}
-        <div className="group relative bg-white border border-[#A48E68]/15 rounded-3xl p-4 sm:p-6 md:p-8 shadow-md flex flex-col justify-between overflow-hidden">
+        <div className="group relative bg-white border border-[#A48E68]/15 rounded-3xl px-6 pt-7 pb-5 sm:p-6 md:p-8 shadow-md flex flex-col justify-between overflow-hidden">
           <DecorativeCorners />
           
           <div>
             {/* Header Month Navigation */}
-            <div className="flex items-center justify-between mb-8 relative z-10 px-2">
+            <div className="flex items-center justify-between mb-8 relative z-10 px-4 pt-2">
               <button
                 onClick={() => goMonth(-1)}
                 className="w-10 h-10 rounded-full bg-slate-50 hover:bg-[#002723]/10 border border-slate-100 flex items-center justify-center text-slate-600 hover:text-primary transition-all cursor-pointer shadow-sm active:scale-95"
@@ -505,7 +579,7 @@ export default function CulturalCalendarSection({ locale, isDedicated = false })
             <div className="grid grid-cols-7 mb-4 relative z-10">
               {days.map((d, i) => (
                 <div key={d} className="text-center text-[#A48E68] text-[10px] xs:text-xs font-bold py-2 border-b border-[#A48E68]/10">
-                  <span className="md:hidden">{isRtl ? DAYS_MOBILE_AR[i] : DAYS_SHORT_EN[i].slice(0, 1)}</span>
+                  <span className="md:hidden">{isRtl ? DAYS_MOBILE_AR[i] : DAYS_SHORT_EN[i].slice(0, 2)}</span>
                   <span className="hidden md:inline">{d}</span>
                 </div>
               ))}
@@ -567,7 +641,7 @@ export default function CulturalCalendarSection({ locale, isDedicated = false })
                     )}
                     {/* Multi-event count badge */}
                     {hasEvents && dayEvents.length > 1 && !isSelected && (
-                      <span className="absolute top-0.5 end-0.5 w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full text-[8px] sm:text-[9px] font-black flex items-center justify-center"
+                      <span className="absolute top-0.5 end-0.5 w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full number-circle text-[8px] sm:text-[9px] font-black flex items-center justify-center"
                             style={{ background: (dayEvents[0].typeColor || "#1C665A") + "25", color: dayEvents[0].typeColor || "#1C665A" }}>
                         {dayEvents.length}
                       </span>
@@ -578,20 +652,29 @@ export default function CulturalCalendarSection({ locale, isDedicated = false })
             </div>
           </div>
 
-          {/* Legend categories */}
-          <div className="mt-8 pt-5 border-t border-slate-100 flex flex-wrap gap-x-4 gap-y-2 relative z-10 justify-center">
+          {/* Legend categories (Structured, centered flex wrap design for official government website) */}
+          <div 
+            className="mt-8 pt-5 border-t border-slate-100 flex flex-wrap justify-center gap-x-6 gap-y-3 max-w-4xl mx-auto px-4"
+            dir={isRtl ? "rtl" : "ltr"}
+          >
             {eventTypesList.map((type) => (
-              <div key={type.id} className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full shrink-0 shadow-sm" style={{ background: type.color || "#1C665A" }} />
-                <span className="text-slate-500 text-xs font-semibold">{isRtl ? type.nameAr : (type.nameEn || type.nameAr)}</span>
+              <div key={type.id} className="flex items-center gap-2 text-[11px] font-bold text-slate-400 select-none">
+                <span 
+                  className="w-2 h-2 rounded-full shrink-0 shadow-sm" 
+                  style={{ background: type.color || "#1C665A" }} 
+                />
+                <span className="truncate">{isRtl ? type.nameAr : (type.nameEn || type.nameAr)}</span>
               </div>
             ))}
             {Object.entries(TYPE)
               .filter(([k]) => !eventTypesList.some(t => t.nameAr === k))
               .map(([k, v]) => (
-                <div key={k} className="flex items-center gap-1.5">
-                   <span className="w-2.5 h-2.5 rounded-full shrink-0 shadow-sm" style={{ background: v.color }} />
-                   <span className="text-slate-500 text-xs font-semibold">{isRtl ? v.labelAr : v.labelEn}</span>
+                <div key={k} className="flex items-center gap-2 text-[11px] font-bold text-slate-400 select-none">
+                  <span 
+                    className="w-2 h-2 rounded-full shrink-0 shadow-sm" 
+                    style={{ background: v.color }} 
+                  />
+                  <span className="truncate">{isRtl ? v.labelAr : v.labelEn}</span>
                 </div>
               ))}
           </div>
@@ -599,11 +682,11 @@ export default function CulturalCalendarSection({ locale, isDedicated = false })
 
         {/* Column 2: Sidebar Events Panel */}
         <div id="events-sidebar-panel" className="flex flex-col justify-start relative z-10">
-          <div className="bg-white border border-[#A48E68]/15 rounded-3xl p-4 sm:p-6 shadow-md flex flex-col h-full overflow-hidden max-h-[440px] md:max-h-[520px] xl:max-h-[580px] 2xl:max-h-[640px] relative">
+          <div className="bg-white border border-[#A48E68]/15 rounded-3xl px-6 pt-7 pb-5 sm:p-6 shadow-md flex flex-col h-full overflow-hidden max-h-[440px] md:max-h-[520px] xl:max-h-[580px] 2xl:max-h-[640px] relative">
             <DecorativeCorners />
             
             {/* Sidebar Header */}
-            <div className="border-b border-slate-100 pb-4 mb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 z-10 relative">
+            <div className="border-b border-slate-100 pb-4 mb-4 px-3 pt-2 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 z-10 relative">
               <div>
                 <h4 className="text-[#002723] font-extrabold text-sm uppercase tracking-wider text-start">
                   {selectedDay === null ? (
@@ -635,9 +718,9 @@ export default function CulturalCalendarSection({ locale, isDedicated = false })
                 </div>
               ) : filteredEvents.length > 0 ? (
                 filteredEvents.map((ev) => {
-                  const evDate = new Date(ev.startDate);
-                  const status = getEventStatus(evDate.getUTCFullYear(), evDate.getUTCMonth() + 1, evDate.getUTCDate(), "");
+                  const status = getEventStatus(ev.startDate, ev.endDate);
                   const isFinished = status === "finished";
+                  const isOngoing = status === "ongoing";
 
                   return (
                     <div
@@ -659,6 +742,10 @@ export default function CulturalCalendarSection({ locale, isDedicated = false })
                           {isFinished ? (
                             <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-white border border-red-400 text-red-500 mx-auto">
                               {isRtl ? "منتهية" : "Past"}
+                            </span>
+                          ) : isOngoing ? (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-[#A48E68] text-white shadow-sm mx-auto animate-pulse">
+                              {isRtl ? "جارية الآن" : "Now"}
                             </span>
                           ) : (
                             <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-[#428177] text-white shadow-sm mx-auto animate-pulse">
@@ -791,33 +878,16 @@ export default function CulturalCalendarSection({ locale, isDedicated = false })
       {isDedicated ? (
         <>
           {/* ── Subpage Hero ── */}
-          <section className="relative py-16 sm:py-20 xl:py-24 px-4 overflow-hidden border-b border-[#A48E68]/15">
-            <div className="absolute inset-0 z-0">
-              <Image
-                src="/images/drive-photos/Khan-Asad-Basha.jpg"
-                alt="الروزنامة الثقافية السورية"
-                fill
-                priority
-                className="object-cover brightness-[0.25] saturate-[0.8]"
-              />
-              <div className="absolute inset-0 bg-gradient-to-b from-[#002723]/90 via-[#002723]/75 to-[#002723] z-0"></div>
-            </div>
-
-            <div className="max-w-7xl mx-auto text-center relative z-10 flex flex-col items-center gap-4 animate-[fadeInUp_0.6s_ease-out]">
-              <span className="text-xs uppercase text-[#A48E68] font-bold tracking-widest leading-none border border-[#A48E68]/30 rounded-full px-4 py-1 bg-[#A48E68]/5">
-                {isRtl ? "وزارة الثقافة السورية" : "Syrian Ministry of Culture"}
-              </span>
-              <h1 className="text-white font-extrabold text-3xl sm:text-5xl font-sans">
-                {isRtl ? "الروزنامة الثقافية" : "Cultural Calendar"}
-              </h1>
-              <div className="w-16 h-[2.5px] bg-[#A48E68] mt-2"></div>
-              <p className="text-slate-300 text-sm max-w-xl">
-                {isRtl 
-                  ? "دليلك الكامل للأنشطة والفعاليات الثقافية والفنية في مختلف المحافظات السورية."
-                  : "Your comprehensive guide to cultural and artistic events across Syrian governorates."}
-              </p>
-            </div>
-          </section>
+          <SubpageHero
+            title={isRtl ? "الروزنامة الثقافية" : "Cultural Calendar"}
+            subtitle={isRtl ? "وزارة الثقافة السورية" : "Syrian Ministry of Culture"}
+            description={
+              isRtl 
+                ? "دليلك الكامل للأنشطة والفعاليات الثقافية والفنية في مختلف المحافظات السورية."
+                : "Your comprehensive guide to cultural and artistic events across Syrian governorates."
+            }
+            isRtl={isRtl}
+          />
 
           {/* ── Main content grid ── */}
           <main className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 2xl:px-12 py-8 sm:py-12 xl:py-16 w-full flex-grow relative z-10">
@@ -1009,6 +1079,19 @@ export default function CulturalCalendarSection({ locale, isDedicated = false })
 
                 {/* Bottom buttons */}
                 <div className="flex justify-end gap-3 shrink-0 pt-2">
+                  {detailEvent.bookingUrl && (
+                    <a
+                      href={detailEvent.bookingUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 px-6 py-2.5 bg-[#054239] hover:bg-[#03332c] text-white text-sm font-bold rounded-full cursor-pointer transition shadow-sm border-b-2 border-[#b9a779]"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 0 0-2 2v3a2 2 0 1 1 0 4v3a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3a2 2 0 1 1 0-4V7a2 2 0 0 0-2-2H5Z" />
+                      </svg>
+                      {isRtl ? "احجز الآن" : "Book now"}
+                    </a>
+                  )}
                   <button
                     onClick={() => setDetailEvent(null)}
                     className="px-6 py-2.5 border border-slate-200 hover:border-slate-300 text-slate-600 hover:text-slate-800 text-sm font-bold rounded-full cursor-pointer transition"

@@ -5,7 +5,7 @@ import { can } from "@/lib/permissions";
 
 export async function PUT(request, { params }) {
   const session = await verifySession();
-  if (!can(session.role, "CREATE_EVENT")) {
+  if (!can(session.role, "MANAGE_EVENT_TAXONOMIES")) {
     return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
   }
 
@@ -35,11 +35,19 @@ export async function PUT(request, { params }) {
 
 export async function DELETE(request, { params }) {
   const session = await verifySession();
-  if (!can(session.role, "CREATE_EVENT")) {
+  if (!can(session.role, "MANAGE_EVENT_TAXONOMIES")) {
     return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
   }
 
   const { id } = await params;
+
+  const linkedSubmission = await prisma.eventSubmission.findFirst({
+    where: { culturalCenterId: id, deletedAt: null },
+    select: { id: true },
+  });
+  if (linkedSubmission) {
+    return NextResponse.json({ error: "Cultural center is referenced by an event submission" }, { status: 409 });
+  }
 
   try {
     await prisma.culturalCenter.delete({ where: { id } });

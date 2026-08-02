@@ -5,6 +5,7 @@ import { can, ROLES } from "@/lib/permissions";
 import { sanitizeRichText } from "@/lib/sanitize";
 import { notifyByPermission } from "@/lib/notify";
 import { parseDateAsUTC } from "@/lib/dates";
+import { canChangePostStatus } from "@/lib/business-rules.mjs";
 
 // Reduce any text to a URL-safe ASCII slug (lowercase, no Arabic/symbols,
 // spaces → hyphens). Returns "" when nothing usable remains.
@@ -19,9 +20,12 @@ function slugify(text = "") {
 }
 
 export async function GET(request, { params }) {
-  await verifySession();
+  const session = await verifySession();
   const { id } = await params;
   const post = await prisma.post.findUnique({ where: { id } });
+  if (post && !can(session.role, "VIEW_ANY_POST") && post.authorId !== session.userId) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
   if (!post) return NextResponse.json({ error: "غير موجود" }, { status: 404 });
   return NextResponse.json(post);
 }
@@ -44,8 +48,15 @@ export async function PUT(request, { params }) {
   if (!canEdit) return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
 
   const data = await request.json();
+  if (!data.titleAr?.trim()) {
+    return NextResponse.json({ error: "titleAr is required" }, { status: 400 });
+  }
+  const nextStatus = data.status ?? post.status;
+  if (!canChangePostStatus(session.role, post.status, nextStatus)) {
+    return NextResponse.json({ error: "Only an editor may change publication status" }, { status: 403 });
+  }
 
-  const wasPublished = post.status !== "PUBLISHED" && data.status === "PUBLISHED";
+  const wasPublished = post.status !== "PUBLISHED" && nextStatus === "PUBLISHED";
   if (wasPublished && !can(session.role, "PUBLISH_POST")) {
     return NextResponse.json({ error: "غير مصرح بالنشر" }, { status: 403 });
   }
@@ -67,7 +78,7 @@ export async function PUT(request, { params }) {
         // Keep slugs ASCII-only. If the submitted slug reduces to nothing
         // (e.g. Arabic), keep the existing one so the URL stays stable.
         slug: slugify(data.slug) || post.slug,
-        status: data.status,
+        status: nextStatus,
         type: nextType,
         featuredImage: data.featuredImage || null,
         categoryId: data.categoryId || null,

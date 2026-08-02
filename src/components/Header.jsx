@@ -82,12 +82,11 @@ export default function Header({ locale }) {
 
   return (
     <header className="fixed inset-x-0 top-0 z-30 flex flex-col w-full">
-      {/* Top repeating shape decorative border */}
+      {/* Top decorative pattern border */}
       <div className="bg-primary w-full h-3 md:h-4 lg:h-6 relative overflow-hidden">
-        <img 
-          alt="nav-shape" 
-          className="w-full h-full object-cover lg:scale-150 object-[20%_10%_20%_10%]" 
-          src="/svg/nav-shape.svg"
+        <div 
+          className="absolute inset-0 opacity-[0.20] pointer-events-none"
+          style={{ backgroundImage: "url(/svg/pattern-hex.svg)", backgroundSize: "340px", backgroundRepeat: "repeat" }}
         />
         <div className="absolute inset-0 bg-gradient-to-b from-transparent to-primary"></div>
       </div>

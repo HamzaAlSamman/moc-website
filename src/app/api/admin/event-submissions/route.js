@@ -10,6 +10,7 @@ export async function GET() {
   }
 
   const submissions = await prisma.eventSubmission.findMany({
+    where: { deletedAt: null },
     orderBy: { createdAt: "desc" },
   });
 

@@ -67,8 +67,13 @@ export default async function LocaleLayout(props) {
   const { children } = props;
   const isRtl = locale === "ar";
 
-  const dbSettingsList = await prisma.setting.findMany();
-  const dbSettings = Object.fromEntries(dbSettingsList.map((s) => [s.key, s.value]));
+  let dbSettings = {};
+  try {
+    const dbSettingsList = await prisma.setting.findMany();
+    dbSettings = Object.fromEntries(dbSettingsList.map((s) => [s.key, s.value]));
+  } catch (error) {
+    console.warn("Warning: Failed to fetch database settings from Prisma:", error.message);
+  }
 
   return (
     <html

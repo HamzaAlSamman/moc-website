@@ -24,8 +24,64 @@ enum Role {
   STUDIES_HEAD
   LEGAL_DIRECTOR
   DEPUTY_MINISTER
+  LICENSING_OFFICER
+  LICENSING_COMMITTEE
   FINANCE
   DIRECTORATE
+}
+
+enum LegalLicenseType {
+  CULTURAL_FORUM
+  CULTURAL_HOUSE
+  CULTURAL_ASSOCIATION
+  AMATEUR_TROUPE
+  CINEMA_ARTS
+  FINE_ARTS
+  HERITAGE_MUSEUM
+  MUSIC_INSTITUTE
+  THEATER_INSTITUTE
+  FINE_ARTS_GALLERY
+}
+
+enum LegalLicenseStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  COMMITTEE_REVIEW
+  SUSPENDED
+  LEGAL_APPROVAL
+  MINISTER_APPROVAL
+  APPROVED
+  REJECTED
+  LICENSE_ISSUED
+  COMPLETED
+}
+
+enum LegalLicenseAttachmentKind {
+  NATIONAL_ID_FRONT
+  NATIONAL_ID_BACK
+  CRIMINAL_RECORD
+  RESIDENCE_DOCUMENT
+  PERSONAL_PHOTO
+  AUTHORIZATION
+  FOUNDERS_MINUTES
+  ACTIVITY_PLAN
+  OWNERSHIP_OR_LEASE
+  FLOOR_PLAN
+  SAFETY_APPROVAL
+  ARTICLES_OF_ASSOCIATION
+  MEMBERS_LIST
+  ARTISTIC_PROGRAM
+  PROFESSIONAL_CERTIFICATE
+  EQUIPMENT_LIST
+  ARTWORK_PORTFOLIO
+  COLLECTION_INVENTORY
+  COLLECTION_PROVENANCE
+  ACADEMIC_QUALIFICATION
+  PROGRAM_AND_CURRICULUM
+  GALLERY_PROGRAM
+  APPLICATION_PDF
+  ISSUED_LICENSE
 }
 
 enum PostStatus {
@@ -57,6 +113,121 @@ enum EventReviewStatus {
   PENDING
   APPROVED
   REJECTED
+}
+
+// Per-service, per-year counter behind the human-readable reference numbers
+// citizens see on their requests (e.g. OVS-2026-0042). One row per
+// (scope, year); the sequence restarts each calendar year so the numbers stay
+// short and match how the ministry files paperwork. See src/lib/reference-number.js.
+model ReferenceCounter {
+  scope     String
+  year      Int
+  seq       Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@id([scope, year])
+}
+
+model LegalLicenseApplication {
+  id                        String             @id @default(cuid())
+  referenceNo               String?            @unique
+  accessTokenHash           String             @unique
+  applicantName             String?
+  nationalId                String?
+  phone                     String?
+  email                     String?
+  capacity                  String?
+  licenseType               LegalLicenseType?
+  entityName                String?
+  purpose                   String?            @db.Text
+  objectives                String?            @db.Text
+  activityDescription       String?            @db.Text
+  governorate               String?
+  address                   String?            @db.Text
+  status                    LegalLicenseStatus @default(DRAFT)
+  revision                  Int                @default(1)
+  declarationAccuracy       Boolean            @default(false)
+  declarationResponsibility Boolean            @default(false)
+  declarationPrivacy        Boolean            @default(false)
+  applicantSignature        String?            @db.Text
+  deficiencyNote            String?            @db.Text
+  committeeRecommendation   String?            @db.Text
+  ministerDecision          String?            @db.Text
+  licenseNumber             String?            @unique
+  licenseDate               DateTime?
+  submittedAt               DateTime?
+  issuedAt                  DateTime?
+  completedAt               DateTime?
+  archivedAt                DateTime?
+  founders                  LegalLicenseFounder[]
+  attachments               LegalLicenseAttachment[]
+  history                   LegalLicenseHistory[]
+  createdAt                 DateTime           @default(now())
+  updatedAt                 DateTime           @updatedAt
+
+  @@index([status])
+  @@index([referenceNo])
+  @@index([accessTokenHash])
+}
+
+model LegalLicenseFounder {
+  id                         String   @id @default(cuid())
+  applicationId              String
+  application                LegalLicenseApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  fullName                   String?
+  nationalId                 String?
+  birthDate                  DateTime?
+  occupation                 String?
+  qualification              String?
+  phone                      String?
+  email                      String?
+  address                    String?  @db.Text
+  isAuthorizedRepresentative Boolean  @default(false)
+  attachments                LegalLicenseAttachment[]
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+
+  @@unique([applicationId, nationalId])
+  @@index([applicationId])
+}
+
+model LegalLicenseAttachment {
+  id            String   @id @default(cuid())
+  applicationId String
+  application   LegalLicenseApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  founderId     String?
+  founder       LegalLicenseFounder? @relation(fields: [founderId], references: [id], onDelete: SetNull)
+  kind          LegalLicenseAttachmentKind
+  originalName  String
+  mimeType      String
+  size          Int
+  storageKey    String   @unique
+  version       Int      @default(1)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([applicationId])
+  @@index([founderId])
+  @@index([kind])
+}
+
+model LegalLicenseHistory {
+  id            String   @id @default(cuid())
+  applicationId String
+  application   LegalLicenseApplication @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+  actorId       String?
+  actorEmail    String?
+  actorName     String?
+  actorRole     String?
+  fromStatus    LegalLicenseStatus?
+  toStatus      LegalLicenseStatus?
+  action        String
+  note          String?  @db.Text
+  publicNote    String?  @db.Text
+  createdAt     DateTime @default(now())
+
+  @@index([applicationId])
+  @@index([createdAt])
 }
 
 model EventKind {
@@ -193,9 +364,19 @@ model Event {
   createdById     String?
   reviewedById    String?
   reviewedAt      DateTime?
+  // External-sync provenance. Events mirrored from partner sites (currently the
+  // Damascus Opera House) carry source="OPERA" plus the partner's own event id,
+  // a booking deep-link back to the partner, and the last sync timestamp. The
+  // (source, externalId) pair is unique so re-pushes upsert instead of dup.
+  // Internal ministry events keep source="MOC" and leave externalId null.
+  source          String         @default("MOC")
+  externalId      String?
+  bookingUrl      String?
+  syncedAt        DateTime?
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 
+  @@unique([source, externalId])
   @@index([reviewStatus])
   @@index([createdById])
 }
@@ -227,6 +408,9 @@ enum EntityType {
 
 model EventSubmission {
   id                 String           @id @default(cuid())
+  // Human-readable sequential reference (EVT-YYYY-NNNN) shown to the citizen and
+  // used in correspondence. Nullable: rows created before the feature have none.
+  referenceNo        String?          @unique
   applicantName      String
   directorate        String?
   phone              String?
@@ -251,8 +435,13 @@ model EventSubmission {
   agreedToTerms      Boolean          @default(false)
   status             SubmissionStatus @default(PENDING)
   adminNotes         String?          @db.Text
+  dedupeKey          String?          @unique
+  deletedAt          DateTime?
+  deletedById        String?
   createdAt          DateTime         @default(now())
   updatedAt          DateTime         @updatedAt
+
+  @@index([deletedAt])
 }
 
 model CulturalCenter {
@@ -310,6 +499,10 @@ model Setting {
 
 model CopyrightSubmission {
   id                         String   @id @default(cuid())
+  // Public sequential reference (CPR-YYYY-NNNN) given to the citizen on submit.
+  // Distinct from `internalRefNumber`, which the technical assessor assigns by
+  // hand later in the review chain.
+  referenceNo                String?  @unique
   applicantName              String
   applicantPhone             String
   applicantEmail             String
@@ -335,7 +528,24 @@ model CopyrightSubmission {
   originalOwnerIdFile        String?  @db.Text
   assessorReportFile         String?  @db.Text
   studiesRecommendationsFile String?  @db.Text
+  // Shared, append-only review notes visible to the whole review chain
+  // (Finance, Assessor, Studies Head, Legal Director, Deputy Minister).
+  // Replaces the old per-stage report file uploads. Each entry:
+  // { role, userId, name, text, at }.
+  reviewNotes                Json?
+  // Internal reference number entered by the technical assessor. Once set it is
+  // locked: only the assessor who set it (internalRefSetById) or a SUPER_ADMIN
+  // may change it.
+  internalRefNumber          String?
+  internalRefSetById         String?
+  // What is missing, written by the reviewer who suspended the submission for
+  // deficiencies. Shown to the citizen and emailed to them.
+  deficiencyNote             String?  @db.Text
   workFile                   String?  @db.Text
+  workDriveUrl               String?
+  workOrigin                 String?
+  originalWorkName           String?
+  originalPermission         String?  @db.Text
   idDocType                  String   @default("national_id") // national_id (front+back) or passport (single page in idFileFront)
   idFileFront                String?  @db.Text
   idFileBack                 String?  @db.Text
@@ -343,4 +553,7 @@ model CopyrightSubmission {
   roleFile                   String?  @db.Text
   createdAt                  DateTime @default(now())
   updatedAt                  DateTime @updatedAt
+
+  @@unique([paymentRef])
+  @@unique([internalRefNumber])
 }

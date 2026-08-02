@@ -2,65 +2,31 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import {
+  STATUS_LABELS,
+  ENTITY_LABELS,
+  eventTypeLabel,
+  parseGoals,
+  parseSponsorship,
+  formatProposedDate,
+} from "@/lib/event-submission-labels";
 
 /* ─── helpers ─── */
+/* Labels come from the shared module so the screen view, the table and the
+   printable sheet can never disagree; only the colours live here. */
 const STATUS_META = {
-  PENDING:      { label: "قيد الانتظار",   dot: "bg-amber-400",   badge: "bg-amber-50 text-amber-700 border-amber-200" },
-  UNDER_REVIEW: { label: "قيد الدراسة",    dot: "bg-blue-400",    badge: "bg-blue-50 text-blue-700 border-blue-200" },
-  APPROVED:     { label: "موافق عليه",     dot: "bg-emerald-400", badge: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-  CONDITIONAL:  { label: "موافقة مشروطة",  dot: "bg-purple-400",  badge: "bg-purple-50 text-purple-700 border-purple-200" },
-  REJECTED:     { label: "مرفوض",          dot: "bg-red-400",     badge: "bg-red-50 text-red-700 border-red-200" },
+  PENDING:      { label: STATUS_LABELS.PENDING,      dot: "bg-amber-400",   badge: "bg-amber-50 text-amber-700 border-amber-200" },
+  UNDER_REVIEW: { label: STATUS_LABELS.UNDER_REVIEW, dot: "bg-blue-400",    badge: "bg-blue-50 text-blue-700 border-blue-200" },
+  APPROVED:     { label: STATUS_LABELS.APPROVED,     dot: "bg-emerald-400", badge: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  CONDITIONAL:  { label: STATUS_LABELS.CONDITIONAL,  dot: "bg-purple-400",  badge: "bg-purple-50 text-purple-700 border-purple-200" },
+  REJECTED:     { label: STATUS_LABELS.REJECTED,     dot: "bg-red-400",     badge: "bg-red-50 text-red-700 border-red-200" },
 };
-
-const ENTITY_LABELS = {
-  DIRECTORATE: "مديرية",
-  GOVERNMENT:  "جهة حكومية",
-  EXTERNAL:    "جهة خارجية / أهلية / فنية",
-  INDIVIDUAL:  "فرد / مثقف مستقل",
-};
-
-const GOAL_LABELS = {
-  cultural: "ثقافي", youth: "شبابي", heritage: "تراثي",
-  education: "تعليمي / تدريبي", community: "مجتمعي",
-  leisure: "ترفيهي هادف", capacity: "تمكين وبناء قدرات",
-};
-
-const SPONSORSHIP_LABELS = {
-  financial: "مالية", legal: "قانونية", other: "غير ذلك",
-};
-
-function parseGoals(str) {
-  try {
-    return JSON.parse(str || "[]").map((g) =>
-      g.startsWith("other:") ? g.slice(6) : (GOAL_LABELS[g] || g)
-    );
-  } catch { return []; }
-}
-
-function parseSponsorship(str) {
-  try {
-    return JSON.parse(str || "[]").map((s) => SPONSORSHIP_LABELS[s] || s);
-  } catch { return []; }
-}
 
 function fmt(d) {
   return new Date(d).toLocaleDateString("en-GB", {
     year: "numeric", month: "long", day: "numeric",
     hour: "2-digit", minute: "2-digit",
   });
-}
-
-function fmtProposedDate(val) {
-  if (!val) return "—";
-  const parsed = Date.parse(val);
-  if (!isNaN(parsed) && val.includes("-") && (val.includes("T") || val.includes(":"))) {
-    return new Date(parsed).toLocaleDateString("ar-SY", {
-      year: "numeric", month: "long", day: "numeric",
-      hour: "2-digit", minute: "2-digit",
-      hour12: true
-    });
-  }
-  return val;
 }
 
 
@@ -119,6 +85,7 @@ export default function SubmissionDetail({ submission: initial, canManage }) {
   const [saving, setSaving]         = useState(false);
   const [deleting, setDeleting]     = useState(false);
   const [saved, setSaved]           = useState(false);
+  const [error, setError]           = useState("");
 
   const goals       = parseGoals(submission.goals);
   const sponsorship = parseSponsorship(submission.sponsorshipNeeded);
@@ -138,16 +105,24 @@ export default function SubmissionDetail({ submission: initial, canManage }) {
 
   async function handleSave() {
     setSaving(true);
-    const res = await fetch(`/api/admin/event-submissions/${submission.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status, adminNotes }),
-    });
-    if (res.ok) {
-      const updated = await res.json();
-      setSubmission(updated);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2500);
+    setError("");
+    try {
+      const res = await fetch(`/api/admin/event-submissions/${submission.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status, adminNotes }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setSubmission(updated);
+        setSaved(true);
+        setTimeout(() => setSaved(false), 2500);
+      } else {
+        const body = await res.json().catch(() => ({}));
+        setError(body.error || "تعذّر حفظ التغييرات، حاول مرة أخرى");
+      }
+    } catch {
+      setError("تعذّر الاتصال بالخادم، تحقق من الاتصال وحاول مجدداً");
     }
     setSaving(false);
   }
@@ -175,11 +150,27 @@ export default function SubmissionDetail({ submission: initial, canManage }) {
             </svg>
           </button>
           <div>
-            <p className="text-xs text-slate-400 font-semibold">طلبات الفعاليات / تفاصيل الطلب</p>
+            <p className="text-xs text-slate-400 font-semibold">
+              طلبات الفعاليات / تفاصيل الطلب
+              {submission.referenceNo && (
+                <span className="ms-2 font-mono font-bold text-[#003D33]" dir="ltr">
+                  {submission.referenceNo}
+                </span>
+              )}
+            </p>
             <h1 className="text-xl font-black text-gray-900 leading-tight">{submission.eventName}</h1>
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={() => router.push(`/admin/event-submissions/${submission.id}/print`)}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-bold text-[#003D33] transition hover:border-[#003D33]/40 hover:bg-[#003D33]/5"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4H7v4a2 2 0 002 2zm10-11V6a2 2 0 00-2-2H7a2 2 0 00-2 2v4" />
+            </svg>
+            طباعة الطلب
+          </button>
           <span className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full border ${meta.badge}`}>
             <span className={`w-1.5 h-1.5 rounded-full ${meta.dot}`} />
             {meta.label}
@@ -209,7 +200,7 @@ export default function SubmissionDetail({ submission: initial, canManage }) {
               <Row label="اسم الفعالية"  value={submission.eventName} full />
               <Row label="نوع الجهة"     value={ENTITY_LABELS[submission.entityType]} />
               <Row label="اسم الجهة"     value={submission.entityName} />
-              <Row label="نوع الفعالية"  value={submission.eventType === "central" ? "مركزية" : submission.eventType === "joint" ? "مشتركة" : submission.eventType} />
+              <Row label="نوع الفعالية"  value={eventTypeLabel(submission.eventType)} />
               <Row label="الاستدامة"     value={submission.isSustainable ? "مستدامة (قابلة للتكرار)" : "فعالية لمرة واحدة"} />
             </div>
             {submission.description && (
@@ -253,7 +244,7 @@ export default function SubmissionDetail({ submission: initial, canManage }) {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4">
               <Row label="المحافظة" value={submission.governorate} />
               <Row label="المكان" value={centerName} />
-              <Row label="الزمان المقترح" value={fmtProposedDate(submission.proposedDate)} />
+              <Row label="الزمان المقترح" value={formatProposedDate(submission.proposedDate)} />
             </div>
           </Section>
 
@@ -329,6 +320,12 @@ export default function SubmissionDetail({ submission: initial, canManage }) {
                     </div>
                   </div>
 
+                  {error && (
+                    <p className="text-xs font-bold text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">
+                      {error}
+                    </p>
+                  )}
+
                   <button
                     onClick={handleSave}
                     disabled={saving}
@@ -371,7 +368,13 @@ export default function SubmissionDetail({ submission: initial, canManage }) {
           {/* Meta info */}
           <div className="bg-slate-50 rounded-2xl border border-slate-100 p-4 space-y-2.5 text-xs text-slate-500">
             <div className="flex justify-between">
-              <span className="font-semibold">رقم الطلب</span>
+              <span className="font-semibold">الرقم المتسلسل</span>
+              <span className="font-mono font-bold text-[#003D33]" dir="ltr">
+                {submission.referenceNo || "—"}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="font-semibold">رمز المعاملة</span>
               <span className="font-mono text-slate-400 text-[10px]">{submission.id.slice(0, 16)}…</span>
             </div>
             <div className="flex justify-between">

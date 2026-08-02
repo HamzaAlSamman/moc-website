@@ -31,6 +31,7 @@ export default function ApexDateTimePicker({
   required = false,
   locale = "ar",
   id,
+  maxDate, // optional Date/ISO-string — disables days after it (e.g. "no future incident dates")
   "aria-invalid": ariaInvalid,
   "aria-describedby": ariaDescribedby,
 }) {
@@ -108,6 +109,39 @@ export default function ApexDateTimePicker({
     }
   }, [value, type]);
 
+  // Emit the selection upward the moment the user picks a day or time, so
+  // closing the picker any way (Confirm, Cancel, click-outside, or the mobile
+  // backdrop) keeps the value — no separate "تأكيد" press required. Previously
+  // onChange fired ONLY inside handleConfirm, so a user who picked then closed
+  // otherwise saw the field filled while form.startDate stayed empty, triggering
+  // a spurious "date required" error on save.
+  //
+  // This is called DIRECTLY from the interaction handlers (not a state-watching
+  // effect) with the freshly-picked values. That's deliberate: the parse effect
+  // above re-derives internal state from `value` (and rounds minutes to the
+  // nearest 5). An effect firing on those prop-driven changes would silently
+  // rewrite an existing saved time on edit (e.g. 14:37 → 14:35) without the user
+  // touching anything. Emitting only from real handlers avoids that entirely.
+  const emitSelection = (
+    dateObj,
+    hour = selectedHour,
+    minute = selectedMinute,
+    ampm = selectedAmPm,
+  ) => {
+    if (!dateObj) return;
+    const year = dateObj.getFullYear();
+    const month = String(dateObj.getMonth() + 1).padStart(2, "0");
+    const day = String(dateObj.getDate()).padStart(2, "0");
+    if (type === "datetime-local") {
+      let hrs = parseInt(hour);
+      if (ampm === "PM" && hrs < 12) hrs += 12;
+      if (ampm === "AM" && hrs === 12) hrs = 0;
+      onChange(`${year}-${month}-${day}T${String(hrs).padStart(2, "0")}:${minute}`);
+    } else {
+      onChange(`${year}-${month}-${day}`);
+    }
+  };
+
   // Handle outside click to close. Clicks inside the trigger OR the (possibly
   // portaled) popover card must NOT close it — only the backdrop / true outside.
   useEffect(() => {
@@ -147,14 +181,17 @@ export default function ApexDateTimePicker({
     if (presetType === "today") {
       setSelectedDate(today);
       setCurrentMonth(today);
+      emitSelection(today);
     } else if (presetType === "tomorrow") {
       target.setDate(today.getDate() + 1);
       setSelectedDate(target);
       setCurrentMonth(target);
+      emitSelection(target);
     } else if (presetType === "next-week") {
       target.setDate(today.getDate() + 7);
       setSelectedDate(target);
       setCurrentMonth(target);
+      emitSelection(target);
     } else if (presetType === "clear") {
       setSelectedDate(null);
       onChange("");
@@ -230,6 +267,20 @@ export default function ApexDateTimePicker({
 
     return grid;
   }, [currentMonth]);
+
+  // Normalize maxDate to a midnight Date for pure day-level comparison
+  // (an incident/completion date has no time component to compare against).
+  const maxDateObj = useMemo(() => {
+    if (!maxDate) return null;
+    const d = maxDate instanceof Date ? maxDate : new Date(maxDate);
+    if (Number.isNaN(d.getTime())) return null;
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  }, [maxDate]);
+
+  const isDateDisabled = (date) => {
+    if (!maxDateObj) return false;
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate()) > maxDateObj;
+  };
 
   // Is date currently selected?
   const isDateSelected = (date) => {
@@ -462,18 +513,21 @@ export default function ApexDateTimePicker({
                     const isSelected = isDateSelected(cell.date);
                     const isToday = isDateToday(cell.date);
                     const isCurrent = cell.isCurrentMonth;
+                    const isDisabled = isDateDisabled(cell.date);
 
                     return (
                       <button
                         key={idx}
                         type="button"
-                        onClick={() => setSelectedDate(cell.date)}
+                        disabled={isDisabled}
+                        onClick={() => { setSelectedDate(cell.date); emitSelection(cell.date); }}
                         className={`
-                          aspect-square text-xs rounded-lg flex items-center justify-center font-bold transition-all cursor-pointer min-h-[38px] md:min-h-0 font-cairo
+                          aspect-square text-xs rounded-lg flex items-center justify-center font-bold transition-all min-h-[38px] md:min-h-0 font-cairo
+                          ${isDisabled ? "text-slate-250 cursor-not-allowed opacity-50" : "cursor-pointer"}
                           ${isSelected ? `bg-gradient-to-br ${themeColors.primaryGradient} text-white font-extrabold scale-105 shadow-md` : ""}
-                          ${!isSelected && isToday ? `border border-[#b9a779] ${themeColors.accentText} font-extrabold bg-[#b9a779]/5` : ""}
-                          ${!isSelected && !isToday && isCurrent ? "text-slate-700 hover:bg-[#b9a779]/12" : ""}
-                          ${!isSelected && !isCurrent ? "text-slate-300" : ""}
+                          ${!isSelected && !isDisabled && isToday ? `border border-[#b9a779] ${themeColors.accentText} font-extrabold bg-[#b9a779]/5` : ""}
+                          ${!isSelected && !isDisabled && !isToday && isCurrent ? "text-slate-700 hover:bg-[#b9a779]/12" : ""}
+                          ${!isSelected && !isDisabled && !isCurrent ? "text-slate-300" : ""}
                         `}
                       >
                         {cell.dayNum}
@@ -496,7 +550,7 @@ export default function ApexDateTimePicker({
                   {/* Hours select */}
                   <select
                     value={selectedHour}
-                    onChange={(e) => setSelectedHour(e.target.value)}
+                    onChange={(e) => { setSelectedHour(e.target.value); emitSelection(selectedDate, e.target.value); }}
                     className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-bold outline-none transition focus:border-[#b9a779] focus:ring-2 focus:ring-[#b9a779]/20 font-cairo"
                   >
                     {HOURS.map((h) => (
@@ -508,7 +562,7 @@ export default function ApexDateTimePicker({
                   {/* Minutes select */}
                   <select
                     value={selectedMinute}
-                    onChange={(e) => setSelectedMinute(e.target.value)}
+                    onChange={(e) => { setSelectedMinute(e.target.value); emitSelection(selectedDate, selectedHour, e.target.value); }}
                     className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-bold outline-none transition focus:border-[#b9a779] focus:ring-2 focus:ring-[#b9a779]/20 font-cairo"
                   >
                     {MINUTES.map((m) => (
@@ -519,7 +573,7 @@ export default function ApexDateTimePicker({
                   {/* AM / PM toggle */}
                   <button
                     type="button"
-                    onClick={() => setSelectedAmPm(selectedAmPm === "AM" ? "PM" : "AM")}
+                    onClick={() => { const next = selectedAmPm === "AM" ? "PM" : "AM"; setSelectedAmPm(next); emitSelection(selectedDate, selectedHour, selectedMinute, next); }}
                     className="rounded-lg px-3 py-1.5 text-xs font-extrabold transition ml-1 cursor-pointer bg-slate-100 hover:bg-slate-200 text-slate-700"
                   >
                     {selectedAmPm}
@@ -528,24 +582,30 @@ export default function ApexDateTimePicker({
               </div>
             )}
 
-            {/* Quick Presets Bar */}
+            {/* Quick Presets Bar — hidden individually when the preset's target
+                date would fall after maxDate (e.g. "tomorrow" for a
+                can't-be-future incident date). */}
             {!jumpPanel && (
               <div className="flex flex-wrap gap-1 mt-4 pt-3.5 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => handlePreset("today")}
-                  className={`rounded-lg border border-[#b9a779]/15 px-3 py-2 text-[10px] font-bold bg-white text-slate-655 hover:bg-[#b9a779]/8 hover:border-[#b9a779]/45 hover:text-slate-800 transition cursor-pointer ${isRtl ? "font-qomra" : "font-inter"}`}
-                >
-                  {isRtl ? "اليوم" : "Today"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handlePreset("tomorrow")}
-                  className={`rounded-lg border border-[#b9a779]/15 px-3 py-2 text-[10px] font-bold bg-white text-slate-655 hover:bg-[#b9a779]/8 hover:border-[#b9a779]/45 hover:text-slate-800 transition cursor-pointer ${isRtl ? "font-qomra" : "font-inter"}`}
-                >
-                  {isRtl ? "غداً" : "Tomorrow"}
-                </button>
-                {type === "datetime-local" && (
+                {!isDateDisabled(new Date()) && (
+                  <button
+                    type="button"
+                    onClick={() => handlePreset("today")}
+                    className={`rounded-lg border border-[#b9a779]/15 px-3 py-2 text-[10px] font-bold bg-white text-slate-655 hover:bg-[#b9a779]/8 hover:border-[#b9a779]/45 hover:text-slate-800 transition cursor-pointer ${isRtl ? "font-qomra" : "font-inter"}`}
+                  >
+                    {isRtl ? "اليوم" : "Today"}
+                  </button>
+                )}
+                {!isDateDisabled(new Date(Date.now() + 86400000)) && (
+                  <button
+                    type="button"
+                    onClick={() => handlePreset("tomorrow")}
+                    className={`rounded-lg border border-[#b9a779]/15 px-3 py-2 text-[10px] font-bold bg-white text-slate-655 hover:bg-[#b9a779]/8 hover:border-[#b9a779]/45 hover:text-slate-800 transition cursor-pointer ${isRtl ? "font-qomra" : "font-inter"}`}
+                  >
+                    {isRtl ? "غداً" : "Tomorrow"}
+                  </button>
+                )}
+                {type === "datetime-local" && !isDateDisabled(new Date(Date.now() + 7 * 86400000)) && (
                   <button
                     type="button"
                     onClick={() => handlePreset("next-week")}

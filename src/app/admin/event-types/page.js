@@ -7,7 +7,7 @@ import EventTypesManager from "@/components/admin/EventTypesManager";
 
 export default async function EventTypesPage() {
   const user = await getCurrentUser();
-  if (!can(user.role, "MANAGE_CATEGORIES") && !can(user.role, "CREATE_EVENT")) {
+  if (!can(user.role, "MANAGE_CATEGORIES") && !can(user.role, "MANAGE_EVENT_TAXONOMIES")) {
     redirect("/admin/dashboard");
   }
 

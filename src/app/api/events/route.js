@@ -44,6 +44,11 @@ export async function GET() {
         endDate: true,
         featuredImage: true,
         status: true,
+        // Provenance + booking deep-link for events mirrored from partner sites
+        // (e.g. the Damascus Opera House) so the calendar can show a "Book now"
+        // button that hands off to the partner's own booking flow.
+        source: true,
+        bookingUrl: true,
         eventKindId: true,
         eventKind: {
           select: {

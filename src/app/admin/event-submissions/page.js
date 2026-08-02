@@ -13,6 +13,7 @@ export default async function EventSubmissionsPage() {
   }
 
   const submissions = await prisma.eventSubmission.findMany({
+    where: { deletedAt: null },
     orderBy: { createdAt: "desc" },
   });
 

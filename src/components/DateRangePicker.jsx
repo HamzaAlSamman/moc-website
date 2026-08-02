@@ -80,7 +80,7 @@ function MonthGrid({ year, month, startDate, endDate, hovered, onDay, onHover, l
               onClick={() => onDay(d)}
             >
               <span className={`
-                z-10 flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium
+                z-10 flex items-center justify-center w-8 h-8 rounded-full number-circle text-sm font-medium
                 transition-all duration-100
                 ${isStart || isEnd ? "bg-[#002723] text-white font-bold" : ""}
                 ${isHovEnd && !isEnd ? "bg-[#002723]/20 text-[#002723]" : ""}

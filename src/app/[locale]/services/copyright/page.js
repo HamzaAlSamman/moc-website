@@ -9,12 +9,13 @@ import DecorativeCorners from "../../../../components/DecorativeCorners";
 import ApexDateTimePicker from "../../../../components/ApexDateTimePicker";
 import { validateField, validateAll } from "../../../../lib/copyright-validation";
 import { Lightbulb, Hourglass, AlertTriangle, Info, FileText, CheckCircle, AlertCircle, CreditCard, Clock, Award, Check, Trash2, Plus, Download, X } from "lucide-react";
+import SubpageHero from "../../../../components/SubpageHero";
 
 // Translation Dictionary
 const T = {
   ar: {
     metaTitle: "وزارة الثقافة – مديرية حماية حقوق المؤلف والحقوق المجاورة",
-    title: "بوابة حماية حقوق المؤلف الرقمية",
+    title: "بوابة حماية حقوق المؤلف",
     subtitle: "احمِ عملك الفكري (كتاب، برنامج، تطبيق، أغنية، أو لوحة) وسجّله رسمياً لمنع سرقته أو تقليده.",
     step1: "الاستمارة والمرفقات",
     step1Desc: "إدخال معلومات المودع وتفاصيل المصنف ورفع الملفات والوثائق الثبوتية.",
@@ -362,11 +363,80 @@ After passing away, this protection is inherited by your family for an additiona
   ]
 };
 
+const ROLES_LIST = [
+  { ar: "المؤلف", labelAr: "مؤلف", en: "Author" },
+  { ar: "الابن", labelAr: "ابن", en: "Son" },
+  { ar: "الشريك", labelAr: "شريك", en: "Partner" },
+  { ar: "المؤدي", labelAr: "مؤدي", en: "Performer" },
+  { ar: "المؤلف والمؤدي", labelAr: "مؤلف ومؤدي", en: "Author & Performer" },
+  { ar: "المؤلف والمنتج", labelAr: "مؤلف ومنتج", en: "Author & Producer" },
+  { ar: "المؤلف والملحن", labelAr: "مؤلف وملحن", en: "Author & Composer" },
+  { ar: "المؤلفات", labelAr: "مؤلفات", en: "Authors (F)" },
+  { ar: "المبرمج", labelAr: "مبرمج", en: "Programmer" },
+  { ar: "المخرج", labelAr: "مخرج", en: "Director" },
+  { ar: "المنتج", labelAr: "منتج", en: "Producer" },
+  { ar: "المدير العام", labelAr: "مدير عام", en: "General Manager" },
+  { ar: "المستثمر", labelAr: "مستثمر", en: "Investor" },
+  { ar: "المصمم", labelAr: "مصمم", en: "Designer" },
+  { ar: "المصور", labelAr: "مصور", en: "Photographer" },
+  { ar: "المعد للبرنامج", labelAr: "معد للبرنامج", en: "Program Preparer" },
+  { ar: "المفوض", labelAr: "مفوض", en: "Authorized Delegate" },
+  { ar: "المكلف", labelAr: "مكلف", en: "Assignee" },
+  { ar: "الملحن", labelAr: "ملحن", en: "Composer" },
+  { ar: "الموزع الموسيقي", labelAr: "موزع موسيقي", en: "Music Arranger" },
+  { ar: "الناشر", labelAr: "ناشر", en: "Publisher" },
+  { ar: "النحات", labelAr: "نحات", en: "Sculptor" },
+  { ar: "الوالد", labelAr: "والد", en: "Father" },
+  { ar: "الورثة", labelAr: "ورثة", en: "Heirs" },
+  { ar: "الوكيل", labelAr: "وكيل", en: "Agent" },
+  { ar: "الوكيل القانوني", labelAr: "وكيل قانوني", en: "Legal Agent" },
+  { ar: "رئيس مجلس إدارة", labelAr: "رئيس مجلس إدارة", en: "Board Chairman" },
+  { ar: "صاحب الحقوق", labelAr: "صاحب حقوق", en: "Rights Owner" },
+  { ar: "صاحب الشركة", labelAr: "صاحب شركة", en: "Company Owner" },
+  { ar: "سيناريست", labelAr: "سيناريست", en: "Screenwriter" }
+];
+
+function getUnderlyingRoleGroup(role) {
+  if (["الابن", "الوالد", "الورثة"].includes(role)) {
+    return "heir";
+  }
+  if (["الشريك", "المدير العام", "المستثمر", "رئيس مجلس إدارة", "صاحب الشركة"].includes(role)) {
+    return "representative";
+  }
+  if (["المفوض", "الوكيل", "الوكيل القانوني", "المكلف"].includes(role)) {
+    return "agent";
+  }
+  return "author";
+}
+
+function getFeesForRole(role) {
+  const isCompany = getUnderlyingRoleGroup(role) === "representative";
+  if (isCompany) {
+    return {
+      initialBase: 51000,
+      initialStamps: 300,
+      initialTotal: 51300,
+      finalBase: 47000,
+      finalStamps: 300,
+      finalTotal: 47300
+    };
+  } else {
+    return {
+      initialBase: 31000,
+      initialStamps: 300,
+      initialTotal: 31300,
+      finalBase: 47000,
+      finalStamps: 300,
+      finalTotal: 47300
+    };
+  }
+}
+
 const INITIAL_FORM = {
   applicantName: "",
   applicantPhone: "",
   applicantEmail: "",
-  applicantRole: "author",
+  applicantRole: "المؤلف",
   idDocType: "national_id",
   workTitle: "",
   workCategory: "written",
@@ -644,6 +714,7 @@ export default function CopyrightPage(props) {
   // Applicant Portal Wizard step: 1=terms, 2=form, 3=payment, 4=processing, 5=certificate
   const [step, setStep] = useState(1);
   const [form, setForm] = useState(INITIAL_FORM);
+  const fees = getFeesForRole(form.applicantRole);
   const [touched, setTouched] = useState({});
   const [errors, setErrors] = useState({});
 
@@ -677,6 +748,8 @@ export default function CopyrightPage(props) {
   const [trackPaymentReceipt, setTrackPaymentReceipt] = useState(null);
   const [trackReceiptFileLabel, setTrackReceiptFileLabel] = useState(t?.fileSelect || "اختر الملف");
   const [trackPaymentRefTouched, setTrackPaymentRefTouched] = useState(false);
+  // Citizen's written reply when re-submitting after a suspension for deficiencies.
+  const [trackReply, setTrackReply] = useState("");
 
   const [toast, setToast] = useState({ text: "", type: "", show: false });
   const [imagePreview, setImagePreview] = useState(null);
@@ -726,6 +799,7 @@ export default function CopyrightPage(props) {
   // File label states
   const [workFileLabel, setWorkFileLabel] = useState(t.fileSelect);
   const [workFile, setWorkFile] = useState(null);
+  const [workDriveUrl, setWorkDriveUrl] = useState("");
   const [idFileFrontLabel, setIdFileFrontLabel] = useState(t.fileSelect);
   const [idFileFront, setIdFileFront] = useState(null);
   const [idFileBackLabel, setIdFileBackLabel] = useState(t.fileSelect);
@@ -767,6 +841,23 @@ export default function CopyrightPage(props) {
       };
       reader.readAsDataURL(file);
     }
+  };
+
+  const handleWorkFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!["application/zip", "application/x-zip-compressed"].includes(file.type) && !file.name.toLowerCase().endsWith(".zip")) {
+      showToast(isRtl ? "يُسمح برفع ملفات ZIP فقط" : "Only ZIP files are allowed", "error");
+      e.target.value = "";
+      return;
+    }
+    if (file.size > 100 * 1024 * 1024) {
+      showToast(isRtl ? "يتجاوز ملف ZIP حجم 100 ميغابايت؛ استخدم غوغل درايف" : "ZIP exceeds 100 MiB; use Google Drive", "error");
+      e.target.value = "";
+      return;
+    }
+    setWorkDriveUrl("");
+    handleBase64FileChange(e, setWorkFileLabel, setWorkFile);
   };
 
   // Shape of a fresh joint-author row. Like the main applicant, each one picks an
@@ -876,7 +967,20 @@ export default function CopyrightPage(props) {
   const handleFormSubmit = async (e) => {
     e.preventDefault();
 
-    const fieldErrors = validateAll(form);
+    // Automatically set completionDate to current local date, hour, and minute
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const seconds = String(now.getSeconds()).padStart(2, '0');
+    const completionDateStr = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+
+    const updatedForm = { ...form, completionDate: completionDateStr };
+    setForm(updatedForm);
+
+    const fieldErrors = validateAll(updatedForm);
     if (Object.keys(fieldErrors).length > 0) {
       setTouched((t) => {
         const next = { ...t };
@@ -895,7 +999,7 @@ export default function CopyrightPage(props) {
     }
 
     // File uploads validation
-    if (workFileLabel === t.fileSelect) {
+    if (workFileLabel === t.fileSelect && !workDriveUrl.trim()) {
       showToast(isRtl ? "يرجى رفع ملف العمل الفكري للاستمرار" : "Please upload the work file to proceed", "error");
       return;
     }
@@ -917,7 +1021,8 @@ export default function CopyrightPage(props) {
     }
 
     // Specific role file validation
-    if (form.applicantRole === "representative") {
+    const roleGroup = getUnderlyingRoleGroup(form.applicantRole);
+    if (roleGroup === "representative") {
       if (commercialRegisterLabel === t.fileSelect) {
         showToast(isRtl ? "يرجى رفع السجل التجاري للشركة للاستمرار" : "Please upload the company registry to proceed", "error");
         return;
@@ -930,7 +1035,7 @@ export default function CopyrightPage(props) {
         showToast(isRtl ? "يرجى رفع صورة هوية المفوض للاستمرار" : "Please upload the representative ID scan to proceed", "error");
         return;
       }
-    } else if (form.applicantRole === "agent") {
+    } else if (roleGroup === "agent") {
       if (roleFileLabel === t.fileSelect) {
         showToast(isRtl ? "يرجى رفع الوكالة القانونية للاستمرار" : "Please upload the power of attorney to proceed", "error");
         return;
@@ -939,7 +1044,7 @@ export default function CopyrightPage(props) {
         showToast(isRtl ? "يرجى رفع هوية المالك الأصلي للاستمرار" : "Please upload the original owner's ID to proceed", "error");
         return;
       }
-    } else if (form.applicantRole === "heir") {
+    } else if (roleGroup === "heir") {
       if (roleFileLabel === t.fileSelect) {
         showToast(isRtl ? "يرجى رفع وثيقة حصر الإرث للاستمرار" : "Please upload the inheritance certificate to proceed", "error");
         return;
@@ -970,9 +1075,9 @@ export default function CopyrightPage(props) {
     }
 
     const payload = {
-      ...form,
+      ...updatedForm,
       applicantSignature: null,
-      hasTelecomDoc: form.workCategory === "informational",
+      hasTelecomDoc: updatedForm.workCategory === "informational",
       authors: hasJointAuthors ? jointAuthors : null,
       applicationStatus: "submitted",
       paymentStatus: "pending",
@@ -982,6 +1087,7 @@ export default function CopyrightPage(props) {
       representativeIdFile,
       originalOwnerIdFile,
       workFile,
+      workDriveUrl: workDriveUrl.trim() || null,
       idFileFront,
       idFileBack,
       telecomFile,
@@ -1137,6 +1243,7 @@ export default function CopyrightPage(props) {
         body: JSON.stringify({
           id: trackedSub.id,
           action: "resubmit",
+          applicantReply: trackReply.trim() || undefined,
           workFile: workFile || undefined,
           idFileFront: idFileFront || undefined,
           idFileBack: idFileBack || undefined,
@@ -1152,6 +1259,7 @@ export default function CopyrightPage(props) {
       if (res.ok && data.success) {
         showToast(isRtl ? "تمت إعادة إرسال المصنف للمراجعة بعد استكمال النواقص" : "Application re-submitted for review", "success");
         setTrackedSub(data.submission);
+        setTrackReply("");
       } else {
         showToast(data.error || "خطأ أثناء إعادة الإرسال", "error");
       }
@@ -1230,6 +1338,7 @@ export default function CopyrightPage(props) {
 
   const renderTrackingDashboard = (sub) => {
     if (!sub) return null;
+    const fees = getFeesForRole(sub.applicantRole);
     return (
       <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 sm:p-8 space-y-8 relative animate-fade-in-up text-start">
         <DecorativeCorners />
@@ -1257,6 +1366,37 @@ export default function CopyrightPage(props) {
           </div>
         </div>
 
+        {/* Official receipts — always downloadable from here once the matching
+            fee is paid, in case the email attachment was blocked (#2). */}
+        {(sub.paymentStatus === "initial_paid" || sub.paymentStatus === "final_paid" || sub.paymentStatus === "fully_paid") && (
+          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-2.5">
+            <h5 className="text-xs font-black text-[#054239] flex items-center gap-2">
+              <FileText className="w-4 h-4 text-[#b9a779]" />
+              {isRtl ? "إيصالات الدفع الرسمية" : "Official Payment Receipts"}
+            </h5>
+            <div className="flex flex-wrap gap-2">
+              <a
+                href={`/api/copyright/receipt?code=${sub.id}&stage=initial`}
+                target="_blank" rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 bg-white border border-slate-250 hover:border-[#b9a779] text-[#054239] text-xs font-bold px-4 py-2 rounded-xl transition shadow-sm cursor-pointer"
+              >
+                <i className="fa-solid fa-file-arrow-down text-[#b9a779]" />
+                {isRtl ? "تحميل إيصال الرسم الأولي (PDF)" : "Download initial receipt (PDF)"}
+              </a>
+              {sub.paymentStatus === "fully_paid" && (
+                <a
+                  href={`/api/copyright/receipt?code=${sub.id}&stage=final`}
+                  target="_blank" rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 bg-white border border-slate-250 hover:border-[#b9a779] text-[#054239] text-xs font-bold px-4 py-2 rounded-xl transition shadow-sm cursor-pointer"
+                >
+                  <i className="fa-solid fa-file-arrow-down text-[#b9a779]" />
+                  {isRtl ? "تحميل إيصال الرسم النهائي (PDF)" : "Download final receipt (PDF)"}
+                </a>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Timeline */}
         <div className="space-y-4">
           <h5 className="text-xs font-black text-[#054239] uppercase tracking-wider text-start">
@@ -1273,7 +1413,7 @@ export default function CopyrightPage(props) {
                   : "bg-white text-slate-400 border-slate-100"
               }`}>
                 <div className="flex justify-between items-center mb-1">
-                  <span className={`text-[10px] font-black w-4.5 h-4.5 rounded-full flex items-center justify-center ${
+                  <span className={`text-[10px] font-black w-4.5 h-4.5 rounded-full number-circle flex items-center justify-center ${
                     stepItem.active ? "bg-[#b9a779] text-[#054239]" : stepItem.past ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-400"
                   }`}>
                     {idx + 1}
@@ -1294,13 +1434,13 @@ export default function CopyrightPage(props) {
             <h5 className="text-sm font-extrabold text-[#054239]">{isRtl ? "بانتظار تسديد الرسم المالي الأولي" : "Awaiting Initial Fee Payment"}</h5>
             <p className="text-xs text-slate-655 font-bold leading-normal">
               {isRtl
-                ? "يرجى تسديد الرسم الأولي البالغ 550 ل.س لإكمال معاملتك وتحويلها للدارس المختص للمراجعة والتدقيق الفني والقانوني."
-                : "Please pay the initial 550 L.S. fee to send your application to the researcher for review."}
+                ? `يرجى تسديد الرسم الأولي البالغ ${fees.initialTotal.toLocaleString()} ل.س لإكمال معاملتك وتحويلها للدارس المختص للمراجعة والتدقيق الفني والقانوني.`
+                : `Please pay the initial ${fees.initialTotal.toLocaleString()} L.S. fee to send your application to the researcher for review.`}
             </p>
 
             <div className="bg-white p-4 rounded-xl border border-slate-200 flex justify-between items-center text-xs">
                <span className="font-extrabold">{isRtl ? "الرسم الأولي المطلوب:" : "Required Initial Fee:"}</span>
-              <span className="text-emerald-700 font-black text-sm">500 ل.س (+ 50 ل.س خدمات)</span>
+              <span className="text-emerald-700 font-black text-sm">{fees.initialBase.toLocaleString()} ل.س (+ {fees.initialStamps.toLocaleString()} ل.س خدمات)</span>
             </div>
 
             {/* Cham Cash Details */}
@@ -1356,7 +1496,7 @@ export default function CopyrightPage(props) {
             <button onClick={() => handleTrackPay("initial")}
               className="w-full bg-[#054239] hover:bg-[#04332b] text-white font-bold py-3 rounded-xl transition shadow active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
             >
-              <span>{t.btnPay}</span>
+              <span>{isRtl ? `تسديد الرسم الأولي (${fees.initialTotal.toLocaleString()} ل.س)` : `Pay Initial Fee (${fees.initialTotal.toLocaleString()} L.S.)`}</span>
             </button>
           </div>
         )}
@@ -1367,10 +1507,18 @@ export default function CopyrightPage(props) {
             <h5 className="text-sm font-extrabold text-rose-800">{isRtl ? "المعاملة موقوفة مؤقتاً لاستكمال النواقص" : "Transaction Suspended for Gaps"}</h5>
             <p className="text-xs text-rose-900 font-bold leading-normal">
               {isRtl
-                ? "أشار المراجع القانوني بوجود نقص في الطلب أو الوثائق المرفقة. يرجى إعادة رفع المرفقات بشكل سليم والضغط على تأكيد المراجعة بالأسفل."
-                : "The reviewer found deficiencies. Please re-upload documents and click Submit Update below."}
+                ? "أشار المراجع بوجود نقص في الطلب أو الوثائق المرفقة. يرجى مراجعة النواقص أدناه، وإعادة رفع المرفقات بشكل سليم، وكتابة ردّك، ثم الضغط على إعادة الإرسال."
+                : "The reviewer found deficiencies. Review them below, re-upload documents, write your reply, then re-submit."}
             </p>
-            
+
+            {/* The specific deficiencies written by the reviewer (#8). */}
+            {sub.deficiencyNote && (
+              <div className="bg-white border border-rose-200 rounded-xl p-4 text-start">
+                <h6 className="text-[11px] font-extrabold text-rose-700 mb-1.5">{isRtl ? "النواقص المطلوب استكمالها:" : "Required corrections:"}</h6>
+                <p className="text-xs text-slate-700 font-semibold leading-6 whitespace-pre-line">{sub.deficiencyNote}</p>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="border border-slate-200 hover:border-[#b9a779]/40 rounded-xl p-3 bg-white text-center space-y-2 transition-all">
                 <h5 className="text-[11px] font-bold text-slate-800">{t.fileWorkLabel}</h5>
@@ -1415,6 +1563,17 @@ export default function CopyrightPage(props) {
               )}
             </div>
 
+            <div className="text-start">
+              <label className="block text-[11px] font-bold text-slate-700 mb-1.5">{isRtl ? "ردّك على النواقص (اختياري):" : "Your reply (optional):"}</label>
+              <textarea
+                value={trackReply}
+                onChange={(e) => setTrackReply(e.target.value)}
+                rows={3}
+                placeholder={isRtl ? "اشرح كيف عالجت النواقص المذكورة أعلاه..." : "Explain how you addressed the deficiencies above..."}
+                className="w-full text-xs border border-slate-250 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 resize-y bg-white"
+              />
+            </div>
+
             <button
               onClick={handleTrackResubmit}
               className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs px-6 py-3 rounded-xl transition shadow active:scale-95 cursor-pointer"
@@ -1430,13 +1589,13 @@ export default function CopyrightPage(props) {
             <h5 className="text-sm font-extrabold text-[#054239]">{isRtl ? "الموافقة الإدارية صادرة: بانتظار استكمال الرسوم" : "Administrative Approval Granted: Awaiting Fees"}</h5>
             <p className="text-xs text-slate-655 font-bold leading-normal">
               {isRtl
-                ? "تهانينا! صدرت الموافقة الرسمية على منح الحماية لمصنفك. يرجى تسديد الشطر الثاني النهائي من الرسوم البالغ 500 ل.س لتوليد وإصدار شهادة حماية حقوق المؤلف رسمياً."
-                : "Congratulations! Approval granted. Please pay the remaining 500 L.S. fee to issue your certificate."}
+                ? `تهانينا! صدرت الموافقة الرسمية على منح الحماية لمصنفك. يرجى تسديد الشطر الثاني النهائي من الرسوم البالغ ${fees.finalTotal.toLocaleString()} ل.س لتوليد وإصدار شهادة حماية حقوق المؤلف رسمياً.`
+                : `Congratulations! Approval granted. Please pay the remaining ${fees.finalTotal.toLocaleString()} L.S. fee to issue your certificate.`}
             </p>
             
             <div className="bg-white p-4 rounded-xl border border-slate-200 flex justify-between items-center text-xs">
-              <span className="font-extrabold">{isRtl ? "الرسم النهائي المطلوب لاستكمال الـ 1,000 ل.س:" : "Required Final Fee (completing 1k):"}</span>
-              <span className="text-emerald-700 font-black text-sm">500 ل.س (+ 50 ل.س طوابع إلكترونية)</span>
+              <span className="font-extrabold">{isRtl ? "الرسم النهائي المطلوب:" : "Required Final Fee:"}</span>
+              <span className="text-emerald-700 font-black text-sm">{fees.finalBase.toLocaleString()} ل.س (+ {fees.finalStamps.toLocaleString()} ل.س طوابع إلكترونية)</span>
             </div>
 
             {/* Cham Cash Details */}
@@ -1492,7 +1651,7 @@ export default function CopyrightPage(props) {
             <button onClick={() => handleTrackPay("final")}
               className="w-full bg-[#054239] hover:bg-[#04332b] text-white font-bold py-3 rounded-xl transition shadow active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
             >
-              <span>{isRtl ? "تسديد الرسم النهائي (550 ل.س)" : "Pay Final Fee (550 L.S.)"}</span>
+              <span>{isRtl ? `تسديد الرسم النهائي (${fees.finalTotal.toLocaleString()} ل.س)` : `Pay Final Fee (${fees.finalTotal.toLocaleString()} L.S.)`}</span>
             </button>
           </div>
         )}
@@ -1534,7 +1693,7 @@ export default function CopyrightPage(props) {
   };
 
   // File upload card helper
-  const FileUploadCard = ({ icon, label, desc, fileLabel, onChange, required: isRequired, highlight }) => (
+  const FileUploadCard = ({ icon, label, desc, fileLabel, onChange, required: isRequired, highlight, accept }) => (
     <div className={`group relative rounded-2xl p-5 border transition-all cursor-pointer focus-within:ring-2 focus-within:ring-[#b9a779]/40 focus-within:border-[#b9a779] ${highlight ? "border-amber-300 bg-amber-50/60" : "border-slate-200 bg-white hover:border-[#b9a779]/50"}`}>
       <div className="flex items-start gap-4">
         <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${highlight ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-600"}`}>
@@ -1548,7 +1707,7 @@ export default function CopyrightPage(props) {
           </span>
         </div>
       </div>
-      <input type="file" required={false} onChange={onChange} aria-label={label} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+      <input type="file" accept={accept} required={false} onChange={onChange} aria-label={label} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
     </div>
   );
 
@@ -1601,78 +1760,60 @@ export default function CopyrightPage(props) {
       )}
 
       {/* ── Hero ── */}
-      <section className="relative py-20 px-4 overflow-hidden border-b border-[#b9a779]/15">
-        <div className="absolute inset-0 z-0">
-          <Image
-            src="/images/drive-photos/Khan-Asad-Basha.jpg"
-            alt="copyright background"
-            fill
-            priority
-            className="object-cover brightness-[0.2] saturate-[0.7]"
-          />
-          <div className="absolute inset-0 bg-gradient-to-b from-[#002723]/90 via-[#002723]/75 to-[#002723]" />
-        </div>
-        <div className="max-w-4xl mx-auto text-center relative z-10 flex flex-col items-center gap-3">
-          <span className="text-[10px] uppercase text-[#b9a779] font-bold tracking-widest border border-[#b9a779]/30 rounded-full px-4 py-1 bg-[#b9a779]/5">
-            {t.decree}
-          </span>
-          <h1 className="text-white font-extrabold text-3xl sm:text-4xl lg:text-5xl font-qomra">
-            {t.title}
-          </h1>
-          <div className="w-16 h-[2.5px] bg-[#b9a779] mt-1" />
-          <p className="text-slate-300 text-sm max-w-xl leading-relaxed">
-            {t.subtitle}
-          </p>
-
-          {/* Step indicator */}
-          {portal === "applicant" && step < 4 && (
-            <div className="flex flex-col md:flex-row items-center justify-center gap-3 mt-4">
-              {[1, 2, 3].map((s) => (
-                <div key={s} className="flex items-center gap-3">
-                  <div className={`flex items-center gap-2 px-4 py-1.5 rounded-full border text-xs font-bold transition-all ${
-                    step === s
-                      ? "bg-[#b9a779] text-[#054239] border-[#b9a779]"
-                      : step > s
-                        ? "bg-[#1C665A]/30 text-[#b9a779] border-[#1C665A]/40"
-                        : "bg-white/10 text-slate-400 border-white/15"
-                  }`}>
-                    <span className={`w-4 h-4 rounded-full text-[10px] flex items-center justify-center ${
-                      step === s ? "bg-[#054239] text-white" : step > s ? "bg-[#b9a779] text-white" : "bg-white/20 text-white/50"
-                    }`}>{s}</span>
-                    {s === 1 ? t.step1 : s === 2 ? t.step2 : t.step3}
-                  </div>
-                  {s < 3 && <div className="hidden md:block w-8 h-px bg-white/20" />}
+      <SubpageHero
+        title={t.title}
+        subtitle={t.decree}
+        description={t.subtitle}
+        isRtl={isRtl}
+      >
+        {/* Step indicator */}
+        {portal === "applicant" && step < 4 && (
+          <div className="flex flex-col md:flex-row items-center justify-center gap-3 mt-4">
+            {[1, 2, 3].map((s) => (
+              <div key={s} className="flex items-center gap-3">
+                <div className={`flex items-center gap-2 px-4 py-1.5 rounded-full border text-xs font-bold transition-all ${
+                  step === s
+                    ? "bg-[#b9a779] text-[#054239] border-[#b9a779]"
+                    : step > s
+                      ? "bg-[#1C665A]/30 text-[#b9a779] border-[#1C665A]/40"
+                      : "bg-white/10 text-slate-400 border-white/15"
+                }`}>
+                  <span className={`w-4 h-4 rounded-full number-circle text-[10px] flex items-center justify-center ${
+                    step === s ? "bg-[#054239] text-white" : step > s ? "bg-[#b9a779] text-white" : "bg-white/20 text-white/50"
+                  }`}>{s}</span>
+                  {s === 1 ? t.step1 : s === 2 ? t.step2 : t.step3}
                 </div>
-              ))}
-            </div>
-          )}
-
-          {portal === "applicant" && step === 4 && (
-            <div className="mt-4 inline-flex items-center gap-3 bg-emerald-500/10 border border-emerald-500/30 px-5 py-2.5 rounded-full text-emerald-400 text-sm font-bold shadow-md animate-fade-in-up font-qomra">
-              <span className="w-5 h-5 rounded-full bg-emerald-500 text-[#054239] flex items-center justify-center text-xs font-black">✓</span>
-              <span>{t.step4}</span>
-            </div>
-          )}
-
-          {/* Contextual nav link */}
-          <div className="mt-8 font-qomra">
-            {portal === "applicant" && step < 4 && (
-              <button onClick={() => { setPortal("tracker"); setTrackedSub(null); setErrorTracker(""); }}
-                className="text-white/40 hover:text-[#b9a779] text-xs font-semibold transition-colors duration-200 pointer-events-auto cursor-pointer flex items-center gap-1.5 mx-auto border border-white/10 hover:border-[#b9a779]/30 px-4 py-2 rounded-full bg-white/5 hover:bg-white/10 font-qomra font-bold">
-                <Clock className="w-3.5 h-3.5" />
-                <span>{isRtl ? "تبحث عن معاملة سابقة؟ تتبع طلبك من هنا" : "Looking for a previous request? Track here"}</span>
-              </button>
-            )}
-            {portal === "tracker" && (
-              <button onClick={() => { setPortal("applicant"); setStep(1); }}
-                className="text-white/40 hover:text-[#b9a779] text-xs font-semibold transition-colors duration-200 pointer-events-auto cursor-pointer flex items-center gap-1.5 mx-auto border border-white/10 hover:border-[#b9a779]/30 px-4 py-2 rounded-full bg-white/5 hover:bg-white/10 font-qomra font-bold">
-                <FileText className="w-3.5 h-3.5" />
-                <span>{isRtl ? "تقديم معاملة جديدة؟ اضغط هنا" : "Submit a new request? Click here"}</span>
-              </button>
-            )}
+                {s < 3 && <div className="hidden md:block w-8 h-px bg-white/20" />}
+              </div>
+            ))}
           </div>
+        )}
+
+        {portal === "applicant" && step === 4 && (
+          <div className="mt-4 inline-flex items-center gap-3 bg-emerald-500/10 border border-emerald-500/30 px-5 py-2.5 rounded-full text-emerald-400 text-sm font-bold shadow-md animate-fade-in-up font-qomra">
+            <span className="w-5 h-5 rounded-full bg-emerald-500 text-[#054239] flex items-center justify-center text-xs font-black">✓</span>
+            <span>{t.step4}</span>
+          </div>
+        )}
+
+        {/* Contextual nav link */}
+        <div className="mt-8 font-qomra">
+          {portal === "applicant" && step < 4 && (
+            <button onClick={() => { setPortal("tracker"); setTrackedSub(null); setErrorTracker(""); }}
+              className="text-white/40 hover:text-[#b9a779] text-xs font-semibold transition-colors duration-200 pointer-events-auto cursor-pointer flex items-center gap-1.5 mx-auto border border-white/10 hover:border-[#b9a779]/30 px-4 py-2 rounded-full bg-white/5 hover:bg-white/10 font-qomra font-bold">
+              <Clock className="w-3.5 h-3.5" />
+              <span>{isRtl ? "تبحث عن معاملة سابقة؟ تتبع طلبك من هنا" : "Looking for a previous request? Track here"}</span>
+            </button>
+          )}
+          {portal === "tracker" && (
+            <button onClick={() => { setPortal("applicant"); setStep(1); }}
+              className="text-white/40 hover:text-[#b9a779] text-xs font-semibold transition-colors duration-200 pointer-events-auto cursor-pointer flex items-center gap-1.5 mx-auto border border-white/10 hover:border-[#b9a779]/30 px-4 py-2 rounded-full bg-white/5 hover:bg-white/10 font-qomra font-bold">
+              <FileText className="w-3.5 h-3.5" />
+              <span>{isRtl ? "تقديم معاملة جديدة؟ اضغط هنا" : "Submit a new request? Click here"}</span>
+            </button>
+          )}
         </div>
-      </section>
+      </SubpageHero>
 
       {/* ── Toast ── */}
       {toast.show && (
@@ -1737,7 +1878,7 @@ export default function CopyrightPage(props) {
                 <div className="bg-white rounded-3xl border border-[#b9a779]/20 shadow-sm relative z-10">
                   <DecorativeCorners />
                   <div className="bg-[#054239]/5 border-b border-[#b9a779]/15 px-8 sm:px-12 py-5 flex items-center gap-3 rounded-t-3xl">
-                    <span className="w-7 h-7 rounded-full bg-[#b9a779] text-white text-xs font-black flex items-center justify-center shrink-0">1</span>
+                    <span className="w-7 h-7 rounded-full number-circle bg-[#b9a779] text-white text-xs font-black flex items-center justify-center shrink-0">1</span>
                     <h2 className="font-extrabold text-[#054239] text-sm">{t.section1}</h2>
                   </div>
                   <div className="px-8 sm:px-12 pb-8 sm:pb-12 pt-6 space-y-5">
@@ -1790,37 +1931,38 @@ export default function CopyrightPage(props) {
                         <label className="text-sm font-semibold text-slate-700">{t.roleLabel}</label>
                         <Tooltip text={isRtl ? "حدد صفتك لمعرفة الوثائق المطلوبة." : "Select your capacity to determine required documents."} />
                       </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                        {[
-                          { val: "author", label: t.roleAuthor },
-                          { val: "agent", label: t.roleAgent },
-                          { val: "heir", label: t.roleHeir },
-                          { val: "representative", label: t.roleRep },
-                        ].map((item) => (
-                          <label key={item.val} className={`flex items-center gap-3 border rounded-xl px-4 py-3 cursor-pointer transition-all focus-within:ring-2 focus-within:ring-[#b9a779]/40 ${
-                            form.applicantRole === item.val
-                              ? "border-[#b9a779] bg-[#b9a779]/8 text-[#054239]"
-                              : "border-slate-200 hover:border-slate-300 text-slate-600"
-                          }`}>
-                            <input type="radio" name="applicantRole" value={item.val}
-                              checked={form.applicantRole === item.val}
-                              onChange={() => setForm((f) => ({ ...f, applicantRole: item.val }))}
-                              className="accent-[#b9a779]" />
-                            <span className="text-sm font-bold">{item.label}</span>
-                          </label>
-                        ))}
+                      <div className="relative">
+                        <select
+                          id="applicantRole"
+                          value={form.applicantRole}
+                          onChange={(e) => setForm((f) => ({ ...f, applicantRole: e.target.value }))}
+                          className="w-full border border-slate-200 focus:border-[#b9a779] focus:ring-2 focus:ring-[#b9a779]/15 rounded-xl px-4 py-3 text-sm text-slate-800 outline-none transition bg-white"
+                        >
+                          {ROLES_LIST.map((role) => (
+                            <option key={role.ar} value={role.ar}>
+                              {isRtl ? role.labelAr : role.en}
+                            </option>
+                          ))}
+                        </select>
                       </div>
-                      {form.applicantRole !== "author" && (
-                        <p className="mt-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 font-bold">
-                          {t.roleExtraDetails}
-                        </p>
+                      {getUnderlyingRoleGroup(form.applicantRole) !== "author" && (
+                        <div className="mt-3 space-y-2">
+                          <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 font-bold">
+                            {t.roleExtraDetails}
+                          </p>
+                          {roleDescriptions[locale] && roleDescriptions[locale][getUnderlyingRoleGroup(form.applicantRole)] && (
+                            <p className="text-[11px] text-slate-500 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 leading-relaxed">
+                              {roleDescriptions[locale][getUnderlyingRoleGroup(form.applicantRole)]}
+                            </p>
+                          )}
+                        </div>
                       )}
                     </div>
                   </div>
                 </div>
 
                 {/* Joint Authors (if author) */}
-                {form.applicantRole === "author" && (
+                {getUnderlyingRoleGroup(form.applicantRole) === "author" && (
                   <div className="bg-white rounded-3xl border border-[#b9a779]/20 shadow-sm overflow-hidden relative p-8">
                     <DecorativeCorners />
                     <label className="flex items-center gap-3 cursor-pointer select-none">
@@ -1921,7 +2063,7 @@ export default function CopyrightPage(props) {
                 <div className="bg-white rounded-3xl border border-[#b9a779]/20 shadow-sm relative z-10">
                   <DecorativeCorners />
                   <div className="bg-[#054239]/5 border-b border-[#b9a779]/15 px-8 sm:px-12 py-5 flex items-center gap-3 rounded-t-3xl">
-                    <span className="w-7 h-7 rounded-full bg-[#b9a779] text-white text-xs font-black flex items-center justify-center shrink-0">2</span>
+                    <span className="w-7 h-7 rounded-full number-circle bg-[#b9a779] text-white text-xs font-black flex items-center justify-center shrink-0">2</span>
                     <h2 className="font-extrabold text-[#054239] text-sm">{t.section2}</h2>
                   </div>
                   <div className="px-8 sm:px-12 pb-8 sm:pb-12 pt-6 space-y-5">
@@ -2013,11 +2155,11 @@ export default function CopyrightPage(props) {
                 <div className="bg-white rounded-3xl border border-[#b9a779]/20 shadow-sm relative z-20">
                   <DecorativeCorners />
                   <div className="bg-[#054239]/5 border-b border-[#b9a779]/15 px-8 sm:px-12 py-5 flex items-center gap-3 rounded-t-3xl">
-                    <span className="w-7 h-7 rounded-full bg-[#b9a779] text-white text-xs font-black flex items-center justify-center shrink-0">3</span>
+                    <span className="w-7 h-7 rounded-full number-circle bg-[#b9a779] text-white text-xs font-black flex items-center justify-center shrink-0">3</span>
                     <h2 className="font-extrabold text-[#054239] text-sm">{t.section3}</h2>
                   </div>
                   <div className="px-8 sm:px-12 pb-8 sm:pb-12 pt-6">
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                       <div>
                         <label htmlFor="province" className="block text-sm font-semibold text-slate-700 mb-2">{t.provinceLabel}</label>
                         <select id="province" value={form.province}
@@ -2035,15 +2177,6 @@ export default function CopyrightPage(props) {
                         <input id="center" type="text" readOnly value={form.center}
                           className={`w-full border border-slate-100 bg-slate-50 text-slate-500 rounded-xl px-4 py-3 text-sm outline-none font-bold ${isRtl ? "font-qomra" : "font-inter"}`} />
                       </div>
-                      <div>
-                        <label htmlFor="completionDate" className="block text-sm font-semibold text-slate-700 mb-2">{t.completionDateLabel}</label>
-                        <ApexDateTimePicker type="date" id="completionDate" value={form.completionDate}
-                          onChange={(val) => { setForm((f) => ({ ...f, completionDate: val })); handleBlur("completionDate"); }}
-                          aria-invalid={!!fieldError("completionDate")}
-                          aria-describedby={fieldError("completionDate") ? "completionDate-error" : undefined}
-                          locale={locale} />
-                        <FieldErrorText id="completionDate-error" message={fieldError("completionDate")} />
-                      </div>
                     </div>
                   </div>
                 </div>
@@ -2052,7 +2185,7 @@ export default function CopyrightPage(props) {
                 <div className="bg-white rounded-3xl border border-[#b9a779]/20 shadow-sm relative z-10">
                   <DecorativeCorners />
                   <div className="bg-[#054239]/5 border-b border-[#b9a779]/15 px-8 sm:px-12 py-5 flex items-center gap-3 rounded-t-3xl">
-                    <span className="w-7 h-7 rounded-full bg-[#b9a779] text-white text-xs font-black flex items-center justify-center shrink-0">4</span>
+                    <span className="w-7 h-7 rounded-full number-circle bg-[#b9a779] text-white text-xs font-black flex items-center justify-center shrink-0">4</span>
                     <h2 className="font-extrabold text-[#054239] text-sm">{t.section4}</h2>
                   </div>
                   <div className="px-8 sm:px-12 pb-8 sm:pb-12 pt-6 space-y-5">
@@ -2068,7 +2201,36 @@ export default function CopyrightPage(props) {
 
                     <div className="space-y-3">
                       <FileUploadCard icon="fa-file-arrow-up" label={t.fileWorkLabel} desc={t.fileWorkDesc}
-                        fileLabel={workFileLabel} required onChange={(e) => handleBase64FileChange(e, setWorkFileLabel, setWorkFile)} />
+                        fileLabel={workFileLabel} required accept=".zip,application/zip,application/x-zip-compressed" onChange={handleWorkFileChange} />
+                      <label className="block text-xs font-bold text-slate-700">
+                        {isRtl ? "رابط غوغل درايف للمصنفات التي يتجاوز حجمها 100 ميغابايت" : "Google Drive URL for works larger than 100 MiB"}
+                        <input
+                          type="url"
+                          value={workDriveUrl}
+                          dir="ltr"
+                          inputMode="url"
+                          autoCapitalize="none"
+                          spellCheck={false}
+                          placeholder="https://drive.google.com/file/d/..."
+                          onChange={(e) => {
+                            setWorkDriveUrl(e.target.value);
+                            if (e.target.value) {
+                              setWorkFile(null);
+                              setWorkFileLabel(t.fileSelect);
+                            }
+                          }}
+                          className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-left text-sm font-inter"
+                        />
+                      </label>
+                      {/* Large / serial works: advise uploading to Google Drive and pasting the link (#9). */}
+                      <div className="flex items-start gap-2.5 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-xs text-blue-900 leading-relaxed font-semibold">
+                        <i className="fa-brands fa-google-drive text-blue-600 text-sm mt-0.5 shrink-0" />
+                        <span>
+                          {isRtl
+                            ? "إذا كان المصنف مسلسلاً (عدة أجزاء) أو حجمه كبيراً يتعذّر رفعه هنا، يُرجى رفعه على Google Drive وإدراج رابط المشاركة داخل ملف PDF مختصر ورفعه أعلاه، مع ضبط صلاحية الرابط على «أي شخص لديه الرابط يمكنه الاطلاع»."
+                            : "If the work is serialized (multiple parts) or too large to upload here, upload it to Google Drive and include the shareable link inside a short PDF uploaded above — set the link to “anyone with the link can view.”"}
+                        </span>
+                      </div>
                       {/* Identity document type: national ID (two faces) or passport (single data page) */}
                       <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
                         <div className="flex items-center gap-2 mb-3">
@@ -2100,19 +2262,19 @@ export default function CopyrightPage(props) {
                         </div>
                       </div>
 
-                      {form.idDocType === "passport" ? (
+                      {getUnderlyingRoleGroup(form.applicantRole) === "author" ? (
                         <FileUploadCard icon="fa-passport"
-                          label={form.applicantRole === "author" ? (isRtl ? "صورة جواز السفر *" : "Passport *") : (isRtl ? "صورة جواز سفر مقدم الطلب *" : "Applicant Passport *")}
+                          label={isRtl ? "صورة جواز السفر *" : "Passport *"}
                           desc={isRtl ? "صورة واضحة لصفحة البيانات في جواز السفر." : "Clear photo of the passport data page."}
                           fileLabel={idFileFrontLabel} required onChange={(e) => handleBase64FileChange(e, setIdFileFrontLabel, setIdFileFront)} />
                       ) : (
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <FileUploadCard icon="fa-address-card"
-                            label={form.applicantRole === "author" ? (isRtl ? "وجه الهوية الأمامي *" : "ID Front Face *") : (isRtl ? "وجه هوية مقدم الطلب الأمامي *" : "Applicant ID Front *")}
+                            label={isRtl ? "وجه الهوية الأمامي مقدم الطلب *" : "Applicant ID Front *"}
                             desc={isRtl ? "صورة واضحة للوجه الأمامي لبطاقة الهوية الشخصية." : "Clear photo of the front face of your national ID."}
                             fileLabel={idFileFrontLabel} required onChange={(e) => handleBase64FileChange(e, setIdFileFrontLabel, setIdFileFront)} />
                           <FileUploadCard icon="fa-address-card"
-                            label={form.applicantRole === "author" ? (isRtl ? "وجه الهوية الخلفي *" : "ID Back Face *") : (isRtl ? "وجه هوية مقدم الطلب الخلفي *" : "Applicant ID Back *")}
+                            label={isRtl ? "وجه الهوية الخلفي مقدم الطلب *" : "Applicant ID Back *"}
                             desc={isRtl ? "صورة واضحة للوجه الخلفي لبطاقة الهوية الشخصية." : "Clear photo of the back face of your national ID."}
                             fileLabel={idFileBackLabel} required onChange={(e) => handleBase64FileChange(e, setIdFileBackLabel, setIdFileBack)} />
                         </div>
@@ -2123,7 +2285,7 @@ export default function CopyrightPage(props) {
                           label={t.fileTelecomLabel} desc={t.fileTelecomDesc}
                           fileLabel={telecomFileLabel} required onChange={(e) => handleBase64FileChange(e, setTelecomFileLabel, setTelecomFile)} />
                       )}
-                      {form.applicantRole === "representative" && (<>
+                      {getUnderlyingRoleGroup(form.applicantRole) === "representative" && (<>
                         <FileUploadCard icon="fa-building-user" label={isRtl ? "السجل التجاري للشركة *" : "Company Registry *"}
                           desc={isRtl ? "سجل تجاري حديث مصدق." : "Certified company registry."} fileLabel={commercialRegisterLabel} required onChange={(e) => handleBase64FileChange(e, setCommercialRegisterLabel, setCommercialRegisterFile)} />
                         <FileUploadCard icon="fa-file-contract" label={isRtl ? "قرار التفويض *" : "Delegation Letter *"}
@@ -2131,13 +2293,13 @@ export default function CopyrightPage(props) {
                         <FileUploadCard icon="fa-address-card" label={isRtl ? "صورة هوية المفوض *" : "Representative ID *"}
                           desc={isRtl ? "صورة هوية الشخص المفوض بالمعاملة." : "National ID scan of the representative."} fileLabel={representativeIdLabel} required onChange={(e) => handleBase64FileChange(e, setRepresentativeIdLabel, setRepresentativeIdFile)} />
                       </>)}
-                      {form.applicantRole === "agent" && (<>
+                      {getUnderlyingRoleGroup(form.applicantRole) === "agent" && (<>
                         <FileUploadCard icon="fa-scale-balanced" label={isRtl ? "الوكالة القانونية *" : "Power of Attorney *"}
                           desc={isRtl ? "صورة واضحة عن الوكالة الرسمية." : "Clear scan of power of attorney."} fileLabel={roleFileLabel} required onChange={(e) => handleBase64FileChange(e, setRoleFileLabel, setRoleFile)} />
                         <FileUploadCard icon="fa-user-shield" label={isRtl ? "هوية المالك الأصلي *" : "Original Owner ID *"}
                           desc={isRtl ? "هوية مالك الحقوق الأصلي." : "ID of the original rights owner."} fileLabel={originalOwnerIdLabel} required onChange={(e) => handleBase64FileChange(e, setOriginalOwnerIdLabel, setOriginalOwnerIdFile)} />
                       </>)}
-                      {form.applicantRole === "heir" && (<>
+                      {getUnderlyingRoleGroup(form.applicantRole) === "heir" && (<>
                         <FileUploadCard icon="fa-rectangle-list" label={isRtl ? "وثيقة حصر الإرث *" : "Inheritance Certificate *"}
                           desc={isRtl ? "حصر إرث شرعي للمؤلف المتوفى." : "Probate certificate of deceased author."} fileLabel={roleFileLabel} required onChange={(e) => handleBase64FileChange(e, setRoleFileLabel, setRoleFile)} />
                         <FileUploadCard icon="fa-user-slash" label={isRtl ? "هوية المؤلف المتوفى *" : "Deceased Author ID *"}
@@ -2241,14 +2403,14 @@ export default function CopyrightPage(props) {
                         <p className="font-bold text-[#054239]">{isRtl ? "🔹 الرسم الأولي (المرحلة الأولى)" : "🔹 Initial Fee (Phase 1)"}</p>
                         <p className="text-xs text-slate-500 mt-0.5">{isRtl ? "يُسدَّد الآن — إيداع وحماية المصنف + طوابع خدمات" : "Paid now — Work deposit + e-service stamps"}</p>
                       </div>
-                      <span className="text-base font-black text-[#054239]">550 ل.س</span>
+                      <span className="text-base font-black text-[#054239]">{fees.initialTotal.toLocaleString()} ل.س</span>
                     </div>
                     <div className="flex items-center justify-between bg-white rounded-xl px-4 py-3 border border-slate-200 opacity-70">
                       <div>
                         <p className="font-bold text-slate-600">{isRtl ? "🔸 الرسم النهائي (المرحلة الثانية)" : "🔸 Final Fee (Phase 2)"}</p>
                         <p className="text-xs text-slate-400 mt-0.5">{isRtl ? "يُطلب لاحقاً فقط بعد الموافقة القانونية النهائية — إصدار الشهادة الرسمية" : "Requested later only after final legal approval — Official certificate issuance"}</p>
                       </div>
-                      <span className="text-base font-black text-slate-500">500 ل.س</span>
+                      <span className="text-base font-black text-slate-500">{fees.finalTotal.toLocaleString()} ل.س</span>
                     </div>
                   </div>
                 </div>
@@ -2259,15 +2421,15 @@ export default function CopyrightPage(props) {
                   <div className="space-y-3">
                     <div className="flex justify-between items-center text-sm">
                       <span className="text-slate-600">{t.payDetail1}</span>
-                      <span className="font-bold text-slate-900">500 ل.س</span>
+                      <span className="font-bold text-slate-900">{fees.initialBase.toLocaleString()} ل.س</span>
                     </div>
                     <div className="flex justify-between items-center text-sm">
                       <span className="text-slate-600">{t.payDetail2}</span>
-                      <span className="font-bold text-slate-900">50 ل.س</span>
+                      <span className="font-bold text-slate-900">{fees.initialStamps.toLocaleString()} ل.س</span>
                     </div>
                     <div className="border-t border-slate-100 pt-3 flex justify-between items-center">
                       <span className="font-bold text-slate-900">{t.payTotal}</span>
-                      <span className="text-lg font-bold text-emerald-700">550 ل.س</span>
+                      <span className="text-lg font-bold text-emerald-700">{fees.initialTotal.toLocaleString()} ل.س</span>
                     </div>
                   </div>
                 </div>
@@ -2335,7 +2497,7 @@ export default function CopyrightPage(props) {
 
                 <button onClick={handlePaymentSubmit}
                   className="w-full bg-[#054239] hover:bg-[#04332b] text-white font-bold py-4 rounded-2xl transition shadow-md flex items-center justify-center gap-2 cursor-pointer">
-                  <span>{t.btnPay}</span>
+                  <span>{isRtl ? `تسديد الرسم الأولي (${fees.initialTotal.toLocaleString()} ل.س)` : `Pay Initial Fee (${fees.initialTotal.toLocaleString()} L.S.)`}</span>
                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" /></svg>
                 </button>
               </div>
@@ -2410,7 +2572,7 @@ export default function CopyrightPage(props) {
                       <div><p className="text-xs text-slate-500 font-medium">{t.certWorkTitle}</p><p className="font-bold text-slate-900 mt-0.5">{form.workTitle}</p></div>
                       <div><p className="text-xs text-slate-500 font-medium">{t.certWorkCategory}</p><p className="font-bold text-[#054239] mt-0.5">{getCategoryLabel(form.workCategory)}</p></div>
                     </div>
-                    <div><p className="text-xs text-slate-500 font-medium">{t.certOwnerName}</p><p className="font-bold text-slate-900 mt-0.5">{form.applicantName} ({form.applicantRole === "author" ? (isRtl ? "مؤلف رئيسي" : "Primary Author") : form.applicantRole})</p></div>
+                    <div><p className="text-xs text-slate-500 font-medium">{t.certOwnerName}</p><p className="font-bold text-slate-900 mt-0.5">{form.applicantName} ({getUnderlyingRoleGroup(form.applicantRole) === "author" ? (isRtl ? "مؤلف رئيسي" : "Primary Author") : form.applicantRole})</p></div>
                     {form.authors && Array.isArray(form.authors) && form.authors.length > 0 && (
                       <div><p className="text-xs text-slate-500 font-medium">{isRtl ? "المؤلفون المشتركون:" : "Joint Authors:"}</p>
                         {form.authors.map((auth, idx) => <p key={idx} className="font-bold text-slate-900 mt-0.5">• {auth.name}</p>)}

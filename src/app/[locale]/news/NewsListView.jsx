@@ -7,6 +7,7 @@ import DateRangePicker from "../../../components/DateRangePicker";
 import { translations } from "../../../data/translations";
 import DecorativeCorners from "../../../components/DecorativeCorners";
 import { useSettings } from "../../../components/SettingsContext";
+import SubpageHero from "../../../components/SubpageHero";
 
 // Client view: receives the published news list from the server page and keeps
 // all the interactive search / date-filter / pagination behaviour. Data is no
@@ -55,75 +56,54 @@ export default function NewsListView({ news = [], locale }) {
   return (
     <div className="flex flex-col w-full min-h-screen bg-[#F8F3EC] pt-[84px] md:pt-[88px] lg:pt-[104px]" dir={isRtl ? "rtl" : "ltr"}>
       {/* Subpage Hero Header */}
-      <section className="relative py-20 px-4 border-b border-[#b9a779]/15 z-10">
-        {/* Background Image & Emerald Vignette */}
-        <div className="absolute inset-0 z-0">
-          <Image
-            src="/images/drive-photos/Khan-Asad-Basha.jpg"
-            alt="خان أسعد باشا - دمشق"
-            fill
-            priority
-            className="object-cover brightness-[0.25] saturate-[0.8]"
-          />
-          <div className="absolute inset-0 bg-gradient-to-b from-[#002723]/90 via-[#002723]/75 to-[#002723] z-0" />
-        </div>
-
-        {/* Glow Effects */}
-        <div className="absolute top-1/2 -translate-y-1/2 left-1/4 w-80 h-80 bg-[#b9a779]/10 rounded-full blur-[120px] pointer-events-none z-10"></div>
-
-        <div className="max-w-7xl mx-auto text-center relative z-10 flex flex-col items-center gap-4">
-          <span className="text-xs uppercase text-[#b9a779] font-bold tracking-widest leading-none">
-            {isRtl ? "وزارة الثقافة السورية" : "Syrian Ministry of Culture"}
-          </span>
-          <h1 className="text-white font-extrabold text-3xl sm:text-4xl font-qomra">
-            {t.news}
-          </h1>
-          <div className="w-16 h-[2px] bg-[#b9a779] mt-2"></div>
-
-          {/* Search + Date filter row */}
-          <div className="w-full max-w-2xl mt-6 flex flex-col sm:flex-row items-stretch sm:items-center gap-3" dir={isRtl ? "rtl" : "ltr"}>
-            {/* Search input */}
-            <div className="w-full flex-1 relative flex items-center bg-white/[0.07] hover:bg-white/[0.12] focus-within:bg-white/[0.15] backdrop-blur-lg border border-[#b9a779]/45 hover:border-[#b9a779] focus-within:border-[#b9a779] rounded-full px-4 py-2 transition-all duration-300 shadow-sm focus-within:shadow-[0_0_18px_rgba(185,167,121,0.25)]">
-              <div className="flex-grow flex items-center gap-2">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none" viewBox="0 0 24 24"
-                  strokeWidth={2} stroke="currentColor"
-                  className="w-5 h-5 text-[#b9a779] shrink-0"
+      <SubpageHero
+        title={t.news}
+        subtitle={isRtl ? "وزارة الثقافة السورية" : "Syrian Ministry of Culture"}
+        isRtl={isRtl}
+      >
+        {/* Search + Date filter row */}
+        <div className="w-full max-w-2xl mt-6 flex flex-col sm:flex-row items-stretch sm:items-center gap-3" dir={isRtl ? "rtl" : "ltr"}>
+          {/* Search input */}
+          <div className="w-full flex-1 relative flex items-center bg-white/[0.07] hover:bg-white/[0.12] focus-within:bg-white/[0.15] backdrop-blur-lg border border-[#b9a779]/45 hover:border-[#b9a779] focus-within:border-[#b9a779] rounded-full px-4 py-2 transition-all duration-300 shadow-sm focus-within:shadow-[0_0_18px_rgba(185,167,121,0.25)]">
+            <div className="flex-grow flex items-center gap-2">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none" viewBox="0 0 24 24"
+                strokeWidth={2} stroke="currentColor"
+                className="w-5 h-5 text-[#b9a779] shrink-0"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+              </svg>
+              <input
+                type="text"
+                placeholder={isRtl ? "ابحث عن أخبار وتحديثات..." : "Search for news and updates..."}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                dir={isRtl ? "rtl" : "ltr"}
+                className="w-full bg-transparent border-none outline-none text-white text-sm placeholder-[#EDE5D6]/70 font-medium"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  className="text-[#EDE5D6]/50 hover:text-white transition-colors p-0.5 shrink-0"
+                  title={isRtl ? "مسح البحث" : "Clear search"}
                 >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
-                </svg>
-                <input
-                  type="text"
-                  placeholder={isRtl ? "ابحث عن أخبار وتحديثات..." : "Search for news and updates..."}
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  dir={isRtl ? "rtl" : "ltr"}
-                  className="w-full bg-transparent border-none outline-none text-white text-sm placeholder-[#EDE5D6]/70 font-medium"
-                />
-                {searchQuery && (
-                  <button
-                    onClick={() => setSearchQuery("")}
-                    className="text-[#EDE5D6]/50 hover:text-white transition-colors p-0.5 shrink-0"
-                    title={isRtl ? "مسح البحث" : "Clear search"}
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                )}
-              </div>
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
             </div>
-
-            {/* Date range picker */}
-            <DateRangePicker
-              value={dateRange}
-              onChange={setDateRange}
-              locale={locale}
-            />
           </div>
+
+          {/* Date range picker */}
+          <DateRangePicker
+            value={dateRange}
+            onChange={setDateRange}
+            locale={locale}
+          />
         </div>
-      </section>
+      </SubpageHero>
 
       {/* News Listings Section */}
       <section className="py-16 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
@@ -167,7 +147,7 @@ export default function NewsListView({ news = [], locale }) {
                       <button
                         key={item}
                         onClick={() => { setCurrentPage(item); window.scrollTo({ top: 0, behavior: "smooth" }); }}
-                        className={`w-10 h-10 flex items-center justify-center rounded-full text-sm font-semibold transition-all ${
+                        className={`w-10 h-10 flex items-center justify-center rounded-full number-circle text-sm font-semibold transition-all ${
                           currentPage === item
                             ? "bg-[#054239] text-white shadow-md"
                             : "border border-[#b9a779]/40 text-[#054239] hover:bg-[#b9a779]/10"

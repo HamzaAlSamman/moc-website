@@ -17,6 +17,25 @@ export async function DELETE(request, { params }) {
 
   if (!media) return NextResponse.json({ error: "غير موجود" }, { status: 404 });
 
+  const [postReference, eventReference] = await Promise.all([
+    prisma.post.findFirst({
+      where: {
+        OR: [
+          { featuredImage: media.url },
+          { gallery: { contains: media.url } },
+          { attachments: { contains: media.url } },
+          { contentAr: { contains: media.url } },
+          { contentEn: { contains: media.url } },
+        ],
+      },
+      select: { id: true },
+    }),
+    prisma.event.findFirst({ where: { featuredImage: media.url }, select: { id: true } }),
+  ]);
+  if (postReference || eventReference) {
+    return NextResponse.json({ error: "Media is still referenced by content" }, { status: 409 });
+  }
+
   try {
     const filePath = path.join(process.cwd(), "public", media.url);
     await unlink(filePath);

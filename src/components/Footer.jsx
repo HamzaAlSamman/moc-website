@@ -27,15 +27,11 @@ export default function Footer({ locale }) {
       className="relative bg-primary border-t border-white/10 overflow-hidden text-gray-300"
       dir={isRtl ? "rtl" : "ltr"}
     >
-      {/* Top repeating shape decorative border */}
-      <div className="bg-primary w-full relative h-12 overflow-hidden pointer-events-none">
-        <img 
-          src="/svg/nav-shape.svg" 
-          alt="nav-shape" 
-          className="w-full h-12 object-cover scale-150 object-[0%_70%]"
-        />
-        <div className="absolute inset-0 -bottom-3 bg-gradient-to-b from-transparent to-primary"></div>
-      </div>
+      {/* Background pattern layer with 5% opacity */}
+      <div 
+        className="absolute inset-0 opacity-[0.05] pointer-events-none"
+        style={{ backgroundImage: "url(/svg/pattern-hex.svg)", backgroundSize: "340px", backgroundRepeat: "repeat" }}
+      />
 
       {/* Ambient background glows */}
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-primary/10 via-transparent to-transparent pointer-events-none"></div>
@@ -212,17 +208,6 @@ export default function Footer({ locale }) {
 
         </div>
       </div>
-
-      {/* Bottom repeating shape decorative border */}
-      <div className="bg-primary w-full relative h-12 overflow-hidden pointer-events-none mt-8">
-        <img 
-          src="/svg/nav-shape.svg" 
-          alt="nav-shape" 
-          className="w-full h-12 object-cover scale-150 object-[0%_100%]"
-        />
-        <div className="absolute inset-0 -top-3 bg-gradient-to-b from-primary to-transparent"></div>
-      </div>
-
     </footer>
   );
 }

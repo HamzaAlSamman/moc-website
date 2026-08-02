@@ -133,7 +133,7 @@ export default function AdminTopbar() {
           >
             <Bell className="w-5 h-5 text-gray-500 group-hover:text-[#003D33] transition-colors" />
             {unreadCount > 0 && (
-              <span className="absolute top-1.5 end-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-white">
+              <span className="absolute top-1.5 end-1.5 flex h-4 min-w-4 items-center justify-center rounded-full number-circle bg-red-500 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-white">
                 {unreadCount > 9 ? "9+" : unreadCount}
               </span>
             )}

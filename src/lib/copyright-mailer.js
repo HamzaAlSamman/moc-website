@@ -2,6 +2,22 @@ import "server-only";
 import nodemailer from "nodemailer";
 import { generateReceiptPdf } from "@/lib/receipt-pdf";
 
+// ── Fee mapping helpers ──────────────────────────────────────────────────────
+function getFeesForMailer(role) {
+  const isCompany = ["الشريك", "المدير العام", "المستثمر", "رئيس مجلس إدارة", "صاحب الشركة"].includes(role);
+  if (isCompany) {
+    return {
+      initialTotal: "51,300 ل.س",
+      finalTotal: "47,300 ل.س"
+    };
+  } else {
+    return {
+      initialTotal: "31,300 ل.س",
+      finalTotal: "47,300 ل.س"
+    };
+  }
+}
+
 // ── Label helpers ─────────────────────────────────────────────────────────────
 const WORK_CATEGORY_LABELS_AR = {
   written: "نصوص مكتوبة",
@@ -26,6 +42,10 @@ function buildTransport() {
       port,
       secure: port === 465,
       auth: { user, pass },
+      // Ministry-owned mail relay whose TLS cert is sometimes expired/self-signed.
+      // Set SMTP_TLS_INSECURE="true" in .env to accept it (otherwise nodemailer
+      // rejects the connection with "certificate has expired" and no mail sends).
+      tls: { rejectUnauthorized: process.env.SMTP_TLS_INSECURE !== "true" },
     });
   }
   return null;
@@ -143,6 +163,7 @@ async function dispatchEmail(submission, { subject, titleAr, contentHtml, attach
 // يشرح للمواطن الرسوم الكاملة منذ البداية ويعطيه رمز التتبع.
 // ═══════════════════════════════════════════════════════════════════════════════
 export async function sendCopyrightEmail(submission) {
+  const fees = getFeesForMailer(submission.applicantRole);
   await dispatchEmail(submission, {
     subject: `تأكيد استلام طلب حماية حقوق المؤلف - المعاملة #${submission.id}`,
     titleAr: "تم استلام طلبك بنجاح — حماية حقوق المؤلف",
@@ -151,10 +172,15 @@ export async function sendCopyrightEmail(submission) {
         عزيزنا المودع <strong>${submission.applicantName}</strong>،<br/>
         تم استلام طلبك لحماية العمل الفكري <strong>«${submission.workTitle}»</strong>
         (${categoryLabelAr(submission.workCategory)}) وتسجيله في سجلات وزارة الثقافة.
-        سيتولى الدارس المختص مراجعته فنياً وقانونياً وستصلك إشعارات عبر بريدك في المراحل الأساسية فقط.
+        سيتولى الدارس المختص مراجعته فنياً وقانونياً وستصلك إشعارات عبر بريدك عند تحديث حالة طلبك.
       </p>
 
       <table style="width:100%;border-collapse:collapse;margin:20px 0;font-size:13px;background:#fdfdfd;border:1px solid #f0f0f0;border-radius:8px;">
+        ${submission.referenceNo ? `
+        <tr style="background:#f9f9f9;border-bottom:1px solid #eee;">
+          <td style="padding:11px 12px;font-weight:bold;color:#002723;width:45%;">الرقم المتسلسل / Reference No.:</td>
+          <td style="padding:11px 12px;font-family:monospace;font-weight:bold;color:#428177;letter-spacing:1px;">${submission.referenceNo}</td>
+        </tr>` : ""}
         <tr style="background:#f9f9f9;border-bottom:1px solid #eee;">
           <td style="padding:11px 12px;font-weight:bold;color:#002723;width:45%;">رمز المعاملة / Request ID:</td>
           <td style="padding:11px 12px;font-family:monospace;font-weight:bold;color:#428177;">${submission.id}</td>
@@ -179,7 +205,7 @@ export async function sendCopyrightEmail(submission) {
         <table style="width:100%;font-size:13px;line-height:2;">
           <tr>
             <td>🔹 الرسم الأولي (إيداع وحماية المصنف + طوابع):</td>
-            <td style="text-align:left;font-weight:bold;color:#002723;">550 ل.س</td>
+            <td style="text-align:left;font-weight:bold;color:#002723;">${fees.initialTotal}</td>
           </tr>
           <tr>
             <td style="color:#888;font-size:12px;padding-right:16px;">يُسدَّد عبر شام كاش فور استلام هذا الإشعار</td>
@@ -187,7 +213,7 @@ export async function sendCopyrightEmail(submission) {
           </tr>
           <tr style="border-top:1px dashed #e4d7be;">
             <td>🔸 الرسم النهائي (إصدار شهادة حماية حقوق المؤلف):</td>
-            <td style="text-align:left;font-weight:bold;color:#002723;">500 ل.س</td>
+            <td style="text-align:left;font-weight:bold;color:#002723;">${fees.finalTotal}</td>
           </tr>
           <tr>
             <td style="color:#888;font-size:12px;padding-right:16px;">يُطلب منك تسديده فقط بعد الحصول على الموافقة القانونية النهائية</td>
@@ -206,24 +232,53 @@ export async function sendCopyrightEmail(submission) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// EMAIL 1.5 — إشعار «الدفع قيد التدقيق» (يُرسل فور تسديد المواطن الرسم الأولي أو
+// النهائي، قبل تأكيد المالية). يطمئن المواطن أن دفعته سُجّلت وأن الإيصال الرسمي
+// سيصله بعد اعتماد المالية.
+// ═══════════════════════════════════════════════════════════════════════════════
+export async function sendPaymentUnderReviewEmail(submission, stage = "initial") {
+  const fees = getFeesForMailer(submission.applicantRole);
+  const isFinal = stage === "final";
+  const feeLabel = isFinal ? "الرسم النهائي" : "الرسم الأولي";
+  const feeValue = isFinal ? fees.finalTotal : fees.initialTotal;
+  await dispatchEmail(submission, {
+    subject: `تم استلام دفعتك (${feeLabel}) وهي قيد التدقيق - المعاملة #${submission.id}`,
+    titleAr: "تم استلام دفعتك — قيد التدقيق لدى مديرية الشؤون المالية",
+    contentHtml: `
+      <p style="font-size:14px;">
+        عزيزنا المودع <strong>${submission.applicantName}</strong>،<br/>
+        تم استلام إشعار دفعك لـ<strong>${feeLabel}</strong> (${feeValue}) الخاص بطلبك للعمل
+        <strong>«${submission.workTitle}»</strong>، وهو الآن <strong>قيد التدقيق</strong>
+        لدى مديرية الشؤون المالية.
+      </p>
+      <div style="margin-top:18px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:14px;font-size:13px;color:#1e3a8a;line-height:1.7;">
+        📌 بعد اعتماد الدفع من قِبل المالية، ستصلك رسالة تحتوي على <strong>إيصال الدفع الرسمي</strong> بصيغة PDF${isFinal ? " مع شهادة حماية حقوق المؤلف" : ""}.
+      </div>
+      ${trackingButton(submission)}
+    `,
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // EMAIL 2 — إيصال الرسم الأولي (يُرسل عند تأكيد المالية للرسم الأولي → under_review)
 // ═══════════════════════════════════════════════════════════════════════════════
 export async function sendUnderReviewEmail(submission) {
+  const fees = getFeesForMailer(submission.applicantRole);
   const attachments = await buildReceiptAttachment(submission, "initial");
   await dispatchEmail(submission, {
-    subject: `إيصال دفع الرسم الأولي (550 ل.س) - المعاملة #${submission.id}`,
+    subject: `إيصال دفع الرسم الأولي (${fees.initialTotal}) - المعاملة #${submission.id}`,
     titleAr: "تأكيد استلام الرسم الأولي — بدء الدراسة الفنية والقانونية",
     attachments,
     contentHtml: `
       <p style="font-size:14px;">
         عزيزنا المودع <strong>${submission.applicantName}</strong>،<br/>
-        تم تدقيق واعتماد الرسم الأولي (550 ل.س) الخاص بطلبك للعمل
+        تم تدقيق واعتماد الرسم الأولي (${fees.initialTotal}) الخاص بطلبك للعمل
         <strong>«${submission.workTitle}»</strong> من قِبل مديرية الشؤون المالية.
         بدأت مديرية الدراسات بمراجعة طلبك فنياً وقانونياً.
       </p>
       ${receiptNotice(attachments)}
       <div style="margin-top:18px;background:#fefce8;border:1px solid #fde68a;border-radius:8px;padding:14px;font-size:12px;color:#92400e;line-height:1.6;">
-        ⏳ ستتلقى إشعاراً فور صدور الموافقة النهائية لتكملة الإجراءات وتسديد الرسم الأخير (500 ل.س).
+        ⏳ ستتلقى إشعاراً فور صدور الموافقة النهائية لتكملة الإجراءات وتسديد الرسم الأخير (${fees.finalTotal}).
       </div>
       ${trackingButton(submission)}
     `,
@@ -234,23 +289,23 @@ export async function sendUnderReviewEmail(submission) {
 // EMAIL 3 — طلب تسديد الرسم النهائي (يُرسل عند pending_fees — موافقة نهائية)
 // ═══════════════════════════════════════════════════════════════════════════════
 export async function sendApprovalEmail(submission) {
+  const fees = getFeesForMailer(submission.applicantRole);
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://moc.gov.sy";
   const trackingLink = `${appUrl}/ar/services/copyright?code=${submission.id}`;
   await dispatchEmail(submission, {
-    subject: `تمت الموافقة على طلبك — يرجى تسديد الرسم النهائي (500 ل.س) - #${submission.id}`,
+    subject: `تمت الموافقة على طلبك — يرجى تسديد الرسم النهائي (${fees.finalTotal}) - #${submission.id}`,
     titleAr: "🎉 تمت الموافقة القانونية على طلبك — استكمل الرسم النهائي",
     contentHtml: `
       <p style="font-size:14px;">
         عزيزنا المودع <strong>${submission.applicantName}</strong>،<br/>
-        يسعدنا إعلامك بأن طلب حماية العمل الفكري
-        <strong>«${submission.workTitle}»</strong>
-        قد حاز على <strong>الموافقة القانونية والفنية النهائية</strong>
-        من مديرية الشؤون القانونية بوزارة الثقافة.
+        بناءً على مراجعة مديرية الشؤون القانونية بوزارة الثقافة، فقد تم اعتماد
+        طلب حماية العمل الفكري <strong>«${submission.workTitle}»</strong>
+        بشكل نهائي من الناحيتين القانونية والفنية.
       </p>
 
       <div style="background:#fbf9f6;border-right:4px solid #B9A779;border-radius:8px;padding:16px;margin:20px 0;border:1px solid #f0eada;">
         <h4 style="color:#002723;margin:0 0 10px 0;font-size:15px;border-bottom:1px dashed #e4d7be;padding-bottom:6px;">الرسم النهائي المستحق / Final Fee Due</h4>
-        <div style="font-size:28px;font-weight:bold;color:#15803d;text-align:center;margin:14px 0;">500 ل.س</div>
+        <div style="font-size:28px;font-weight:bold;color:#15803d;text-align:center;margin:14px 0;">${fees.finalTotal}</div>
         <p style="font-size:12px;color:#555;margin:0;text-align:center;">
           رسم إصدار شهادة حماية حقوق المؤلف الرسمية
         </p>
@@ -258,7 +313,7 @@ export async function sendApprovalEmail(submission) {
 
       <p style="font-size:13px;color:#444;line-height:1.7;">
         لإصدار الشهادة الرسمية وحفظها في المستودع الإلكتروني للوزارة، يرجى سداد الرسم النهائي البالغ
-        <strong>500 ل.س</strong> عبر شام كاش من صفحة تتبع الطلب (الزر أدناه)،
+        <strong>${fees.finalTotal}</strong> عبر شام كاش من صفحة تتبع الطلب (الزر أدناه),
         ثم رفع صورة إيصال الدفع في الحقل المخصص.
       </p>
 
@@ -280,6 +335,7 @@ export async function sendApprovalEmail(submission) {
 // EMAIL 4 — إيصال الرسم النهائي + إشعار إصدار الشهادة (يُرسل عند completed)
 // ═══════════════════════════════════════════════════════════════════════════════
 export async function sendCompletedEmail(submission) {
+  const fees = getFeesForMailer(submission.applicantRole);
   const attachments = await buildReceiptAttachment(submission, "final");
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://moc.gov.sy";
   const trackingLink = `${appUrl}/ar/services/copyright?code=${submission.id}`;
@@ -291,7 +347,7 @@ export async function sendCompletedEmail(submission) {
     contentHtml: `
       <p style="font-size:14px;">
         عزيزنا المودع <strong>${submission.applicantName}</strong>،<br/>
-        تم تدقيق واعتماد الرسم النهائي (500 ل.س) وإصدار
+        تم تدقيق واعتماد الرسم النهائي (${fees.finalTotal}) وإصدار
         <strong>شهادة حماية حقوق المؤلف الرسمية</strong>
         للعمل <strong>«${submission.workTitle}»</strong> بصيغة قابلة للتحميل.
       </p>
@@ -330,7 +386,32 @@ export async function sendPendingFinalApprovalEmail(_submission) {
   // الإشعار الداخلي يُرسل عبر notify.js في admin route.
 }
 
-// suspended — يتلقى المواطن إشعار النواقص.
+// Escape applicant/reviewer-supplied text before interpolating into email HTML.
+function esc(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+// Renders a highlighted box containing a free-text message the reviewer wrote
+// to the citizen (the list of deficiencies, or the reason for rejection).
+function applicantNoteBox(note, { heading, tone = "warn" }) {
+  if (!note || !String(note).trim()) return "";
+  const palette = tone === "reject"
+    ? { bg: "#fef2f2", border: "#fecaca", color: "#991b1b" }
+    : { bg: "#fefce8", border: "#fde68a", color: "#92400e" };
+  const safe = esc(note).replace(/\n/g, "<br/>");
+  return `
+    <div style="margin:20px 0;background:${palette.bg};border:1px solid ${palette.border};border-radius:8px;padding:16px;">
+      <h4 style="margin:0 0 8px 0;font-size:14px;color:${palette.color};">${heading}</h4>
+      <p style="margin:0;font-size:13px;color:${palette.color};line-height:1.8;white-space:pre-line;">${safe}</p>
+    </div>
+  `;
+}
+
+// suspended — يتلقى المواطن إشعار النواقص مع تفاصيلها المكتوبة من المدقّق.
 export async function sendSuspendedEmail(submission) {
   await dispatchEmail(submission, {
     subject: `طلبك متوقف مؤقتاً لاستكمال النواقص - المعاملة #${submission.id}`,
@@ -339,15 +420,18 @@ export async function sendSuspendedEmail(submission) {
       <p style="font-size:14px;">
         عزيزنا المودع <strong>${submission.applicantName}</strong>،<br/>
         تم إيقاف طلبك الخاص بالعمل <strong>«${submission.workTitle}»</strong>
-        مؤقتاً لوجود نواقص في المستندات. يرجى الدخول لصفحة تتبع الطلب لمعرفة
-        التفاصيل وإعادة رفع المستندات المطلوبة.
+        مؤقتاً لوجود النواقص التالية:
+      </p>
+      ${applicantNoteBox(submission.deficiencyNote, { heading: "📋 النواقص المطلوب استكمالها:", tone: "warn" })}
+      <p style="font-size:13px;color:#444;line-height:1.7;">
+        يرجى الدخول لصفحة تتبع الطلب، إعادة رفع المستندات الناقصة وكتابة ردّك، ثم إعادة إرسال الطلب.
       </p>
       ${trackingButton(submission)}
     `,
   });
 }
 
-// rejected — يتلقى المواطن إشعار الرفض.
+// rejected — يتلقى المواطن إشعار الرفض مع سببه المكتوب.
 export async function sendRejectedEmail(submission) {
   await dispatchEmail(submission, {
     subject: `نتيجة طلب حماية حقوق المؤلف - المعاملة #${submission.id}`,
@@ -356,7 +440,10 @@ export async function sendRejectedEmail(submission) {
       <p style="font-size:14px;">
         عزيزنا المودع <strong>${submission.applicantName}</strong>،<br/>
         نأسف لإعلامك بأنه تم رفض طلبك الخاص بالعمل
-        <strong>«${submission.workTitle}»</strong> بعد المراجعة.
+        <strong>«${submission.workTitle}»</strong> بشكل نهائي بعد المراجعة.
+      </p>
+      ${applicantNoteBox(submission.deficiencyNote, { heading: "سبب الرفض:", tone: "reject" })}
+      <p style="font-size:13px;color:#444;line-height:1.7;">
         يمكنك مراجعة صفحة تتبع الطلب أو التواصل مع مديرية الشؤون القانونية لمزيد من التفاصيل.
       </p>
       ${trackingButton(submission)}

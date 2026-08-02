@@ -11,7 +11,20 @@ export const verifySession = cache(async () => {
     redirect("/admin/login");
   }
 
-  return { isAuth: true, userId: session.userId, role: session.role };
+  const user = await prisma.user.findUnique({
+    where: { id: session.userId },
+    select: { id: true, role: true, isActive: true, mustChangePassword: true },
+  });
+  if (!user?.isActive) {
+    redirect("/admin/login");
+  }
+
+  return {
+    isAuth: true,
+    userId: user.id,
+    role: user.role,
+    mustChangePassword: user.mustChangePassword,
+  };
 });
 
 export const getCurrentUser = cache(async () => {

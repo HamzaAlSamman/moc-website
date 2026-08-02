@@ -3,19 +3,14 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-const STATUS_META = {
-  PENDING:      { label: "قيد الانتظار",   cls: "bg-amber-50 text-amber-700 border border-amber-200" },
-  UNDER_REVIEW: { label: "قيد الدراسة",    cls: "bg-blue-50 text-blue-700 border border-blue-200" },
-  APPROVED:     { label: "موافق عليه",     cls: "bg-emerald-50 text-emerald-700 border border-emerald-200" },
-  CONDITIONAL:  { label: "موافقة مشروطة",  cls: "bg-purple-50 text-purple-700 border border-purple-200" },
-  REJECTED:     { label: "مرفوض",          cls: "bg-red-50 text-red-700 border border-red-200" },
-};
+import { STATUS_LABELS, ENTITY_LABELS } from "@/lib/event-submission-labels";
 
-const ENTITY_LABELS = {
-  DIRECTORATE: "مديرية",
-  GOVERNMENT:  "جهة حكومية",
-  EXTERNAL:    "جهة خارجية",
-  INDIVIDUAL:  "فرد مستقل",
+const STATUS_META = {
+  PENDING:      { label: STATUS_LABELS.PENDING,      cls: "bg-amber-50 text-amber-700 border border-amber-200" },
+  UNDER_REVIEW: { label: STATUS_LABELS.UNDER_REVIEW, cls: "bg-blue-50 text-blue-700 border border-blue-200" },
+  APPROVED:     { label: STATUS_LABELS.APPROVED,     cls: "bg-emerald-50 text-emerald-700 border border-emerald-200" },
+  CONDITIONAL:  { label: STATUS_LABELS.CONDITIONAL,  cls: "bg-purple-50 text-purple-700 border border-purple-200" },
+  REJECTED:     { label: STATUS_LABELS.REJECTED,     cls: "bg-red-50 text-red-700 border border-red-200" },
 };
 
 function formatDate(d) {
@@ -30,7 +25,12 @@ export default function SubmissionsTable({ submissions, canManage }) {
   const [deleting, setDeleting]        = useState(null);
 
   const filtered = submissions.filter((s) => {
-    const matchSearch = !search || s.applicantName.includes(search) || s.eventName.includes(search);
+    const q = search.trim().toLowerCase();
+    const matchSearch =
+      !q ||
+      s.applicantName.toLowerCase().includes(q) ||
+      s.eventName.toLowerCase().includes(q) ||
+      (s.referenceNo || "").toLowerCase().includes(q);
     const matchStatus = filterStatus === "ALL" || s.status === filterStatus;
     return matchSearch && matchStatus;
   });
@@ -51,7 +51,7 @@ export default function SubmissionsTable({ submissions, canManage }) {
       <div className="flex flex-col sm:flex-row gap-3">
         <input
           type="text"
-          placeholder="ابحث باسم المقدم أو الفعالية..."
+          placeholder="ابحث بالرقم المتسلسل أو اسم المقدم أو الفعالية..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="flex-1 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-[#003D33]"
@@ -66,6 +66,23 @@ export default function SubmissionsTable({ submissions, canManage }) {
             <option key={k} value={k}>{v.label}</option>
           ))}
         </select>
+        {/* The report re-runs the same filters server-side so the printed sheet
+            matches exactly what is on screen. */}
+        <button
+          onClick={() => {
+            const qs = new URLSearchParams();
+            if (filterStatus !== "ALL") qs.set("status", filterStatus);
+            if (search.trim()) qs.set("q", search.trim());
+            const query = qs.toString();
+            router.push(`/admin/event-submissions/print${query ? `?${query}` : ""}`);
+          }}
+          className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-[#003D33] transition hover:border-[#003D33]/40 hover:bg-[#003D33]/5"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4H7v4a2 2 0 002 2zm10-11V6a2 2 0 00-2-2H7a2 2 0 00-2 2v4" />
+          </svg>
+          طباعة الكشف
+        </button>
       </div>
 
       {/* Table */}
@@ -80,6 +97,7 @@ export default function SubmissionsTable({ submissions, canManage }) {
               <table className="w-full text-sm text-right">
                 <thead className="bg-slate-50 border-b border-slate-200">
                   <tr>
+                    <th className="px-4 py-3 font-bold text-slate-500 text-xs">الرقم المتسلسل</th>
                     <th className="px-4 py-3 font-bold text-slate-500 text-xs">اسم المقدم</th>
                     <th className="px-4 py-3 font-bold text-slate-500 text-xs">اسم الفعالية</th>
                     <th className="px-4 py-3 font-bold text-slate-500 text-xs hidden md:table-cell">الجهة</th>
@@ -95,6 +113,11 @@ export default function SubmissionsTable({ submissions, canManage }) {
                       onClick={() => router.push(`/admin/event-submissions/${s.id}`)}
                       className="hover:bg-slate-50 transition-colors cursor-pointer group"
                     >
+                      <td className="px-4 py-3.5 whitespace-nowrap">
+                        <span className="font-mono text-xs font-bold text-[#003D33]" dir="ltr">
+                          {s.referenceNo || "—"}
+                        </span>
+                      </td>
                       <td className="px-4 py-3.5 font-semibold text-slate-800 whitespace-nowrap">
                         {s.applicantName}
                       </td>
@@ -122,6 +145,12 @@ export default function SubmissionsTable({ submissions, canManage }) {
                           >
                             عرض
                           </button>
+                          <button
+                            onClick={() => router.push(`/admin/event-submissions/${s.id}/print`)}
+                            className="text-xs font-bold text-slate-500 hover:underline px-2 py-1 rounded-lg hover:bg-slate-100 transition"
+                          >
+                            طباعة
+                          </button>
                           {canManage && (
                             <button
                               onClick={(e) => handleDelete(e, s.id)}
@@ -146,6 +175,11 @@ export default function SubmissionsTable({ submissions, canManage }) {
                   onClick={() => router.push(`/admin/event-submissions/${s.id}`)}>
                   <div className="flex justify-between items-start">
                     <div className="min-w-0 flex-1 text-start">
+                      {s.referenceNo && (
+                        <p className="font-mono text-[10px] font-bold text-[#003D33]" dir="ltr">
+                          {s.referenceNo}
+                        </p>
+                      )}
                       <h4 className="font-bold text-slate-800 text-sm truncate">{s.eventName}</h4>
                       <p className="text-xs text-slate-500 mt-1">{s.applicantName}</p>
                     </div>

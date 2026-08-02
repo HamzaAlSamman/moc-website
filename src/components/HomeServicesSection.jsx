@@ -110,11 +110,7 @@ export default function HomeServicesSection({ locale = "ar" }) {
                   style={{ backgroundColor: service.color }}
                 />
 
-                {service.featured && (
-                  <span className="absolute top-4 end-4 rounded-full bg-[#8B2635]/10 px-3 py-1 text-[11px] font-extrabold text-[#8B2635]">
-                    {isRtl ? "خدمة ذات أولوية" : "Priority Service"}
-                  </span>
-                )}
+
 
                 <div
                   className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl transition group-hover:scale-105"

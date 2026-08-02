@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import nodemailer from "nodemailer";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
+import { sendCitizenAck } from "@/lib/mailer";
+import { nextReferenceNumberSafe, REFERENCE_SCOPES } from "@/lib/reference-number";
 
 // Strip CR/LF so user input can never inject extra mail headers (Bcc:, etc.)
 function cleanHeaderValue(value) {
@@ -65,7 +67,9 @@ export async function POST(request) {
         host,
         port,
         secure: port === 465,
-        auth: { user, pass }
+        auth: { user, pass },
+        // Ministry mail relay may have an expired/self-signed cert; SMTP_TLS_INSECURE="true" accepts it.
+        tls: { rejectUnauthorized: process.env.SMTP_TLS_INSECURE !== "true" }
       });
     } else if (process.env.NODE_ENV === "production") {
       // In production we must NEVER silently route real visitors' messages to a
@@ -90,11 +94,15 @@ export async function POST(request) {
       });
     }
 
+    // Sequential reference (MSG-YYYY-NNNN) so a citizen can quote a number when
+    // following up on a message that is delivered by email only.
+    const referenceNo = await nextReferenceNumberSafe(REFERENCE_SCOPES.CONTACT);
+
     const mailOptions = {
       from: `"نموذج تواصل معنا" <${from}>`,
       to: toEmail,
-      subject: `رسالة تواصل جديدة: ${safeSubject}`,
-      text: `اسم المرسل: ${safeName}\nالبريد الإلكتروني: ${safeEmail}\nالموضوع: ${safeSubject}\n\nالرسالة:\n${message}`,
+      subject: `${referenceNo ? `[${referenceNo}] ` : ""}رسالة تواصل جديدة: ${safeSubject}`,
+      text: `${referenceNo ? `الرقم المتسلسل: ${referenceNo}\n` : ""}اسم المرسل: ${safeName}\nالبريد الإلكتروني: ${safeEmail}\nالموضوع: ${safeSubject}\n\nالرسالة:\n${message}`,
       html: `
         <div style="font-family: Arial, sans-serif; direction: rtl; text-align: right; padding: 20px; background-color: #fcfcfc; border: 1px solid #eaeaea; border-radius: 12px; max-w: 600px; margin: 0 auto;">
           <div style="background-color: #002723; padding: 15px; border-radius: 8px 8px 0 0; text-align: center;">
@@ -102,6 +110,7 @@ export async function POST(request) {
           </div>
           <div style="padding: 20px; border: 1px solid #eaeaea; border-top: none; border-radius: 0 0 8px 8px; background-color: #ffffff;">
             <h3 style="color: #002723; border-bottom: 2px solid #B9A779; padding-bottom: 8px; margin-top: 0;">تفاصيل رسالة تواصل جديدة</h3>
+            ${referenceNo ? `<p style="margin: 10px 0;"><strong>الرقم المتسلسل:</strong> <span style="font-family: monospace; font-weight: bold; color: #428177;">${escapeHtml(referenceNo)}</span></p>` : ""}
             <p style="margin: 10px 0;"><strong>اسم المرسل:</strong> ${escapeHtml(safeName)}</p>
             <p style="margin: 10px 0;"><strong>البريد الإلكتروني:</strong> <a href="mailto:${encodeURIComponent(safeEmail)}" style="color: #428177; text-decoration: none;">${escapeHtml(safeEmail)}</a></p>
             <p style="margin: 10px 0;"><strong>الموضوع:</strong> ${escapeHtml(safeSubject)}</p>
@@ -128,7 +137,17 @@ export async function POST(request) {
       console.log("-----------------------------------------");
     }
 
-    return NextResponse.json({ success: true });
+    // Best-effort acknowledgement to the sender's own email (fire-and-forget so
+    // a mail failure never turns a successful submission into an error).
+    sendCitizenAck({
+      to: safeEmail,
+      name: safeName,
+      serviceLabel: "رسالة عبر نموذج «تواصل معنا»",
+      reference: referenceNo,
+      extraNote: `موضوع رسالتك: ${safeSubject}`,
+    });
+
+    return NextResponse.json({ success: true, referenceNo });
   } catch (error) {
     console.error("Error sending contact email:", error);
     return NextResponse.json(

@@ -28,4 +28,4 @@ export const DIRECTORATE_USERS = [
 ];
 
 export const DIRECTORATE_USER_ROLE = "DIRECTORATE";
-export const DEFAULT_DIRECTORATE_PASSWORD = "Moc@2026-Directorates!";
+export const DEFAULT_DIRECTORATE_PASSWORD = "Moc@2026#Temp";

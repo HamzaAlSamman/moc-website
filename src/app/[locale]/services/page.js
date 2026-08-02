@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import DecorativeCorners from "../../../components/DecorativeCorners";
+import SubpageHero from "../../../components/SubpageHero";
 
 // Secret unlock gesture for "coming soon" service cards: tapping a card this
 // many times within the timeout navigates straight to it (the route's own
@@ -72,7 +73,26 @@ const SERVICES = [
       "Query submission status online",
     ],
   },
-  /* ── 3. International Cooperation Contact ── ACTIVE */
+  /* ── Legal License Applications ── INTERNAL TESTING */
+  {
+    id: "legal-licenses",
+    status: "soon",
+    href: (locale) => `/${locale}/services/legal-licenses`,
+    color: "#5D4A7D",
+    colorLight: "#5D4A7D",
+    badge: null,
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="w-7 h-7">
+        <path d="M6 3h9l3 3v15H6z" /><path d="M15 3v4h4M9 11h6M9 15h6M9 19h4" />
+      </svg>
+    ),
+    titleAr: "طلبات التراخيص القانونية",
+    titleEn: "Legal License Applications",
+    descAr: "تقديم ومتابعة طلبات تراخيص الجهات والأنشطة الثقافية مع وثائق المؤسسين وسير اعتماد قانوني موثّق.",
+    descEn: "Apply for and track licenses for cultural entities and activities through a documented legal review workflow.",
+    featuresAr: ["عشرة أنواع من التراخيص الثقافية", "حفظ المسودة ومتابعتها برمز سري", "رفع آمن للوثائق خارج التخزين العام"],
+    featuresEn: ["Ten cultural license types", "Secure draft saving and tracking", "Private protected document storage"],
+  },  /* ── 3. International Cooperation Contact ── ACTIVE */
   {
     id: "international-cooperation",
     status: "active",
@@ -177,50 +197,29 @@ export default function ServicesPage(props) {
       dir={isRtl ? "rtl" : "ltr"}
     >
       {/* ── Hero ── */}
-      <section className="relative py-16 sm:py-20 xl:py-24 px-4 overflow-hidden border-b border-[#b9a779]/15">
-        <div className="absolute inset-0 z-0">
-          <Image
-            src="/images/drive-photos/Khan-Asad-Basha.jpg"
-            alt={isRtl ? "الخدمات الإلكترونية" : "Digital Services"}
-            fill
-            priority
-            className="object-cover brightness-[0.22] saturate-[0.7]"
-          />
-          <div className="absolute inset-0 bg-gradient-to-b from-[#002723]/90 via-[#002723]/75 to-[#002723]" />
-          <div
-            className="absolute inset-0 opacity-[0.04] pointer-events-none"
-            style={{ backgroundImage: "url(/svg/unisco_pattern.svg)", backgroundSize: "90px", backgroundRepeat: "repeat" }}
-          />
+      <SubpageHero
+        title={isRtl ? "الخدمات الإلكترونية" : "Digital Services"}
+        subtitle={isRtl ? "وزارة الثقافة السورية" : "Syrian Ministry of Culture"}
+        description={
+          isRtl
+            ? "بوابتك الرسمية للخدمات الثقافية والإدارية المقدّمة من وزارة الثقافة السورية للأفراد والمؤسسات والجهات الأهلية."
+            : "Your official gateway to cultural and administrative services from the Syrian Ministry of Culture."
+        }
+        isRtl={isRtl}
+      >
+        {/* Stats */}
+        <div className="flex items-center gap-8 mt-4">
+          {[
+            { num: active.length, label: isRtl ? "خدمات متاحة" : "Available Services" },
+            { num: soon.length,   label: isRtl ? "خدمات قادمة" : "Upcoming Services" },
+          ].map((s) => (
+            <div key={s.label} className="text-center">
+              <p className="text-3xl font-black text-[#b9a779] font-qomra">{s.num}</p>
+              <p className="text-xs text-slate-400 font-semibold mt-0.5">{s.label}</p>
+            </div>
+          ))}
         </div>
-
-        <div className="max-w-5xl mx-auto text-center relative z-10 flex flex-col items-center gap-4">
-          <span className="text-[10px] uppercase text-[#b9a779] font-bold tracking-widest border border-[#b9a779]/30 rounded-full px-4 py-1 bg-[#b9a779]/5">
-            {isRtl ? "وزارة الثقافة السورية" : "Syrian Ministry of Culture"}
-          </span>
-          <h1 className="text-white font-extrabold text-3xl sm:text-4xl lg:text-5xl xl:text-6xl leading-tight font-qomra">
-            {isRtl ? "الخدمات الإلكترونية" : "Digital Services"}
-          </h1>
-          <div className="w-16 h-[2.5px] bg-[#b9a779]" />
-          <p className="text-slate-300 text-sm sm:text-base max-w-xl leading-relaxed">
-            {isRtl
-              ? "بوابتك الرسمية للخدمات الثقافية والإدارية المقدّمة من وزارة الثقافة السورية للأفراد والمؤسسات والجهات الأهلية."
-              : "Your official gateway to cultural and administrative services from the Syrian Ministry of Culture."}
-          </p>
-
-          {/* Stats */}
-          <div className="flex items-center gap-8 mt-4">
-            {[
-              { num: active.length, label: isRtl ? "خدمات متاحة" : "Available Services" },
-              { num: soon.length,   label: isRtl ? "خدمات قادمة" : "Upcoming Services" },
-            ].map((s) => (
-              <div key={s.label} className="text-center">
-                <p className="text-3xl font-black text-[#b9a779] font-qomra">{s.num}</p>
-                <p className="text-xs text-slate-400 font-semibold mt-0.5">{s.label}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+      </SubpageHero>
 
       {/* ── Main ── */}
       <main className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 2xl:px-12 py-12 xl:py-16 w-full flex-grow">

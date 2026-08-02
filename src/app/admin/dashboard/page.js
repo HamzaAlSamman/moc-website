@@ -118,7 +118,7 @@ export default async function DashboardPage() {
     needEventOverview ? prisma.event.count({ where: { status: "UPCOMING" } }) : Promise.resolve(0),
     isEventManager ? prisma.event.count({ where: { status: "ONGOING" } }) : Promise.resolve(0),
     isAdmin ? prisma.user.count() : Promise.resolve(0),
-    needSubmissions ? prisma.eventSubmission.count({ where: { status: "PENDING" } }) : Promise.resolve(0),
+    needSubmissions ? prisma.eventSubmission.count({ where: { status: "PENDING", deletedAt: null } }) : Promise.resolve(0),
     needCopyrightOverview
       ? prisma.copyrightSubmission.count({
           where: { applicationStatus: { in: ["finance_review", "under_review", "pending_final_approval", "pending_fees", "final_review"] } },
@@ -200,7 +200,7 @@ export default async function DashboardPage() {
     // counted here. Internal Oversight and International Cooperation are email-only
     // (nothing persisted), so they're intentionally excluded from this breakdown.
     isAdmin ? prisma.copyrightSubmission.count() : Promise.resolve(0),
-    isAdmin ? prisma.eventSubmission.count() : Promise.resolve(0),
+    isAdmin ? prisma.eventSubmission.count({ where: { deletedAt: null } }) : Promise.resolve(0),
   ]);
 
   // `createdById` is a denormalized plain id (no relation), so resolve the

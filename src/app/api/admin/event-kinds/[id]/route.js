@@ -5,7 +5,7 @@ import { can } from "@/lib/permissions";
 
 export async function PUT(request, { params }) {
   const session = await verifySession();
-  if (!can(session.role, "CREATE_EVENT")) {
+  if (!can(session.role, "MANAGE_EVENT_TAXONOMIES")) {
     return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
   }
 
@@ -36,7 +36,7 @@ export async function PUT(request, { params }) {
 
 export async function DELETE(request, { params }) {
   const session = await verifySession();
-  if (!can(session.role, "CREATE_EVENT")) {
+  if (!can(session.role, "MANAGE_EVENT_TAXONOMIES")) {
     return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
   }
 

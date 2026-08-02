@@ -5,6 +5,7 @@ import Image from "next/image";
 import { translations } from "../../../data/translations";
 import ScrollReveal from "../../../components/ScrollReveal";
 import DecorativeCorners from "../../../components/DecorativeCorners";
+import SubpageHero from "../../../components/SubpageHero";
 
 export default function AboutMinistryPage(props) {
   const params = use(props.params);
@@ -27,33 +28,14 @@ export default function AboutMinistryPage(props) {
     : [];
 
   return (
-    <div className="flex flex-col w-full min-h-screen bg-[#FBF9F6]" dir={isRtl ? "rtl" : "ltr"}>
+    <div className="flex flex-col w-full min-h-screen bg-[#FBF9F6] pt-[84px] md:pt-[88px] lg:pt-[104px]" dir={isRtl ? "rtl" : "ltr"}>
       {/* 1. Hero Header Banner */}
-      <section className="relative py-28 md:py-36 px-4 overflow-hidden border-b border-[#A48E68]/15">
-        <div className="absolute inset-0 z-0">
-          <Image
-            src="/images/panorama.jpg"
-            alt="About Ministry Hero Background"
-            fill
-            priority
-            className="object-cover brightness-[0.22] saturate-[0.85] object-bottom"
-          />
-          <div className="absolute inset-0 bg-gradient-to-b from-[#002723]/90 via-[#002723]/75 to-[#002723] z-0"></div>
-        </div>
-
-        <div className="max-w-4xl mx-auto text-center relative z-10 flex flex-col items-center gap-4 mt-8 md:mt-12">
-          <span className="text-xs uppercase text-[#B9A779] font-bold tracking-widest leading-none">
-            {t.whoWeAre.subtitle}
-          </span>
-          <h1 className="text-white font-extrabold text-3xl sm:text-5xl font-sans drop-shadow-md">
-            {t.hero.title}
-          </h1>
-          <div className="w-16 h-[2.5px] bg-[#B9A779] mt-2"></div>
-          <p className="text-[#EDE5D6]/85 text-sm sm:text-base font-light tracking-wide max-w-xl mx-auto mt-2 leading-relaxed">
-            {t.hero.description}
-          </p>
-        </div>
-      </section>
+      <SubpageHero
+        title={t.hero.title}
+        subtitle={isRtl ? "وزارة الثقافة السورية" : "Syrian Ministry of Culture"}
+        description={t.hero.description}
+        isRtl={isRtl}
+      />
 
       {/* 2. Who We Are Section (من نحن) */}
       <section id="who-we-are" className="relative py-20 lg:py-32 overflow-hidden bg-white">

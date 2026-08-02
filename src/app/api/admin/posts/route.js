@@ -8,6 +8,7 @@ import { parseDateAsUTC } from "@/lib/dates";
 export async function GET() {
   const session = await verifySession();
   const posts = await prisma.post.findMany({
+    where: can(session.role, "VIEW_ANY_POST") ? undefined : { authorId: session.userId },
     orderBy: { createdAt: "desc" },
     include: { author: { select: { nameAr: true } } },
   });

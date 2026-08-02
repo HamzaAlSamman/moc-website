@@ -13,7 +13,7 @@ export async function GET() {
 
 export async function POST(request) {
   const session = await verifySession();
-  if (!can(session.role, "CREATE_EVENT")) {
+  if (!can(session.role, "MANAGE_EVENT_TAXONOMIES")) {
     return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
   }
 

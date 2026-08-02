@@ -35,8 +35,8 @@ export async function POST(request, { params }) {
     return NextResponse.json({ error: "تمت مراجعة هذه الفعالية مسبقاً" }, { status: 409 });
   }
 
-  const event = await prisma.event.update({
-    where: { id },
+  const result = await prisma.event.updateMany({
+    where: { id, reviewStatus: "PENDING" },
     data: {
       reviewStatus: action === "approve" ? "APPROVED" : "REJECTED",
       rejectionReason: action === "reject" ? reason.trim() : null,
@@ -44,6 +44,10 @@ export async function POST(request, { params }) {
       reviewedAt: new Date(),
     },
   });
+  if (result.count !== 1) {
+    return NextResponse.json({ error: "Concurrent review detected" }, { status: 409 });
+  }
+  const event = await prisma.event.findUnique({ where: { id } });
 
   // Notify the creator inside their dashboard (bell inbox). The reject path
   // surfaces the reason directly in the title and links to the event so they

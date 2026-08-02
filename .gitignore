@@ -46,3 +46,6 @@ next-env.d.ts
 
 # CodeGraph index (local per-machine code intelligence)
 /.codegraph
+
+# Local Git worktrees
+/.worktrees/

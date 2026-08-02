@@ -343,23 +343,6 @@ export default function EventForm({ event, isNew, userRole, canReview = false })
                   );
                 })()}
               </div>
-
-              {/* Auto Translate Button */}
-              <button
-                type="button"
-                onClick={handleAutoTranslate}
-                disabled={translating}
-                className="ml-2 px-3 py-1.5 text-xs font-bold rounded-lg border border-[#A48E68] text-[#7a6847] hover:bg-[#A48E68]/10 transition disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
-              >
-                {translating ? (
-                  "جاري الترجمة..."
-                ) : (
-                  <>
-                    <Sparkles className="w-3.5 h-3.5" />
-                    ترجمة تلقائية للإنكليزية
-                  </>
-                )}
-              </button>
             </div>
             <div className="p-5 space-y-4">
               {activeTab === "ar" ? (
@@ -386,72 +369,6 @@ export default function EventForm({ event, isNew, userRole, canReview = false })
         </div>
 
         <div className="space-y-4">
-          <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-            <h3 className="mb-3 font-semibold text-gray-800">الحالة</h3>
-            <select value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))} className={INPUT}>
-              {EVENT_STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-            </select>
-            <button type="button" onClick={handleSave} disabled={saving}
-              className="mt-3 w-full rounded-lg py-2 text-sm font-bold text-white transition disabled:opacity-50 cursor-pointer"
-              style={{ background: "#003D33" }}>
-              {saving
-                ? "جاري الحفظ..."
-                : submitsForReview
-                  ? (reviewStatus === "REJECTED" ? "إعادة الإرسال للمراجعة" : "إرسال للمراجعة")
-                  : (canReview && reviewStatus === "PENDING")
-                    ? "حفظ التعديلات"
-                    : "حفظ الفعالية"}
-            </button>
-            {canReview && !isNew && reviewStatus === "PENDING" && (
-              <p className="mt-2 text-[11px] leading-relaxed text-gray-400">
-                «حفظ التعديلات» يحفظ تغييراتك على بيانات الفعالية فقط وتبقى بانتظار المراجعة — لاعتمادها أو رفضها استخدم الأزرار أدناه.
-              </p>
-            )}
-
-            {/* Reviewer decision panel — only for a pending event. The reviewer has
-                the full form above (description, images, dates...) in view before
-                deciding; this is the only place approve/reject can be triggered. */}
-            {canReview && !isNew && reviewStatus === "PENDING" && (
-              <div className="mt-3 border-t border-gray-100 pt-3 space-y-2">
-                {!showRejectBox ? (
-                  <div className="grid grid-cols-2 gap-2">
-                    <button type="button" onClick={handleApprove} disabled={reviewing}
-                      className="rounded-lg bg-emerald-600 py-2 text-sm font-bold text-white transition hover:bg-emerald-700 disabled:opacity-50">
-                      موافقة ونشر
-                    </button>
-                    <button type="button" onClick={() => setShowRejectBox(true)} disabled={reviewing}
-                      className="rounded-lg bg-red-50 border border-red-200 py-2 text-sm font-bold text-red-600 transition hover:bg-red-100 disabled:opacity-50">
-                      رفض
-                    </button>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <label className="block text-xs font-bold text-gray-700">سبب الرفض / ملاحظات *</label>
-                    <textarea
-                      value={rejectReason}
-                      onChange={(e) => setRejectReason(e.target.value)}
-                      rows={3}
-                      placeholder="اكتب سبب الرفض بوضوح — سيصل هذا النص لصاحب الفعالية..."
-                      className="w-full rounded-lg border border-red-200 bg-red-50/40 px-3 py-2 text-sm outline-none transition focus:border-red-400 focus:ring-2 focus:ring-red-200"
-                      dir="rtl"
-                      autoFocus
-                    />
-                    <div className="grid grid-cols-2 gap-2">
-                      <button type="button" onClick={handleConfirmReject} disabled={reviewing || !rejectReason.trim()}
-                        className="rounded-lg bg-red-600 py-2 text-sm font-bold text-white transition hover:bg-red-700 disabled:opacity-50">
-                        تأكيد الرفض
-                      </button>
-                      <button type="button" onClick={() => { setShowRejectBox(false); setRejectReason(""); }} disabled={reviewing}
-                        className="rounded-lg bg-white border border-gray-200 py-2 text-sm font-bold text-gray-600 transition hover:bg-gray-50 disabled:opacity-50">
-                        إلغاء
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
           {/* Event Category Select */}
           <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm space-y-3">
             <h3 className="font-semibold text-gray-800">فئة الفعالية</h3>
@@ -559,6 +476,97 @@ export default function EventForm({ event, isNew, userRole, canReview = false })
                 className="w-full rounded-lg bg-red-50 py-1.5 text-xs font-medium text-red-500 hover:bg-red-100 transition">
                 حذف الصورة
               </button>
+            )}
+          </div>
+
+          {/* Auto Translate — placed just before the final status/save card so
+              the flow is: fill everything → translate to English → set status →
+              save. Translating after the content is written is the natural last
+              step before committing the event. */}
+          <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+            <h3 className="mb-3 font-semibold text-gray-800">الترجمة</h3>
+            <button
+              type="button"
+              onClick={handleAutoTranslate}
+              disabled={translating}
+              className="w-full px-3 py-2 text-xs font-bold rounded-lg border border-[#A48E68] text-[#7a6847] hover:bg-[#A48E68]/10 transition disabled:opacity-50 flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              {translating ? (
+                "جاري الترجمة..."
+              ) : (
+                <>
+                  <Sparkles className="w-3.5 h-3.5" />
+                  ترجمة تلقائية للإنكليزية
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* Status + Save — the final step: after everything above is filled and
+              translated, set the status and save the event. */}
+          <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+            <h3 className="mb-3 font-semibold text-gray-800">الحالة</h3>
+            <select value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))} className={INPUT}>
+              {EVENT_STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+            </select>
+            <button type="button" onClick={handleSave} disabled={saving}
+              className="mt-3 w-full rounded-lg py-2 text-sm font-bold text-white transition disabled:opacity-50 cursor-pointer"
+              style={{ background: "#003D33" }}>
+              {saving
+                ? "جاري الحفظ..."
+                : submitsForReview
+                  ? (reviewStatus === "REJECTED" ? "إعادة الإرسال للمراجعة" : "إرسال للمراجعة")
+                  : (canReview && reviewStatus === "PENDING")
+                    ? "حفظ التعديلات"
+                    : "حفظ الفعالية"}
+            </button>
+            {canReview && !isNew && reviewStatus === "PENDING" && (
+              <p className="mt-2 text-[11px] leading-relaxed text-gray-400">
+                «حفظ التعديلات» يحفظ تغييراتك على بيانات الفعالية فقط وتبقى بانتظار المراجعة — لاعتمادها أو رفضها استخدم الأزرار أدناه.
+              </p>
+            )}
+
+            {/* Reviewer decision panel — only for a pending event. The reviewer has
+                the full form above (description, images, dates...) in view before
+                deciding; this is the only place approve/reject can be triggered. */}
+            {canReview && !isNew && reviewStatus === "PENDING" && (
+              <div className="mt-3 border-t border-gray-100 pt-3 space-y-2">
+                {!showRejectBox ? (
+                  <div className="grid grid-cols-2 gap-2">
+                    <button type="button" onClick={handleApprove} disabled={reviewing}
+                      className="rounded-lg bg-emerald-600 py-2 text-sm font-bold text-white transition hover:bg-emerald-700 disabled:opacity-50">
+                      موافقة ونشر
+                    </button>
+                    <button type="button" onClick={() => setShowRejectBox(true)} disabled={reviewing}
+                      className="rounded-lg bg-red-50 border border-red-200 py-2 text-sm font-bold text-red-600 transition hover:bg-red-100 disabled:opacity-50">
+                      رفض
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <label className="block text-xs font-bold text-gray-700">سبب الرفض / ملاحظات *</label>
+                    <textarea
+                      value={rejectReason}
+                      onChange={(e) => setRejectReason(e.target.value)}
+                      rows={3}
+                      placeholder="اكتب سبب الرفض بوضوح — سيصل هذا النص لصاحب الفعالية..."
+                      className="w-full rounded-lg border border-red-200 bg-red-50/40 px-3 py-2 text-sm outline-none transition focus:border-red-400 focus:ring-2 focus:ring-red-200"
+                      dir="rtl"
+                      autoFocus
+                    />
+                    <div className="grid grid-cols-2 gap-2">
+                      <button type="button" onClick={handleConfirmReject} disabled={reviewing || !rejectReason.trim()}
+                        className="rounded-lg bg-red-600 py-2 text-sm font-bold text-white transition hover:bg-red-700 disabled:opacity-50">
+                        تأكيد الرفض
+                      </button>
+                      <button type="button" onClick={() => { setShowRejectBox(false); setRejectReason(""); }} disabled={reviewing}
+                        className="rounded-lg bg-white border border-gray-200 py-2 text-sm font-bold text-gray-600 transition hover:bg-gray-50 disabled:opacity-50">
+                        إلغاء
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </div>

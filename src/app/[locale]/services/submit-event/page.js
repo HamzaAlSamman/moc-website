@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import DecorativeCorners from "../../../../components/DecorativeCorners";
 import ApexDateTimePicker from "../../../../components/ApexDateTimePicker";
+import SubpageHero from "../../../../components/SubpageHero";
 
 const GOALS = [
   { id: "cultural",  ar: "ثقافي", en: "Cultural" },
@@ -47,7 +48,7 @@ const TERMS_AR = [
   "التعاون الكامل مع مديرية إدارة الفعاليات والمهرجانات وجميع المديريات الشريكة.",
   "عدم المباشرة بالتنفيذ إلا بعد صدور الموافقات الرسمية.",
   "احترام خصوصية المجتمع خلال الفعالية في جميع أشكال المحتوى.",
-  "تقديم محتوى يعكس التعددية الثقافية والفكرية باحترام ويعزز الحوار والتسامح.",
+  "تقديم محتوى يعكس التعددية الثقافية والفكرية ويعزز الحوار والتسامح.",
   "تنفيذ الفعالية وفق الخطة المعتمدة زمنياً وتنظيمياً والالتزام بتعليمات السلامة العامة.",
 ];
 
@@ -58,7 +59,7 @@ const TERMS_EN = [
   "Full cooperation with the Directorate of Events and Festivals Management and all partner directorates.",
   "Not starting execution until official approvals are issued.",
   "Respecting the privacy of the community during the event, in all forms of content.",
-  "Providing content that reflects cultural and intellectual diversity with respect and promotes dialogue and tolerance.",
+  "Providing content that reflects cultural and intellectual diversity and promotes dialogue and tolerance.",
   "Implementing the event according to the approved time and organizational plan and complying with public safety instructions.",
 ];
 
@@ -76,12 +77,12 @@ const T = {
     generalTerms: "أولاً: الالتزام العام",
     culturalCriteria: "ثانياً: المعايير الثقافية",
     criteriaList: [
-      { title: "معيار الاجتماعي", desc: "احترام الخصوصية الاجتماعية والقيم العامة، وضمان بيئة مناسبة لجميع فئات الحضور في جميع أشكال المحتوى المقدّم خلال الفعالية." },
+      { title: "المعيار الاجتماعي", desc: "احترام الخصوصية الاجتماعية والقيم العامة وضمان بيئة مناسبة لجميع فئات المجتمع في جميع أشكال المحتوى المقدم خلال الفعالية." },
       { title: "معيار التنوع الثقافي والفكري", desc: "تقديم محتوى يعكس التعددية باحترام وعدم الترويج لأي خطاب طائفي أو مناطقي أو تمييزي." },
       { title: "معيار السلم الأهلي", desc: "تقديم محتوى يعزز الحوار والتسامح والتعايش وتجنب أي طرح قد يثير الانقسام أو الحساسية المجتمعية." },
       { title: "معيار السلوك المجتمعي والأخلاقي", desc: "الحفاظ على النظام العام داخل الفعالية وضمان سلوك حضاري للحضور والمحافظة على نظافة المكان." },
     ],
-    termsNote: "لا يعتبر هذا الطلب في أي شكل من الأشكال بمثابة موافقة الوزارة على هذه الفعالية وإنما طلب مبدئي للقبول.",
+    termsNote: "لا يعتبر هذا الطلب بأي شكل من الأشكال بمثابة موافقة الوزارة على هذه الفعالية حيث يتم تزويد الفعاليات الموافق عليها بخطاب رسمي للقيام بها.",
     agreeButton: "لقد قرأت الشروط وأوافق عليها",
     section1Title: "بيانات مقدم الطلب",
     applicantNameLabel: "اسم مقدم الطلب",
@@ -166,12 +167,12 @@ const T = {
     generalTerms: "First: General Commitment",
     culturalCriteria: "Second: Cultural Criteria",
     criteriaList: [
-      { title: "Social Criterion", desc: "Respecting social privacy and general values, and ensuring a suitable environment for all attendees, in all forms of content presented during the event." },
+      { title: "Social Criterion", desc: "Respecting social privacy and general values, and ensuring a suitable environment for all segments of society, in all forms of content presented during the event." },
       { title: "Cultural & Intellectual Diversity", desc: "Providing content that respects pluralism and avoids promoting any sectarian, regional, or discriminatory discourse." },
       { title: "Civil Peace Criterion", desc: "Providing content that enhances dialogue, tolerance, and coexistence, avoiding any topic that might stir division or social sensitivity." },
       { title: "Social & Ethical Behavior", desc: "Maintaining public order within the event, ensuring civilized behavior of the audience, and preserving clean venue spaces." },
     ],
-    termsNote: "This request does not, in any way, constitute the Ministry's approval of this event — it is merely a preliminary request for acceptance.",
+    termsNote: "This request does not, in any way, constitute the Ministry's approval of this event, as approved events are provided with an official letter to proceed.",
     agreeButton: "I have read the terms and agree to them",
     section1Title: "Applicant Details",
     applicantNameLabel: "Applicant Name",
@@ -388,52 +389,35 @@ export default function SubmitEventPage(props) {
     <div className="relative flex flex-col w-full min-h-screen bg-[#F8F3EC] pt-[84px] md:pt-[88px] lg:pt-[104px]" dir={isRtl ? "rtl" : "ltr"}>
 
       {/* ── Hero ── */}
-      <section className="relative py-20 px-4 overflow-hidden border-b border-[#b9a779]/15">
-        <div className="absolute inset-0 z-0">
-          <Image
-            src="/images/drive-photos/Khan-Asad-Basha.jpg"
-            alt="submit event background"
-            fill
-            priority
-            className="object-cover brightness-[0.2] saturate-[0.7]"
-          />
-          <div className="absolute inset-0 bg-gradient-to-b from-[#002723]/90 via-[#002723]/75 to-[#002723]" />
-        </div>
-        <div className="max-w-4xl mx-auto text-center relative z-10 flex flex-col items-center gap-3">
-          <span className="text-[10px] uppercase text-[#b9a779] font-bold tracking-widest border border-[#b9a779]/30 rounded-full px-4 py-1 bg-[#b9a779]/5">
-            {tForm.metaTitle}
-          </span>
-          <h1 className="text-white font-extrabold text-3xl sm:text-4xl lg:text-5xl font-qomra">
-            {tForm.title}
-          </h1>
-          <div className="w-16 h-[2.5px] bg-[#b9a779] mt-1" />
-          <p className="text-slate-300 text-sm max-w-xl leading-relaxed">
-            {tForm.subtitle}
-          </p>
-          {/* Step indicator */}
-          {step < 3 && (
-            <div className="flex flex-col md:flex-row items-center justify-center gap-3 mt-4">
-              {[1, 2].map((s) => (
-                <div key={s} className="flex items-center gap-3">
-                  <div className={`flex items-center gap-2 px-4 py-1.5 rounded-full border text-xs font-bold transition-all ${
-                    step === s
-                      ? "bg-[#b9a779] text-[#054239] border-[#b9a779]"
-                      : step > s
-                        ? "bg-[#1C665A]/30 text-[#b9a779] border-[#1C665A]/40"
-                        : "bg-white/10 text-slate-400 border-white/15"
-                  }`}>
-                    <span className={`w-4 h-4 rounded-full text-[10px] flex items-center justify-center ${
-                      step === s ? "bg-[#054239] text-white" : step > s ? "bg-[#b9a779] text-white" : "bg-white/20 text-white/50"
-                    }`}>{s}</span>
-                    {s === 1 ? tForm.step1 : tForm.step2}
-                  </div>
-                  {s < 2 && <div className="hidden md:block w-8 h-px bg-white/20" />}
+      <SubpageHero
+        title={tForm.title}
+        subtitle={tForm.metaTitle}
+        description={tForm.subtitle}
+        isRtl={isRtl}
+      >
+        {/* Step indicator */}
+        {step < 3 && (
+          <div className="flex flex-col md:flex-row items-center justify-center gap-3 mt-4">
+            {[1, 2].map((s) => (
+              <div key={s} className="flex items-center gap-3">
+                <div className={`flex items-center gap-2 px-4 py-1.5 rounded-full border text-xs font-bold transition-all ${
+                  step === s
+                    ? "bg-[#b9a779] text-[#054239] border-[#b9a779]"
+                    : step > s
+                      ? "bg-[#1C665A]/30 text-[#b9a779] border-[#1C665A]/40"
+                      : "bg-white/10 text-slate-400 border-white/15"
+                }`}>
+                  <span className={`w-4 h-4 rounded-full number-circle text-[10px] flex items-center justify-center ${
+                    step === s ? "bg-[#054239] text-white" : step > s ? "bg-[#b9a779] text-white" : "bg-white/20 text-white/50"
+                  }`}>{s}</span>
+                  {s === 1 ? tForm.step1 : tForm.step2}
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </section>
+                {s < 2 && <div className="hidden md:block w-8 h-px bg-white/20" />}
+              </div>
+            ))}
+          </div>
+        )}
+      </SubpageHero>
 
       {/* ── Content ── */}
       <main className="max-w-4xl mx-auto w-full px-4 sm:px-6 py-12 flex-grow relative z-10">
@@ -465,7 +449,7 @@ export default function SubmitEventPage(props) {
                   <ul className="space-y-2">
                     {termsList.map((term, i) => (
                       <li key={i} className="flex items-start gap-2.5 text-sm text-slate-700">
-                        <span className="w-5 h-5 shrink-0 rounded-full bg-[#b9a779]/15 text-[#b9a779] flex items-center justify-center text-[10px] font-bold mt-0.5">{i + 1}</span>
+                        <span className="w-5 h-5 shrink-0 rounded-full number-circle bg-[#b9a779]/15 text-[#b9a779] flex items-center justify-center text-[10px] font-bold mt-0.5">{i + 1}</span>
                         {term}
                       </li>
                     ))}
@@ -513,7 +497,7 @@ export default function SubmitEventPage(props) {
             <div className="bg-white rounded-3xl border border-[#b9a779]/20 shadow-sm overflow-hidden relative">
               <DecorativeCorners />
               <div className="bg-[#054239]/5 border-b border-[#b9a779]/15 px-8 sm:px-12 py-5 flex items-center gap-3">
-                <span className="w-7 h-7 rounded-full bg-[#b9a779] text-white text-xs font-black flex items-center justify-center shrink-0">١</span>
+                <span className="w-7 h-7 rounded-full number-circle bg-[#b9a779] text-white text-xs font-black flex items-center justify-center shrink-0">١</span>
                 <h2 className="font-extrabold text-[#054239] text-sm font-qomra">{tForm.section1Title}</h2>
               </div>
               <div className="px-8 sm:px-12 pb-8 sm:pb-12 pt-6 grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -535,7 +519,7 @@ export default function SubmitEventPage(props) {
             <div className="bg-white rounded-3xl border border-[#b9a779]/20 shadow-sm overflow-hidden relative">
               <DecorativeCorners />
               <div className="bg-[#054239]/5 border-b border-[#b9a779]/15 px-8 sm:px-12 py-5 flex items-center gap-3">
-                <span className="w-7 h-7 rounded-full bg-[#b9a779] text-white text-xs font-black flex items-center justify-center shrink-0">٢</span>
+                <span className="w-7 h-7 rounded-full number-circle bg-[#b9a779] text-white text-xs font-black flex items-center justify-center shrink-0">٢</span>
                 <h2 className="font-extrabold text-[#054239] text-sm font-qomra">{tForm.section2Title}</h2>
               </div>
               <div className="px-8 sm:px-12 pb-8 sm:pb-12 pt-6 space-y-5">
@@ -583,7 +567,7 @@ export default function SubmitEventPage(props) {
             <div className="bg-white rounded-3xl border border-[#b9a779]/20 shadow-sm overflow-hidden relative">
               <DecorativeCorners />
               <div className="bg-[#054239]/5 border-b border-[#b9a779]/15 px-8 sm:px-12 py-5 flex items-center gap-3">
-                <span className="w-7 h-7 rounded-full bg-[#b9a779] text-white text-xs font-black flex items-center justify-center shrink-0">٣</span>
+                <span className="w-7 h-7 rounded-full number-circle bg-[#b9a779] text-white text-xs font-black flex items-center justify-center shrink-0">٣</span>
                 <h2 className="font-extrabold text-[#054239] text-sm font-qomra">{tForm.section3Title}</h2>
               </div>
               <div className="px-8 sm:px-12 pb-8 sm:pb-12 pt-6 space-y-5">
@@ -650,7 +634,7 @@ export default function SubmitEventPage(props) {
             <div className="bg-white rounded-3xl border border-[#b9a779]/20 shadow-sm relative">
               <DecorativeCorners />
               <div className="bg-[#054239]/5 border-b border-[#b9a779]/15 px-8 sm:px-12 py-5 flex items-center gap-3 rounded-t-3xl">
-                <span className="w-7 h-7 rounded-full bg-[#b9a779] text-white text-xs font-black flex items-center justify-center shrink-0">٤</span>
+                <span className="w-7 h-7 rounded-full number-circle bg-[#b9a779] text-white text-xs font-black flex items-center justify-center shrink-0">٤</span>
                 <h2 className="font-extrabold text-[#054239] text-sm font-qomra">{tForm.section4Title}</h2>
               </div>
               <div className="px-8 sm:px-12 pb-8 sm:pb-12 pt-6 space-y-5">
@@ -701,7 +685,7 @@ export default function SubmitEventPage(props) {
             <div className="bg-white rounded-3xl border border-[#b9a779]/20 shadow-sm overflow-hidden relative">
               <DecorativeCorners />
               <div className="bg-[#054239]/5 border-b border-[#b9a779]/15 px-8 sm:px-12 py-5 flex items-center gap-3">
-                <span className="w-7 h-7 rounded-full bg-[#b9a779] text-white text-xs font-black flex items-center justify-center shrink-0">٥</span>
+                <span className="w-7 h-7 rounded-full number-circle bg-[#b9a779] text-white text-xs font-black flex items-center justify-center shrink-0">٥</span>
                 <h2 className="font-extrabold text-[#054239] text-sm font-qomra">{tForm.section5Title}</h2>
               </div>
               <div className="px-8 sm:px-12 pb-8 sm:pb-12 pt-6 space-y-5">
@@ -771,7 +755,7 @@ export default function SubmitEventPage(props) {
             <div className="bg-white rounded-3xl border border-[#b9a779]/20 shadow-sm overflow-hidden relative">
               <DecorativeCorners />
               <div className="bg-[#054239]/5 border-b border-[#b9a779]/15 px-8 sm:px-12 py-5 flex items-center gap-3">
-                <span className="w-7 h-7 rounded-full bg-[#b9a779] text-white text-xs font-black flex items-center justify-center shrink-0">٦</span>
+                <span className="w-7 h-7 rounded-full number-circle bg-[#b9a779] text-white text-xs font-black flex items-center justify-center shrink-0">٦</span>
                 <h2 className="font-extrabold text-[#054239] text-sm font-qomra">{tForm.section6Title}</h2>
               </div>
               <div className="px-8 sm:px-12 pb-8 sm:pb-12 pt-6 space-y-5">
@@ -878,7 +862,7 @@ export default function SubmitEventPage(props) {
                 <ul className="space-y-2 text-start">
                   {tForm.nextStepsList.map((item, i) => (
                     <li key={i} className="flex items-start gap-2.5">
-                      <span className="w-4 h-4 rounded-full bg-[#b9a779]/20 text-[#b9a779] flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">{i + 1}</span>
+                      <span className="w-4 h-4 rounded-full number-circle bg-[#b9a779]/20 text-[#b9a779] flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">{i + 1}</span>
                       {item}
                     </li>
                   ))}

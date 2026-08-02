@@ -7,6 +7,7 @@ import { translations } from "../../../data/translations";
 import DecorativeCorners from "../../../components/DecorativeCorners";
 import AchievementCarousel from "../../../components/AchievementCarousel";
 import { monthNamesAr, monthNamesEn, getTagColor } from "@/lib/achievements";
+import SubpageHero from "../../../components/SubpageHero";
 
 /* ──────────────────────────────────────────────────────────── */
 /* Helpers                                                       */
@@ -125,69 +126,41 @@ export default function AchievementsView({ posts = [], locale }) {
       dir={isRtl ? "rtl" : "ltr"}
     >
       {/* ── Hero ── */}
-      <section className="relative py-10 sm:py-16 md:py-20 px-4 border-b border-[#A48E68]/15 overflow-hidden">
-        {/* Background image */}
-        <div className="absolute inset-0 z-0">
-          <Image
-            src="/images/drive-photos/Khan-Asad-Basha.jpg"
-            alt="خان أسعد باشا"
-            fill
-            priority
-            className="object-cover brightness-[0.38] saturate-[0.9]"
-          />
-          <div className="absolute inset-0 bg-gradient-to-b from-[#002723]/85 via-[#002723]/65 to-[#002723]/92 z-0" />
-        </div>
-
-        {/* Ambient orb */}
-        <div className="absolute top-1/2 -translate-y-1/2 left-1/4 w-48 h-48 sm:w-80 sm:h-80 bg-[#A48E68]/10 rounded-full blur-[100px] pointer-events-none z-10" />
-
-        <div className="max-w-3xl mx-auto text-center relative z-10 flex flex-col items-center gap-2.5 sm:gap-4">
-          {/* Badge */}
-          <span className="text-[9px] sm:text-xs uppercase text-[#A48E68] font-bold tracking-widest border border-[#A48E68]/30 rounded-full px-3 py-0.5 sm:px-5 sm:py-1.5 bg-[#A48E68]/8">
-            {isRtl ? "وزارة الثقافة السورية" : "Syrian Ministry of Culture"}
-          </span>
-
-          {/* Title */}
-          <h1 className="text-white font-extrabold text-xl sm:text-3xl md:text-4xl font-sans leading-tight">
-            {isRtl ? "إنجازات وزارة الثقافة" : "Ministry Achievements"}
-          </h1>
-
-          {/* Gold divider */}
-          <div className="w-10 sm:w-16 h-[2px] bg-[#A48E68]" />
-
-
-
-          {/* Search box */}
-          {months.length > 0 && (
-            <div className="w-full max-w-xs sm:max-w-md mt-1 sm:mt-4 relative flex items-center bg-white/[0.07] hover:bg-white/[0.12] focus-within:bg-white/[0.15] backdrop-blur-lg border border-[#b9a779]/45 hover:border-[#b9a779] focus-within:border-[#b9a779] rounded-full px-3 py-2 sm:px-4 sm:py-2.5 transition-all duration-300 shadow-sm focus-within:shadow-[0_0_18px_rgba(185,167,121,0.25)]">
-              <div className="flex-grow flex items-center gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 text-[#b9a779] shrink-0">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
-                </svg>
-                <input
-                  type="text"
-                  placeholder={isRtl ? "ابحث في الإنجازات..." : "Search achievements..."}
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  dir={isRtl ? "rtl" : "ltr"}
-                  className="w-full bg-transparent border-none outline-none text-white text-sm placeholder-[#EDE5D6]/60 font-medium"
-                />
-                {search && (
-                  <button
-                    onClick={() => setSearch("")}
-                    className="text-[#EDE5D6]/50 hover:text-white transition-colors p-0.5 shrink-0 cursor-pointer"
-                    aria-label="Clear"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                )}
-              </div>
+      <SubpageHero
+        title={isRtl ? "إنجازات وزارة الثقافة" : "Ministry Achievements"}
+        subtitle={isRtl ? "وزارة الثقافة السورية" : "Syrian Ministry of Culture"}
+        isRtl={isRtl}
+      >
+        {/* Search box */}
+        {months.length > 0 && (
+          <div className="w-full max-w-xs sm:max-w-md mt-1 sm:mt-4 relative flex items-center bg-white/[0.07] hover:bg-white/[0.12] focus-within:bg-white/[0.15] backdrop-blur-lg border border-[#b9a779]/45 hover:border-[#b9a779] focus-within:border-[#b9a779] rounded-full px-3 py-2 sm:px-4 sm:py-2.5 transition-all duration-300 shadow-sm focus-within:shadow-[0_0_18px_rgba(185,167,121,0.25)]">
+            <div className="flex-grow flex items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 text-[#b9a779] shrink-0">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+              </svg>
+              <input
+                type="text"
+                placeholder={isRtl ? "ابحث في الإنجازات..." : "Search achievements..."}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                dir={isRtl ? "rtl" : "ltr"}
+                className="w-full bg-transparent border-none outline-none text-white text-sm placeholder-[#EDE5D6]/60 font-medium"
+              />
+              {search && (
+                <button
+                  onClick={() => setSearch("")}
+                  className="text-[#EDE5D6]/50 hover:text-white transition-colors p-0.5 shrink-0 cursor-pointer"
+                  aria-label="Clear"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
             </div>
-          )}
-        </div>
-      </section>
+          </div>
+        )}
+      </SubpageHero>
 
       {/* ── Filters ── */}
       {months.length > 0 && (

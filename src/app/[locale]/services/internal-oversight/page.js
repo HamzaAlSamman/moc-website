@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import DecorativeCorners from "../../../../components/DecorativeCorners";
 import ApexDateTimePicker from "../../../../components/ApexDateTimePicker";
+import SubpageHero from "../../../../components/SubpageHero";
 
 const CATEGORIES = [
   { value: "financial_admin_corruption", ar: "فساد مالي أو إداري", en: "Financial or Administrative Corruption" },
@@ -54,6 +55,8 @@ const T = {
     backToServices: "العودة إلى الخدمات",
     successTitle: "تم إرسال شكواك بنجاح",
     successSubtitle: "وصلت شكواك إلى مديرية الرقابة الداخلية وستتم مراجعتها.",
+    referenceLabel: "الرقم المتسلسل للشكوى",
+    referenceHint: "احتفظ بهذا الرقم — هو مرجعك الوحيد لمتابعة الشكوى، خصوصاً إذا قدّمتها دون الكشف عن هويتك.",
     nextStepsTitle: "ماذا بعد؟",
     nextStepsList: [
       "تتم مراجعة الشكوى من قبل مديرية الرقابة الداخلية في وزارة الثقافة.",
@@ -110,6 +113,8 @@ const T = {
     backToServices: "Back to Services",
     successTitle: "Your complaint has been submitted",
     successSubtitle: "Your complaint has reached the Internal Oversight Directorate and will be reviewed.",
+    referenceLabel: "Complaint reference number",
+    referenceHint: "Keep this number — it is your only way to follow up on the complaint, especially if you submitted it anonymously.",
     nextStepsTitle: "What happens now?",
     nextStepsList: [
       "Your complaint is reviewed by the Internal Oversight Directorate.",
@@ -182,6 +187,7 @@ export default function InternalOversightPage(props) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+  const [referenceNo, setReferenceNo] = useState("");
   const [images, setImages] = useState([]); // [{ name, dataUrl }]
   const fileInputRef = useRef(null);
 
@@ -261,6 +267,8 @@ export default function InternalOversightPage(props) {
         setError(d.error || tForm.errorMessage);
         return;
       }
+      const payload = await res.json().catch(() => ({}));
+      setReferenceNo(payload.referenceNo || "");
       setSuccess(true);
     } catch {
       setError(tForm.connectionErrorMessage);
@@ -273,30 +281,12 @@ export default function InternalOversightPage(props) {
     <div className="relative flex flex-col w-full min-h-screen bg-[#F8F3EC] pt-[84px] md:pt-[88px] lg:pt-[104px]" dir={isRtl ? "rtl" : "ltr"}>
 
       {/* ── Hero ── */}
-      <section className="relative py-20 px-4 overflow-hidden border-b border-[#b9a779]/15">
-        <div className="absolute inset-0 z-0">
-          <Image
-            src="/images/drive-photos/Khan-Asad-Basha.jpg"
-            alt="internal oversight background"
-            fill
-            priority
-            className="object-cover brightness-[0.2] saturate-[0.7]"
-          />
-          <div className="absolute inset-0 bg-gradient-to-b from-[#002723]/90 via-[#002723]/75 to-[#002723]" />
-        </div>
-        <div className="max-w-4xl mx-auto text-center relative z-10 flex flex-col items-center gap-3">
-          <span className="text-[10px] uppercase text-[#b9a779] font-bold tracking-widest border border-[#b9a779]/30 rounded-full px-4 py-1 bg-[#b9a779]/5">
-            {tForm.metaTitle}
-          </span>
-          <h1 className="text-white font-extrabold text-3xl sm:text-4xl lg:text-5xl font-qomra">
-            {tForm.title}
-          </h1>
-          <div className="w-16 h-[2.5px] bg-[#b9a779] mt-1" />
-          <p className="text-slate-300 text-sm max-w-xl leading-relaxed">
-            {tForm.subtitle}
-          </p>
-        </div>
-      </section>
+      <SubpageHero
+        title={tForm.title}
+        subtitle={tForm.metaTitle}
+        description={tForm.subtitle}
+        isRtl={isRtl}
+      />
 
       {/* ── Content ── */}
       <main className="max-w-4xl mx-auto w-full px-4 sm:px-6 py-12 flex-grow relative z-10">
@@ -340,7 +330,7 @@ export default function InternalOversightPage(props) {
               <div className="bg-white rounded-3xl border border-[#b9a779]/20 shadow-sm relative">
                 <DecorativeCorners />
                 <div className="bg-[#054239]/5 border-b border-[#b9a779]/15 px-8 sm:px-12 py-5 flex items-center gap-3 rounded-t-[22px]">
-                  <span className="w-7 h-7 rounded-full bg-[#b9a779] text-white text-xs font-black flex items-center justify-center shrink-0">1</span>
+                  <span className="w-7 h-7 rounded-full number-circle bg-[#b9a779] text-white text-xs font-black flex items-center justify-center shrink-0">1</span>
                   <h2 className="font-extrabold text-[#054239] text-sm font-qomra">{tForm.section1Title}</h2>
                 </div>
                 <div className="px-8 sm:px-12 pb-8 sm:pb-12 pt-6 space-y-5">
@@ -385,7 +375,7 @@ export default function InternalOversightPage(props) {
               <div className="bg-white rounded-3xl border border-[#b9a779]/20 shadow-sm relative">
                 <DecorativeCorners />
                 <div className="bg-[#054239]/5 border-b border-[#b9a779]/15 px-8 sm:px-12 py-5 flex items-center gap-3 rounded-t-[22px]">
-                  <span className="w-7 h-7 rounded-full bg-[#b9a779] text-white text-xs font-black flex items-center justify-center shrink-0">2</span>
+                  <span className="w-7 h-7 rounded-full number-circle bg-[#b9a779] text-white text-xs font-black flex items-center justify-center shrink-0">2</span>
                   <h2 className="font-extrabold text-[#054239] text-sm font-qomra">{tForm.section2Title}</h2>
                 </div>
                 <div className="px-8 sm:px-12 pb-8 sm:pb-12 pt-6 space-y-5">
@@ -418,6 +408,7 @@ export default function InternalOversightPage(props) {
                       theme="emerald"
                       locale={locale}
                       placeholder={tForm.incidentDatePlaceholder}
+                      maxDate={new Date()}
                     />
                   </Field>
                   <Field label={tForm.messageLabel} required>
@@ -526,12 +517,21 @@ export default function InternalOversightPage(props) {
               </p>
             </div>
             <div className="p-8 space-y-4">
+              {referenceNo && (
+                <div className="bg-white border-2 border-dashed border-[#b9a779]/50 rounded-2xl p-5 text-center">
+                  <p className="text-xs font-bold text-slate-500">{tForm.referenceLabel}</p>
+                  <p className="mt-1.5 font-mono text-2xl font-black tracking-widest text-[#054239]" dir="ltr">
+                    {referenceNo}
+                  </p>
+                  <p className="mt-2 text-xs leading-relaxed text-slate-500">{tForm.referenceHint}</p>
+                </div>
+              )}
               <div className="bg-[#F8F3EC] border border-[#b9a779]/15 rounded-2xl p-5 text-sm text-slate-600 leading-relaxed">
                 <p className="font-bold text-[#054239] mb-2">{tForm.nextStepsTitle}</p>
                 <ul className="space-y-2 text-start">
                   {tForm.nextStepsList.map((item, i) => (
                     <li key={i} className="flex items-start gap-2.5">
-                      <span className="w-4 h-4 rounded-full bg-[#b9a779]/20 text-[#b9a779] flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">{i + 1}</span>
+                      <span className="w-4 h-4 rounded-full number-circle bg-[#b9a779]/20 text-[#b9a779] flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">{i + 1}</span>
                       {item}
                     </li>
                   ))}
@@ -545,7 +545,7 @@ export default function InternalOversightPage(props) {
                   {tForm.backToServices}
                 </Link>
                 <button
-                  onClick={() => { setForm(INITIAL); setImages([]); setSuccess(false); }}
+                  onClick={() => { setForm(INITIAL); setImages([]); setReferenceNo(""); setSuccess(false); }}
                   className="inline-flex items-center justify-center gap-2 border border-slate-200 text-slate-600 font-bold text-sm px-6 py-3 rounded-full transition hover:border-[#b9a779]/40 hover:text-[#054239] cursor-pointer"
                 >
                   {tForm.sendAnother}

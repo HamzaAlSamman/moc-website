@@ -13,6 +13,7 @@ import {
 import { notifyByRole } from "@/lib/notify";
 import { logAudit } from "@/lib/audit";
 import { getClientIp } from "@/lib/rate-limit";
+import { canTransitionCopyright } from "@/lib/business-rules.mjs";
 
 // Staff-only review decisions. Citizen self-service (paying fees, resubmitting
 // after a suspension) goes through the public /api/copyright PUT instead —
@@ -36,23 +37,99 @@ export async function PATCH(request, { params }) {
 
   const { id } = await params;
   const data = await request.json();
-  const { applicationStatus, assessorReportFile, studiesRecommendationsFile } = data;
+  const {
+    applicationStatus,
+    assessorReportFile,
+    studiesRecommendationsFile,
+    reviewNote,
+    deficiencyNote,
+    internalRefNumber,
+  } = data;
 
   if (applicationStatus && !ALLOWED_STATUSES.includes(applicationStatus)) {
     return NextResponse.json({ error: "حالة غير صالحة" }, { status: 400 });
+  }
+
+  const existing = await prisma.copyrightSubmission.findUnique({ where: { id } });
+  if (!existing) {
+    return NextResponse.json({ error: "المعاملة غير موجودة" }, { status: 404 });
+  }
+  if (["completed", "rejected"].includes(existing.applicationStatus)) {
+    return NextResponse.json({ error: "Closed submissions cannot be modified" }, { status: 409 });
+  }
+
+  const nextStatus = applicationStatus ?? existing.applicationStatus;
+  if (applicationStatus && !canTransitionCopyright(session.role, existing.applicationStatus, nextStatus)) {
+    return NextResponse.json({ error: "Invalid workflow transition for the current role" }, { status: 409 });
+  }
+  if (["suspended", "rejected"].includes(nextStatus) && !deficiencyNote?.trim()) {
+    return NextResponse.json({ error: "deficiencyNote is required" }, { status: 400 });
+  }
+  const isAdmin = ["SUPER_ADMIN", "ADMIN"].includes(session.role);
+  if (assessorReportFile !== undefined && session.role !== "STUDIES_ASSESSOR" && !isAdmin) {
+    return NextResponse.json({ error: "Only the studies assessor may submit this report" }, { status: 403 });
+  }
+  if (studiesRecommendationsFile !== undefined && session.role !== "STUDIES_HEAD" && !isAdmin) {
+    return NextResponse.json({ error: "Only the studies head may submit recommendations" }, { status: 403 });
   }
 
   const updateData = {};
   if (applicationStatus) updateData.applicationStatus = applicationStatus;
   // Finance confirming the final fee closes the payment record too.
   if (applicationStatus === "completed") updateData.paymentStatus = "fully_paid";
+  // These two carry the assessor's / studies head's stage notes (they used to
+  // be file uploads). They still double as the study-phase progress markers the
+  // workflow stepper and hand-off notifications below depend on.
   if (assessorReportFile !== undefined) updateData.assessorReportFile = assessorReportFile;
   if (studiesRecommendationsFile !== undefined) updateData.studiesRecommendationsFile = studiesRecommendationsFile;
 
-  const updated = await prisma.copyrightSubmission.update({
-    where: { id },
-    data: updateData,
-  });
+  // The reviewer who suspends or rejects writes what is missing / the reason;
+  // it is shown to the citizen and included in their notification email.
+  if (deficiencyNote !== undefined) updateData.deficiencyNote = deficiencyNote;
+
+  // Internal reference number — assigned by the technical assessor, then LOCKED:
+  // once set, only the assessor who set it or a SUPER_ADMIN may change it.
+  if (internalRefNumber !== undefined) {
+    const isSuperAdmin = session.role === "SUPER_ADMIN";
+    if (existing.internalRefSetById && existing.internalRefSetById !== session.userId && !isSuperAdmin) {
+      return NextResponse.json({ error: "رقم الطلب الداخلي مقفل — لا يعدّله إلا من أدخله أو مدير النظام" }, { status: 403 });
+    }
+    if (!existing.internalRefSetById && session.role !== "STUDIES_ASSESSOR" && !isSuperAdmin) {
+      return NextResponse.json({ error: "إدخال رقم الطلب الداخلي من صلاحية الدارس المختص" }, { status: 403 });
+    }
+    updateData.internalRefNumber = String(internalRefNumber).trim();
+    updateData.internalRefSetById = session.userId;
+  }
+
+  // Append any note to the shared review thread, visible to the whole chain.
+  // The assessor/head stage notes (sent as assessorReportFile/…RecommendationsFile)
+  // are threaded here too so every reviewer sees the full discussion.
+  const noteText = (reviewNote ?? assessorReportFile ?? studiesRecommendationsFile ?? "").trim();
+  if (noteText) {
+    const actor = await prisma.user.findUnique({ where: { id: session.userId }, select: { nameAr: true } });
+    const thread = Array.isArray(existing.reviewNotes) ? existing.reviewNotes : [];
+    updateData.reviewNotes = [
+      ...thread,
+      { role: session.role, userId: session.userId, name: actor?.nameAr || session.role, text: noteText, at: new Date().toISOString() },
+    ];
+  }
+
+  let result;
+  try {
+    result = await prisma.copyrightSubmission.updateMany({
+      where: { id, applicationStatus: existing.applicationStatus, updatedAt: existing.updatedAt },
+      data: updateData,
+    });
+  } catch (error) {
+    if (error.code === "P2002") {
+      return NextResponse.json({ error: "internalRefNumber must be unique" }, { status: 409 });
+    }
+    throw error;
+  }
+  if (result.count !== 1) {
+    return NextResponse.json({ error: "Concurrent update detected" }, { status: 409 });
+  }
+  const updated = await prisma.copyrightSubmission.findUnique({ where: { id } });
 
   // Approving the final stage hands the citizen a fee-payment link — send it.
   if (applicationStatus === "pending_fees") {

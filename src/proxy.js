@@ -14,6 +14,12 @@ const GATED_SERVICES = [
     gateRegex: /^\/(ar|en)\/services\/copyright\/gate\/?$/,
     apiBase: "/api/copyright",
   },
+  {
+    slug: "legal-licenses",
+    pageRegex: /^\/(ar|en)\/services\/legal-licenses(\/.*)?$/,
+    gateRegex: /^\/(ar|en)\/services\/legal-licenses\/gate\/?$/,
+    apiBase: "/api/legal-licenses",
+  },
 ];
 
 function matchGatedService(pathname) {
@@ -114,5 +120,11 @@ export const config = {
     "/en/services/copyright/:path*",
     "/api/copyright",
     "/api/copyright/:path*",
+    "/ar/services/legal-licenses",
+    "/ar/services/legal-licenses/:path*",
+    "/en/services/legal-licenses",
+    "/en/services/legal-licenses/:path*",
+    "/api/legal-licenses",
+    "/api/legal-licenses/:path*",
   ],
 };

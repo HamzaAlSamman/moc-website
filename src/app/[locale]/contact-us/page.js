@@ -5,6 +5,7 @@ import Image from "next/image";
 import { translations } from "../../../data/translations";
 import DecorativeCorners from "../../../components/DecorativeCorners";
 import { useSettings } from "../../../components/SettingsContext";
+import SubpageHero from "../../../components/SubpageHero";
 
 export default function ContactPage(props) {
   const params = use(props.params);
@@ -58,28 +59,13 @@ export default function ContactPage(props) {
   return (
     <div className="flex flex-col w-full min-h-screen bg-[#FBF9F6] pt-[84px] md:pt-[88px] lg:pt-[104px]" dir={isRtl ? "rtl" : "ltr"}>
       {/* Hero Header */}
-      <section className="relative py-24 px-4 overflow-hidden border-b border-[#A48E68]/15">
-        <div className="absolute inset-0 z-0">
-          <Image
-            src="/images/contact-us-background.jpg"
-            alt="Historical Damascus architecture background"
-            fill
-            priority
-            className="object-cover brightness-[0.25] saturate-[0.8]"
-          />
-          <div className="absolute inset-0 bg-gradient-to-b from-[#002723]/90 via-[#002723]/75 to-[#002723] z-0"></div>
-        </div>
-
-        <div className="max-w-7xl mx-auto text-center relative z-10 flex flex-col items-center gap-4">
-          <span className="text-xs uppercase text-[#A48E68] font-bold tracking-widest leading-none">
-            {common.contactInfo}
-          </span>
-          <h1 className="text-white font-extrabold text-3xl sm:text-5xl font-sans">
-            {t.title}
-          </h1>
-          <div className="w-16 h-[2.5px] bg-[#A48E68] mt-2"></div>
-        </div>
-      </section>
+      <SubpageHero
+        title={t.title}
+        subtitle={common.contactInfo}
+        bgImage="/images/contact-us-background.jpg"
+        bgImageAlt="Damascus background"
+        isRtl={isRtl}
+      />
 
       {/* Main Content Section */}
       <section className="py-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full relative z-10">

@@ -2,8 +2,62 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
 import { notifyByRole } from "@/lib/notify";
-import { sendCopyrightEmail } from "@/lib/copyright-mailer";
+import { sendCopyrightEmail, sendPaymentUnderReviewEmail } from "@/lib/copyright-mailer";
 import { fullSubmissionSchema } from "@/lib/copyright-validation";
+import { nextReferenceNumberSafe, REFERENCE_SCOPES } from "@/lib/reference-number";
+import {
+  toPublicCopyrightSubmission,
+  validateCopyrightWorkSource,
+  validateUploadedDocument,
+} from "@/lib/business-rules.mjs";
+
+const COPYRIGHT_DOCUMENT_FIELDS = [
+  "paymentReceipt",
+  "commercialRegisterFile",
+  "delegationFile",
+  "representativeIdFile",
+  "originalOwnerIdFile",
+  "idFileFront",
+  "idFileBack",
+  "telecomFile",
+  "roleFile",
+];
+
+const ROLE_GROUPS = {
+  representative: new Set(["الشريك", "المدير العام", "المستثمر", "رئيس مجلس إدارة", "صاحب الشركة"]),
+  agent: new Set(["المفوض", "الوكيل", "الوكيل القانوني", "المكلف"]),
+  heir: new Set(["الابن", "الوالد", "الورثة"]),
+};
+
+function validateCopyrightDocuments(data, { requireCore = false } = {}) {
+  for (const field of COPYRIGHT_DOCUMENT_FIELDS) {
+    if (data[field] != null) validateUploadedDocument(data[field], field);
+  }
+  for (const [index, author] of (Array.isArray(data.authors) ? data.authors : []).entries()) {
+    if (!author?.name?.trim()) throw new Error(`authors[${index}].name is required`);
+    validateUploadedDocument(author.fileFront, `authors[${index}].fileFront`);
+    if (author.idDocType !== "passport") {
+      validateUploadedDocument(author.fileBack, `authors[${index}].fileBack`);
+    }
+  }
+  if (!requireCore) return;
+  validateUploadedDocument(data.idFileFront, "idFileFront");
+  if (data.idDocType !== "passport") validateUploadedDocument(data.idFileBack, "idFileBack");
+  if (data.workCategory === "informational") validateUploadedDocument(data.telecomFile, "telecomFile");
+
+  const role = data.applicantRole;
+  if (ROLE_GROUPS.representative.has(role)) {
+    for (const field of ["commercialRegisterFile", "delegationFile", "representativeIdFile"]) {
+      validateUploadedDocument(data[field], field);
+    }
+  } else if (ROLE_GROUPS.agent.has(role)) {
+    validateUploadedDocument(data.roleFile, "roleFile");
+    validateUploadedDocument(data.originalOwnerIdFile, "originalOwnerIdFile");
+  } else if (ROLE_GROUPS.heir.has(role)) {
+    validateUploadedDocument(data.roleFile, "roleFile");
+    validateUploadedDocument(data.originalOwnerIdFile, "originalOwnerIdFile");
+  }
+}
 
 // POST: Create a new copyright submission (public, citizen-facing)
 export async function POST(request) {
@@ -26,6 +80,14 @@ export async function POST(request) {
       return NextResponse.json({ error: "بيانات الطلب غير صحيحة أو ناقصة", fieldErrors }, { status: 400 });
     }
 
+    let workSource;
+    try {
+      workSource = validateCopyrightWorkSource(data);
+      validateCopyrightDocuments(data, { requireCore: true });
+    } catch (error) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
     const submission = await prisma.copyrightSubmission.create({
       data: {
         applicantName:          data.applicantName.trim(),
@@ -37,7 +99,9 @@ export async function POST(request) {
         workDesc:               data.workDesc?.trim() || "",
         province:               data.province || "",
         center:                 data.center || "",
-        completionDate:         data.completionDate || "",
+        // Completion date is recorded automatically as the moment of submission
+        // (down to the minute) — the citizen no longer enters it manually.
+        completionDate:         new Date().toISOString(),
         hasTelecomDoc:          Boolean(data.hasTelecomDoc),
         paymentStatus:          "pending",
         applicationStatus:      "submitted",
@@ -51,7 +115,11 @@ export async function POST(request) {
         delegationFile:         data.delegationFile || null,
         representativeIdFile:   data.representativeIdFile || null,
         originalOwnerIdFile:    data.originalOwnerIdFile || null,
-        workFile:               data.workFile || null,
+        workFile:               workSource.workFile,
+        workDriveUrl:           workSource.workDriveUrl,
+        workOrigin:             data.workOrigin,
+        originalWorkName:       data.originalWorkName?.trim() || null,
+        originalPermission:     data.originalPermission?.trim() || null,
         idDocType:              data.idDocType === "passport" ? "passport" : "national_id",
         idFileFront:            data.idFileFront || null,
         idFileBack:             data.idFileBack || null,
@@ -60,21 +128,40 @@ export async function POST(request) {
       },
     });
 
+    // Public sequential reference (CPR-YYYY-NNNN), attached after the row exists
+    // so a failed insert never burns a number. Distinct from internalRefNumber,
+    // which the technical assessor assigns by hand later in the review chain.
+    const referenceNo = await nextReferenceNumberSafe(REFERENCE_SCOPES.COPYRIGHT);
+    if (referenceNo) {
+      try {
+        await prisma.copyrightSubmission.update({
+          where: { id: submission.id },
+          data: { referenceNo },
+        });
+        submission.referenceNo = referenceNo;
+      } catch (error) {
+        console.error("Could not attach reference number to copyright submission:", error);
+      }
+    }
+
     // Intake awareness only — a brand-new submission isn't actionable by any
     // workflow role until the citizen pays, so we ping management (oversight)
     // rather than broadcasting to every reviewer. The first stage actor
     // (FINANCE) is notified on payment instead — see the pay_initial branch.
     await notifyByRole(["SUPER_ADMIN", "ADMIN"], {
       type: "COPYRIGHT_SUBMISSION_PENDING",
-      titleAr: `طلب حماية حقوق مؤلف جديد: «${submission.workTitle}» من ${submission.applicantName}`,
-      titleEn: `New copyright request: "${submission.workTitle}" from ${submission.applicantName}`,
+      titleAr: `طلب حماية حقوق مؤلف جديد${submission.referenceNo ? ` [${submission.referenceNo}]` : ""}: «${submission.workTitle}» من ${submission.applicantName}`,
+      titleEn: `New copyright request${submission.referenceNo ? ` [${submission.referenceNo}]` : ""}: "${submission.workTitle}" from ${submission.applicantName}`,
       link: `/admin/copyright`,
     });
 
     // Send confirmation email to citizen immediately after successful registration.
     sendCopyrightEmail(submission).catch((err) => console.error("Submission confirmation email error:", err));
 
-    return NextResponse.json({ success: true, id: submission.id }, { status: 201 });
+    return NextResponse.json(
+      { success: true, id: submission.id, referenceNo: submission.referenceNo || null },
+      { status: 201 },
+    );
   } catch (err) {
     console.error("Copyright submission POST error:", err);
     return NextResponse.json({ error: "حدث خطأ أثناء حفظ طلب حماية حقوق المؤلف" }, { status: 500 });
@@ -99,7 +186,7 @@ export async function GET(request) {
       return NextResponse.json({ error: "لم يتم العثور على معاملة بهذا الرمز" }, { status: 404 });
     }
 
-    return NextResponse.json({ submission });
+    return NextResponse.json({ submission: toPublicCopyrightSubmission(submission) });
   } catch (err) {
     console.error("Copyright GET error:", err);
     return NextResponse.json({ error: "حدث خطأ أثناء جلب الطلب" }, { status: 500 });
@@ -132,33 +219,62 @@ export async function PUT(request) {
       return NextResponse.json({ error: "الطلب غير موجود" }, { status: 404 });
     }
 
+    try {
+      validateCopyrightDocuments(data);
+    } catch (error) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
     let updateData;
 
     if (action === "pay_initial") {
       if (existing.applicationStatus !== "submitted" || existing.paymentStatus !== "pending") {
         return NextResponse.json({ error: "لا يمكن تسديد الرسم الأولي في هذه المرحلة" }, { status: 409 });
       }
+      // Payment reference is mandatory so Finance has a wallet transaction to
+      // verify against — enforced separately for the initial and final fee.
+      if (!data.paymentRef?.trim()) {
+        return NextResponse.json({ error: "مرجع الدفع (رقم عملية التحويل) مطلوب" }, { status: 400 });
+      }
       updateData = { paymentStatus: "initial_paid", applicationStatus: "finance_review" };
       if (data.paymentGateway !== undefined) updateData.paymentGateway = data.paymentGateway;
-      if (data.paymentRef !== undefined) updateData.paymentRef = data.paymentRef;
+      updateData.paymentRef = data.paymentRef.trim();
       if (data.paymentReceipt !== undefined) updateData.paymentReceipt = data.paymentReceipt;
     } else if (action === "pay_final") {
       if (existing.applicationStatus !== "pending_fees") {
         return NextResponse.json({ error: "لا يمكن تسديد الرسم النهائي في هذه المرحلة" }, { status: 409 });
+      }
+      if (!data.paymentRef?.trim()) {
+        return NextResponse.json({ error: "مرجع الدفع (رقم عملية التحويل) مطلوب" }, { status: 400 });
       }
       // Final fee is a manual wallet transfer like the initial one, so it goes
       // to finance for verification (final_review) before the certificate is
       // issued — the official receipt is emailed only once finance confirms.
       updateData = { paymentStatus: "final_paid", applicationStatus: "final_review" };
       if (data.paymentGateway !== undefined) updateData.paymentGateway = data.paymentGateway;
-      if (data.paymentRef !== undefined) updateData.paymentRef = data.paymentRef;
+      updateData.paymentRef = data.paymentRef.trim();
       if (data.paymentReceipt !== undefined) updateData.paymentReceipt = data.paymentReceipt;
     } else if (action === "resubmit") {
       if (existing.applicationStatus !== "suspended") {
         return NextResponse.json({ error: "لا يمكن إعادة إرسال الطلب في هذه المرحلة" }, { status: 409 });
       }
       updateData = { applicationStatus: "under_review" };
-      if (data.workFile !== undefined) updateData.workFile = data.workFile;
+      if (data.workFile !== undefined || data.workDriveUrl !== undefined) {
+        try {
+          Object.assign(updateData, validateCopyrightWorkSource(data));
+        } catch (error) {
+          return NextResponse.json({ error: error.message }, { status: 400 });
+        }
+      }
+      // Thread the citizen's written reply into the shared review notes so the
+      // reviewers see how they responded to the flagged deficiencies.
+      if (data.applicantReply?.trim()) {
+        const thread = Array.isArray(existing.reviewNotes) ? existing.reviewNotes : [];
+        updateData.reviewNotes = [
+          ...thread,
+          { role: "APPLICANT", name: existing.applicantName, text: data.applicantReply.trim(), at: new Date().toISOString() },
+        ];
+      }
       if (data.idFileFront !== undefined) updateData.idFileFront = data.idFileFront;
       if (data.idFileBack !== undefined) updateData.idFileBack = data.idFileBack;
       if (data.telecomFile !== undefined) updateData.telecomFile = data.telecomFile;
@@ -171,14 +287,24 @@ export async function PUT(request) {
       return NextResponse.json({ error: "إجراء غير صالح" }, { status: 400 });
     }
 
-    const updated = await prisma.copyrightSubmission.update({
-      where: { id },
+    const expectedWhere = action === "pay_initial"
+      ? { applicationStatus: "submitted", paymentStatus: "pending" }
+      : action === "pay_final"
+        ? { applicationStatus: "pending_fees" }
+        : { applicationStatus: "suspended" };
+    const result = await prisma.copyrightSubmission.updateMany({
+      where: { id, ...expectedWhere },
       data: updateData,
     });
+    if (result.count !== 1) {
+      return NextResponse.json({ error: "Concurrent update detected" }, { status: 409 });
+    }
+    const updated = await prisma.copyrightSubmission.findUnique({ where: { id } });
 
     if (action === "pay_initial") {
-      // No citizen email here — Finance will send the official initial receipt
-      // PDF when they move the submission to under_review via the admin panel.
+      // Acknowledge to the citizen that their payment is now under review; the
+      // official receipt PDF follows once Finance verifies the transfer.
+      sendPaymentUnderReviewEmail(updated, "initial").catch((err) => console.error("Initial payment-under-review email error:", err));
       // Hand off to the finance desk: the fee is in, awaiting their verification.
       await notifyByRole("FINANCE", {
         type: "COPYRIGHT_FINANCE_REVIEW",
@@ -187,6 +313,8 @@ export async function PUT(request) {
         link: `/admin/copyright/${updated.id}`,
       });
     } else if (action === "pay_final") {
+      // Same acknowledgment for the final fee — receipt follows on Finance confirm.
+      sendPaymentUnderReviewEmail(updated, "final").catch((err) => console.error("Final payment-under-review email error:", err));
       // Hand off to finance to verify the final transfer landed. The completed
       // email + official receipt are sent when they confirm (admin PATCH).
       await notifyByRole("FINANCE", {
@@ -205,8 +333,11 @@ export async function PUT(request) {
       });
     }
 
-    return NextResponse.json({ success: true, submission: updated });
+    return NextResponse.json({ success: true, submission: toPublicCopyrightSubmission(updated) });
   } catch (err) {
+    if (err.code === "P2002") {
+      return NextResponse.json({ error: "paymentRef must be unique" }, { status: 409 });
+    }
     console.error("Copyright PUT error:", err);
     return NextResponse.json({ error: "حدث خطأ أثناء تحديث حالة الطلب" }, { status: 500 });
   }

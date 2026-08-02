@@ -73,25 +73,35 @@ const GATEWAY_NAMES = {
 const PROVINCE_LABEL = (sub) =>
   [sub.province, sub.center].filter(Boolean).join(" - ") || "—";
 
-// Per-stage receipt content. `initial` = first deposit (500 + 50 stamps = 550),
-// `final` = the issuance fee (500) paid after legal approval.
-function stageConfig(stage) {
+// Per-stage receipt content. Updated to use the new fee structure:
+// For companies: initial total = 51,300 (51,000 + 300 stamps), final total = 47,300 (47,000 + 300 stamps)
+// For others: initial total = 31,300 (31,000 + 300 stamps), final total = 47,300 (47,000 + 300 stamps)
+function stageConfig(stage, role) {
+  const isCompany = ["الشريك", "المدير العام", "المستثمر", "رئيس مجلس إدارة", "صاحب الشركة"].includes(role);
+
   if (stage === "final") {
     return {
       docTitle: "إيصال دفع الرسم النهائي",
       docTitleEn: "Final Fee Payment Receipt",
-      lines: [{ label: "رسم إصدار شهادة حماية المصنف (الرسم النهائي)", value: "500 ل.س" }],
-      total: "500 ل.س",
+      lines: [
+        { label: "رسم إصدار شهادة حماية المصنف (الرسم النهائي)", value: "47000 ل.س" },
+        { label: "رسوم طوابع الخدمات الإلكترونية والخدمة السحابية", value: "300 ل.س" },
+      ],
+      total: "47300 ل.س",
     };
   }
+
+  const baseVal = isCompany ? "51000 ل.س" : "31000 ل.س";
+  const totalVal = isCompany ? "51300 ل.س" : "31300 ل.س";
+
   return {
     docTitle: "إيصال دفع الرسم الأولي",
     docTitleEn: "Initial Fee Payment Receipt",
     lines: [
-      { label: "رسم إيداع وحماية المصنف (الرسم الأولي)", value: "500 ل.س" },
-      { label: "رسوم طوابع الخدمات الإلكترونية", value: "50 ل.س" },
+      { label: "رسم إيداع وحماية المصنف (الرسم الأولي)", value: baseVal },
+      { label: "رسوم طوابع الخدمات الإلكترونية والخدمة السحابية", value: "300 ل.س" },
     ],
-    total: "550 ل.س",
+    total: totalVal,
   };
 }
 
@@ -120,7 +130,7 @@ function esc(value) {
 
 export function buildReceiptHtml(submission, stage = "initial") {
   const { fontRegular, fontBold, logo, navShape } = loadAssets();
-  const cfg = stageConfig(stage);
+  const cfg = stageConfig(stage, submission.applicantRole);
   const gateway = GATEWAY_NAMES[submission.paymentGateway] || submission.paymentGateway || "—";
   const issuedAt = formatDate();
   const receiptNo = `${submission.id}-${stage === "final" ? "F" : "I"}`;
@@ -305,7 +315,14 @@ async function renderPdf(html) {
       ],
     });
     const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: "networkidle0" });
+    // The receipt HTML is fully self-contained — fonts, logo and the decorative
+    // motif are all embedded as data: URIs, so there are NO network requests to
+    // wait on. "networkidle0" (idle for 500ms) added nothing but a failure mode:
+    // under server load (serialized generations + concurrent SMTP sends) it kept
+    // exceeding the 30s navigation timeout, so the final receipt silently failed
+    // to attach. "load" fires on the document load event and is ~2x faster and
+    // reliable here. Keep an explicit, generous timeout as defense-in-depth.
+    await page.setContent(html, { waitUntil: "load", timeout: 60000 });
     const pdf = await page.pdf({
       format: "A4",
       printBackground: true,

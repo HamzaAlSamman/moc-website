@@ -9,7 +9,7 @@ export const fullSubmissionSchema = z
     applicantName: z.string().trim().min(3, "الاسم الرباعي مطلوب (3 أحرف على الأقل)"),
     applicantPhone: z.string().trim().regex(phoneRegex, "رقم الموبايل غير صحيح"),
     applicantEmail: z.string().trim().email("صيغة البريد الإلكتروني غير صحيحة"),
-    applicantRole: z.enum(["author", "agent", "heir", "representative"]),
+    applicantRole: z.string().trim().min(1, "صفة مقدم الطلب مطلوبة"),
     idDocType: z.enum(["national_id", "passport"]).optional().default("national_id"),
     workTitle: z.string().trim().min(3, "عنوان العمل مطلوب (3 أحرف على الأقل)"),
     workCategory: z.enum(["written", "informational", "audio_visual", "fine_arts", "folklore"]),
@@ -19,11 +19,14 @@ export const fullSubmissionSchema = z
     workDesc: z.string().trim().min(10, "يرجى كتابة وصف لا يقل عن 10 أحرف"),
     province: z.string().trim().min(1, "المحافظة مطلوبة"),
     center: z.string().trim().min(1, "مركز الإيداع مطلوب"),
-    completionDate: z.string().trim().min(1, "تاريخ إنجاز العمل مطلوب"),
+    // completionDate is no longer collected from the citizen — it is recorded
+    // automatically as the submission timestamp in the API route.
     commercialRegisterFile: z.string().nullable().optional(),
     delegationFile: z.string().nullable().optional(),
     representativeIdFile: z.string().nullable().optional(),
     originalOwnerIdFile: z.string().nullable().optional(),
+    workFile: z.string().nullable().optional(),
+    workDriveUrl: z.string().trim().url().nullable().optional(),
   })
   .superRefine((data, ctx) => {
     if (data.workOrigin === "derived") {
@@ -32,16 +35,6 @@ export const fullSubmissionSchema = z
       }
       if (!data.originalPermission) {
         ctx.addIssue({ code: "custom", path: ["originalPermission"], message: "وثيقة موافقة صاحب العمل الأصلي مطلوبة" });
-      }
-    }
-    const completion = new Date(data.completionDate);
-    if (Number.isNaN(completion.getTime())) {
-      ctx.addIssue({ code: "custom", path: ["completionDate"], message: "تاريخ غير صالح" });
-    } else {
-      const today = new Date();
-      today.setHours(23, 59, 59, 999);
-      if (completion.getTime() > today.getTime()) {
-        ctx.addIssue({ code: "custom", path: ["completionDate"], message: "تاريخ الإنجاز لا يمكن أن يكون بالمستقبل" });
       }
     }
   });

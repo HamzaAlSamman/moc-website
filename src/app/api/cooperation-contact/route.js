@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import nodemailer from "nodemailer";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
+import { sendCitizenAck } from "@/lib/mailer";
+import { nextReferenceNumberSafe, REFERENCE_SCOPES } from "@/lib/reference-number";
 
 // Contact channel for the Directorate of International Cooperation. Like the
 // general /api/contact endpoint this is email-only — nothing is persisted — but
@@ -102,6 +104,8 @@ export async function POST(request) {
         port,
         secure: port === 465,
         auth: { user, pass },
+        // Ministry mail relay may have an expired/self-signed cert; SMTP_TLS_INSECURE="true" accepts it.
+        tls: { rejectUnauthorized: process.env.SMTP_TLS_INSECURE !== "true" },
       });
     } else if (process.env.NODE_ENV === "production") {
       // Never silently route real messages to a throwaway test inbox in prod.
@@ -121,14 +125,19 @@ export async function POST(request) {
       });
     }
 
+    // Sequential reference (COP-YYYY-NNNN): this channel is email-only, so the
+    // number is the applicant's only handle on their request.
+    const referenceNo = await nextReferenceNumberSafe(REFERENCE_SCOPES.COOPERATION);
+
     const mailOptions = {
       from: `"التواصل مع مديرية التعاون الدولي" <${from}>`,
       to: toEmail,
       // Lets the directorate hit "reply" and answer the applicant directly.
       replyTo: `"${safeName}" <${safeEmail}>`,
-      subject: `[${typeAr}] رسالة جديدة لمديرية التعاون الدولي: ${safeSubject}`,
+      subject: `${referenceNo ? `[${referenceNo}] ` : ""}[${typeAr}] رسالة جديدة لمديرية التعاون الدولي: ${safeSubject}`,
       ...(attachments.length ? { attachments } : {}),
       text:
+        (referenceNo ? `الرقم المتسلسل: ${referenceNo}\n\n` : "") +
         `نوع التواصل: ${typeAr}\n` +
         `اسم مقدم الطلب: ${safeName}\n` +
         `جهة العمل: ${safeWorkplace}\n` +
@@ -149,6 +158,7 @@ export async function POST(request) {
             <p style="margin: 10px 0;"><strong>اسم مقدم الطلب:</strong> ${escapeHtml(safeName)}</p>
             <p style="margin: 10px 0;"><strong>جهة العمل:</strong> ${escapeHtml(safeWorkplace)}</p>
             <p style="margin: 10px 0;"><strong>البريد الإلكتروني:</strong> <a href="mailto:${encodeURIComponent(safeEmail)}" style="color: #428177; text-decoration: none;">${escapeHtml(safeEmail)}</a></p>
+            ${referenceNo ? `<p style="margin: 10px 0;"><strong>الرقم المتسلسل:</strong> <span style="font-family: monospace; font-weight: bold; color: #428177;">${escapeHtml(referenceNo)}</span></p>` : ""}
             <p style="margin: 10px 0;"><strong>رقم الهاتف:</strong> ${escapeHtml(safePhone)}</p>
             <p style="margin: 10px 0;"><strong>الموضوع:</strong> ${escapeHtml(safeSubject)}</p>
             ${attachments.length ? `<p style="margin: 10px 0;"><strong>المرفقات:</strong> ${attachments.length} صورة (مرفقة بهذا البريد)</p>` : ""}
@@ -175,7 +185,17 @@ export async function POST(request) {
       console.log("-----------------------------------------");
     }
 
-    return NextResponse.json({ success: true });
+    // Best-effort acknowledgement to the applicant's own email (fire-and-forget).
+    sendCitizenAck({
+      to: safeEmail,
+      name: safeName,
+      serviceLabel: "التواصل مع مديرية التعاون الدولي",
+      directorate: "مديرية التعاون الدولي",
+      reference: referenceNo,
+      extraNote: `موضوع رسالتك: ${safeSubject}`,
+    });
+
+    return NextResponse.json({ success: true, referenceNo });
   } catch (error) {
     console.error("Error sending cooperation contact email:", error);
     return NextResponse.json(
