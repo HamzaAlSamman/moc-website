@@ -15,21 +15,49 @@ if (!secretKey || secretKey.length < 32) {
 
 const encodedKey = new TextEncoder().encode(secretKey);
 
-export async function encrypt(payload) {
+// Every signed token in this app carries an `aud` (audience) claim naming
+// which of the app's three token families it belongs to. Without this, a
+// citizen session and a CMS admin session are structurally identical JWTs
+// signed with the same SESSION_SECRET — accepting one where the other is
+// expected is a straight privilege escalation (a citizen cookie would open
+// /admin). `decryptFor` enforces the audience match; a token minted for one
+// audience is unconditionally rejected when checked against another,
+// including tokens that carry no `aud` claim at all.
+export const TOKEN_AUDIENCE = Object.freeze({
+  CMS: "moc:cms", // staff/admin session (cms-session cookie)
+  CITIZEN: "moc:citizen", // citizen account session (citizen-session cookie)
+  GATE: "moc:gate", // temporary services-gate password cookie
+});
+
+export async function encryptFor(audience, payload, expiresIn = "7d") {
   return new SignJWT(payload)
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
-    .setExpirationTime("7d")
+    .setAudience(audience)
+    .setExpirationTime(expiresIn)
     .sign(encodedKey);
 }
 
-export async function decrypt(session = "") {
+export async function decryptFor(audience, token = "") {
   try {
-    const { payload } = await jwtVerify(session, encodedKey, {
+    const { payload } = await jwtVerify(token, encodedKey, {
       algorithms: ["HS256"],
+      audience,
     });
     return payload;
   } catch {
     return null;
   }
+}
+
+// Back-compat wrappers bound to the CMS audience, kept for the existing
+// staff-session call sites (src/lib/session.js). New code — citizen
+// sessions, the services gate — must call encryptFor/decryptFor with an
+// explicit audience instead of using these.
+export async function encrypt(payload) {
+  return encryptFor(TOKEN_AUDIENCE.CMS, payload);
+}
+
+export async function decrypt(session = "") {
+  return decryptFor(TOKEN_AUDIENCE.CMS, session);
 }

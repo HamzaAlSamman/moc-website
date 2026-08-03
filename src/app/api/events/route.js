@@ -49,6 +49,12 @@ export async function GET() {
         // button that hands off to the partner's own booking flow.
         source: true,
         bookingUrl: true,
+        bookingAvailability: true,
+        capacity: true,
+        bookedCount: true,
+        waitlistEnabled: true,
+        bookingOpensAt: true,
+        bookingClosesAt: true,
         eventKindId: true,
         eventKind: {
           select: {

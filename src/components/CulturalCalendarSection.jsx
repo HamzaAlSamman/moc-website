@@ -1079,6 +1079,14 @@ export default function CulturalCalendarSection({ locale, isDedicated = false })
 
                 {/* Bottom buttons */}
                 <div className="flex justify-end gap-3 shrink-0 pt-2">
+                  {!detailEvent.bookingUrl && (
+                    <Link
+                      href={`/${locale}/events/${detailEvent.id}`}
+                      className="inline-flex min-h-11 items-center gap-2 px-6 py-2.5 bg-[#054239] hover:bg-[#03332c] text-white text-sm font-bold rounded-full transition shadow-sm border-b-2 border-[#b9a779] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#A48E68]"
+                    >
+                      {isRtl ? "تفاصيل الفعالية والحجز" : "Event details & booking"}
+                    </Link>
+                  )}
                   {detailEvent.bookingUrl && (
                     <a
                       href={detailEvent.bookingUrl}

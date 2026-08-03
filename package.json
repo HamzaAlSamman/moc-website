@@ -10,7 +10,10 @@
     "db:push": "prisma db push",
     "db:seed": "node prisma/seed.js",
     "db:studio": "prisma studio",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "booking:reconcile": "node --conditions=react-server --import ./src/lib/node-test-alias-hook.mjs scripts/reconcile-bookings.mjs",
+    "booking:reconcile:apply": "node --conditions=react-server --import ./src/lib/node-test-alias-hook.mjs scripts/reconcile-bookings.mjs --apply --confirm-booking-counter-repair",
+    "smtp:check": "node --conditions=react-server --import ./src/lib/node-test-alias-hook.mjs scripts/check-smtp.mjs"
   },
   "prisma": {
     "seed": "node prisma/seed.js"

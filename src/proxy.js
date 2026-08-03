@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
-import { decrypt } from "./lib/crypto";
+import { TOKEN_AUDIENCE, decryptFor } from "./lib/crypto";
+import {
+  CITIZEN_SESSION_COOKIE,
+  classifyCitizenRoute,
+  decideCitizenRouteAccess,
+} from "./lib/citizen-route-access.mjs";
 
 // --- Temporary password gate for not-yet-public services -------------------
 // Requirement: these services are deployed for internal testing only; each
@@ -41,7 +46,7 @@ export async function proxy(request) {
 
   if (gatedMatch) {
     const gateCookie = request.cookies.get(SERVICES_GATE_COOKIE)?.value;
-    const gateSession = gateCookie ? await decrypt(gateCookie) : null;
+    const gateSession = gateCookie ? await decryptFor(TOKEN_AUDIENCE.GATE, gateCookie) : null;
 
     if (gateSession?.gate !== "restricted-services") {
       if (gatedMatch.isApi) {
@@ -54,13 +59,32 @@ export async function proxy(request) {
     }
   }
 
+  if (classifyCitizenRoute(pathname)) {
+    const citizenCookie = request.cookies.get(CITIZEN_SESSION_COOKIE)?.value;
+    const citizenSession = citizenCookie ? await decryptFor(TOKEN_AUDIENCE.CITIZEN, citizenCookie) : null;
+
+    const decision = decideCitizenRouteAccess(
+      pathname,
+      pathname + request.nextUrl.search,
+      citizenSession
+    );
+
+    if (decision.action === "redirect") {
+      return NextResponse.redirect(new URL(decision.to, request.url));
+    }
+    if (decision.action === "json401") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    return NextResponse.next();
+  }
+
   const isAdminRoute = pathname.startsWith("/admin");
   const isLoginRoute = pathname === "/admin/login";
   const isAuthApiRoute = pathname.startsWith("/api/admin/auth/");
   const isApiAdminRoute = pathname.startsWith("/api/admin") && !isAuthApiRoute;
 
   const sessionCookie = request.cookies.get("cms-session")?.value;
-  const session = sessionCookie ? await decrypt(sessionCookie) : null;
+  const session = sessionCookie ? await decryptFor(TOKEN_AUDIENCE.CMS, sessionCookie) : null;
 
   if (isLoginRoute) {
     if (session?.userId) {
@@ -126,5 +150,11 @@ export const config = {
     "/en/services/legal-licenses/:path*",
     "/api/legal-licenses",
     "/api/legal-licenses/:path*",
+    "/ar/account",
+    "/ar/account/:path*",
+    "/en/account",
+    "/en/account/:path*",
+    "/api/citizen",
+    "/api/citizen/:path*",
   ],
 };

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { encrypt } from "@/lib/crypto";
+import { TOKEN_AUDIENCE, encryptFor } from "@/lib/crypto";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
 
 // Shared temporary password (see proxy.js) gating the not-yet-public services:
@@ -22,7 +22,7 @@ export async function POST(request) {
     return NextResponse.json({ error: "كلمة السر غير صحيحة" }, { status: 401 });
   }
 
-  const token = await encrypt({ gate: "restricted-services" });
+  const token = await encryptFor(TOKEN_AUDIENCE.GATE, { gate: "restricted-services" });
   const res = NextResponse.json({ success: true });
   res.cookies.set(GATE_COOKIE, token, {
     httpOnly: true,

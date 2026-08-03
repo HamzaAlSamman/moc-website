@@ -28,6 +28,7 @@ export const REFERENCE_SCOPES = {
   CONTACT:          "MSG", // رسائل "اتصل بنا"
   COOPERATION:      "COP", // طلبات التعاون الدولي
   LEGAL_LICENSE:    "LIC", // Legal-license applications
+  BOOKING:          "BKG", // حجوزات الفعاليات
 };
 
 const PAD = 4; // 0001 … 9999, then it simply grows wider.
@@ -49,12 +50,12 @@ function format(scope, year, seq) {
  * @param {Date}  [now]  Injectable clock, for tests.
  * @returns {Promise<string>} e.g. "OVS-2026-0042"
  */
-export async function nextReferenceNumber(scope, now = new Date()) {
+export async function nextReferenceNumberWithClient(client, scope, now = new Date()) {
   const year = now.getFullYear();
 
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      const counter = await prisma.referenceCounter.upsert({
+      const counter = await client.referenceCounter.upsert({
         where: { scope_year: { scope, year } },
         create: { scope, year, seq: 1 },
         update: { seq: { increment: 1 } },
@@ -67,6 +68,10 @@ export async function nextReferenceNumber(scope, now = new Date()) {
   }
 
   throw new Error(`Could not allocate a reference number for ${scope}/${year}`);
+}
+
+export async function nextReferenceNumber(scope, now = new Date()) {
+  return nextReferenceNumberWithClient(prisma, scope, now);
 }
 
 /**

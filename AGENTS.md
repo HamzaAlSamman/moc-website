@@ -22,3 +22,21 @@ npx prisma generate
 NODE_OPTIONS="--max-old-space-size=1024" npm run build
 pm2 restart moc-next --update-env
 ```
+
+### Citizen account email settings
+
+Citizen verification reuses the existing `src/lib/mailer.js` SMTP contract.
+Provision these variables on Plesk; do not add parallel mail variables:
+
+```env
+SMTP_HOST=
+SMTP_PORT=587
+SMTP_USER=
+SMTP_PASS=
+SMTP_FROM=no-reply@moc.gov.sy
+# Set to true only if the ministry relay uses an expired/self-signed certificate.
+SMTP_TLS_INSECURE=false
+```
+
+If the relay needs that certificate exception and `SMTP_TLS_INSECURE` is absent
+or false, Nodemailer rejects the connection and citizen OTP mail is not sent.

@@ -39,6 +39,7 @@ const navGroups = [
     items: [
       { href: "/admin/posts",      icon: Newspaper,   labelAr: "الأخبار", permission: "CREATE_POST" },
       { href: "/admin/achievements", icon: Award,     labelAr: "الإنجازات",          permission: "CREATE_ACHIEVEMENT" },
+      { href: "/admin/bookings",   icon: CalendarDays, labelAr: "إدارة الحجوزات", permission: "VIEW_EVENT_BOOKINGS" },
       { href: "/admin/events",     icon: CalendarDays, labelAr: "الفعاليات",          permission: "CREATE_EVENT" },
       { href: "/admin/categories", icon: Tag,          labelAr: "التصنيفات",          permission: "MANAGE_CATEGORIES" },
       { href: "/admin/event-categories",icon: Layers,  labelAr: "فئات الفعاليات",    permission: "CREATE_EVENT" },
@@ -50,6 +51,7 @@ const navGroups = [
   {
     labelAr: "الخدمات",
     items: [
+      { href: "/admin/citizens", icon: Users, labelAr: "حسابات المواطنين", permission: "REVIEW_CITIZEN_IDENTITY" },
       { href: "/admin/event-submissions", icon: Inbox,      labelAr: "طلبات الفعاليات", permission: "VIEW_SUBMISSIONS" },
       { href: "/admin/copyright",   icon: Copyright,  labelAr: "حقوق المؤلف",     permission: "VIEW_SUBMISSIONS" },
       { href: "/admin/legal-licenses", icon: FileKey2, labelAr: "التراخيص القانونية", permission: "VIEW_LEGAL_LICENSES" },
@@ -95,9 +97,9 @@ export default function AdminSidebar({ collapsed, onLinkClick }) {
   const role = user?.role;
   const roleAllowedHrefs =
     role === "EVENT_MANAGER"
-      ? ["/admin/events", "/admin/event-categories", "/admin/event-kinds", "/admin/cultural-centers", "/admin/event-submissions", "/admin/dashboard"]
+      ? ["/admin/events", "/admin/bookings", "/admin/event-categories", "/admin/event-kinds", "/admin/cultural-centers", "/admin/event-submissions", "/admin/dashboard"]
       : role === "DIRECTORATE"
-        ? ["/admin/events", "/admin/dashboard"]
+        ? ["/admin/events", "/admin/bookings", "/admin/dashboard"]
       : role === "MEDIA_OFFICE"
         ? ["/admin/posts", "/admin/achievements", "/admin/categories", "/admin/dashboard"]
         : ["FINANCE", "STUDIES_ASSESSOR", "STUDIES_HEAD"].includes(role)

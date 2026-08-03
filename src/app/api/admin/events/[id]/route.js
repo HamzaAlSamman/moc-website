@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { verifySession } from "@/lib/dal";
 import { prisma } from "@/lib/prisma";
 import { can } from "@/lib/permissions";
+import { verifyTrustedOrigin } from "@/lib/csrf";
 import { sanitizeRichText } from "@/lib/sanitize";
 import { parseDateAsUTC } from "@/lib/dates";
 import { notifyByPermission } from "@/lib/notify";
@@ -93,6 +94,9 @@ export async function PUT(request, { params }) {
 
 export async function DELETE(request, { params }) {
   const session = await verifySession();
+  if (!verifyTrustedOrigin(request)) {
+    return NextResponse.json({ error: "طلب غير موثوق المصدر" }, { status: 403 });
+  }
   const { id } = await params;
 
   // DELETE_ANY_EVENT may delete any event; DELETE_OWN_EVENT (DIRECTORATE) only
@@ -105,6 +109,21 @@ export async function DELETE(request, { params }) {
     can(session.role, "DELETE_ANY_EVENT") || (can(session.role, "DELETE_OWN_EVENT") && isOwner);
   if (!canDelete) return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
 
-  await prisma.event.delete({ where: { id } });
+  const bookingCount = await prisma.eventBooking.count({ where: { eventId: id } });
+  if (bookingCount > 0) {
+    return NextResponse.json(
+      { error: "لا يمكن حذف فعالية لها حجوزات؛ ألغِ الفعالية للحفاظ على السجل" },
+      { status: 409 },
+    );
+  }
+
+  try {
+    await prisma.event.delete({ where: { id } });
+  } catch (error) {
+    if (error?.code === "P2003") {
+      return NextResponse.json({ error: "لا يمكن حذف فعالية لها حجوزات" }, { status: 409 });
+    }
+    throw error;
+  }
   return NextResponse.json({ success: true });
 }

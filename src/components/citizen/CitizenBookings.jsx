@@ -1,0 +1,22 @@
+"use client";
+
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { CalendarDays, MapPin, Ticket, XCircle } from "lucide-react";
+import { useState } from "react";
+
+const STATUS = {
+  CONFIRMED: ["مؤكد", "Confirmed", "bg-emerald-50 text-emerald-800 border-emerald-200"],
+  WAITLISTED: ["قائمة الانتظار", "Waitlisted", "bg-amber-50 text-amber-800 border-amber-200"],
+  CANCELLED: ["ملغى", "Cancelled", "bg-slate-100 text-slate-600 border-slate-200"],
+  EVENT_CANCELLED: ["ألغيت الفعالية", "Event cancelled", "bg-red-50 text-red-700 border-red-200"],
+};
+
+function formatDate(value, locale) { return new Intl.DateTimeFormat(locale === "ar" ? "ar-SY" : "en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)); }
+
+export default function CitizenBookings({ initialBookings, locale = "ar" }) {
+  const router = useRouter(); const isAr = locale === "ar"; const [bookings, setBookings] = useState(initialBookings); const [busyId, setBusyId] = useState(null); const [notice, setNotice] = useState("");
+  async function cancel(booking) { if (!window.confirm(isAr ? "هل تريد إلغاء هذا الحجز؟" : "Cancel this booking?")) return; setBusyId(booking.id); setNotice(""); const response = await fetch(`/api/citizen/bookings/${booking.id}/cancel`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reason: isAr ? "إلغاء من بوابة المواطن" : "Cancelled from citizen portal" }) }); const data = await response.json().catch(() => ({})); if (response.ok) { setBookings((items) => items.map((item) => item.id === booking.id ? { ...item, status: "CANCELLED", cancelledAt: new Date().toISOString() } : item)); setNotice(isAr ? "تم إلغاء الحجز." : "Booking cancelled."); router.refresh(); } else setNotice(data.error || (isAr ? "تعذر إلغاء الحجز." : "Cancellation failed.")); setBusyId(null); }
+  if (!bookings.length) return <div className="rounded-2xl border border-dashed border-[#A48E68]/40 bg-[#f8faf8] p-10 text-center"><Ticket className="mx-auto text-[#A48E68]" /><h3 className="mt-4 font-black text-[#002723]">{isAr ? "لا توجد حجوزات بعد" : "No bookings yet"}</h3><Link href={`/${locale}/calendar`} className="mt-5 inline-flex min-h-11 items-center rounded-xl bg-[#003D33] px-5 font-bold text-white focus-visible:ring-2 focus-visible:ring-[#A48E68]">{isAr ? "استعرض الروزنامة" : "Browse calendar"}</Link></div>;
+  return <div className="space-y-4"><p aria-live="polite" className="min-h-6 text-sm text-emerald-800">{notice}</p>{bookings.map((booking) => { const status = STATUS[booking.status] || [booking.status, booking.status, "bg-slate-50 text-slate-700 border-slate-200"]; const canCancel = ["CONFIRMED", "WAITLISTED"].includes(booking.status); return <article key={booking.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex flex-col justify-between gap-4 sm:flex-row"><div><span className={`inline-flex rounded-full border px-3 py-1 text-xs font-black ${status[2]}`}>{status[isAr ? 0 : 1]}</span><h3 className="mt-3 text-lg font-black text-[#002723]">{isAr ? booking.event.titleAr : (booking.event.titleEn || booking.event.titleAr)}</h3><p className="mt-2 flex items-center gap-2 text-sm text-slate-600"><CalendarDays size={16} />{formatDate(booking.event.startDate, locale)}</p><p className="mt-1 flex items-center gap-2 text-sm text-slate-600"><MapPin size={16} />{isAr ? booking.event.location : (booking.event.locationEn || booking.event.location)}</p><p className="mt-3 font-mono text-xs font-bold tracking-wider text-[#006455]" dir="ltr">{booking.referenceNo}</p></div><div className="flex shrink-0 flex-wrap items-end gap-2 sm:flex-col sm:justify-end"><Link href={`/${locale}/account/bookings/${encodeURIComponent(booking.referenceNo)}/ticket`} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#003D33] px-4 text-sm font-black text-white transition hover:bg-[#002b24] focus-visible:ring-2 focus-visible:ring-[#A48E68]"><Ticket size={16} />{isAr ? "عرض التذكرة" : "View ticket"}</Link>{canCancel && <button type="button" onClick={() => cancel(booking)} disabled={busyId === booking.id} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-red-200 px-4 text-sm font-black text-red-700 transition hover:bg-red-50 disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-red-300"><XCircle size={16} />{isAr ? "إلغاء" : "Cancel"}</button>}</div></div></article>; })}</div>;
+}

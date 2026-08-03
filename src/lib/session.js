@@ -1,15 +1,18 @@
 import "server-only";
 import { cookies } from "next/headers";
-import { encrypt, decrypt } from "./crypto";
-
-export { encrypt, decrypt };
+import { TOKEN_AUDIENCE, encryptFor, decryptFor } from "./crypto";
 
 export async function createSession(userId, role, mustChangePassword = false) {
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
   // `mustChangePassword` travels inside the signed JWT itself (not just the DB)
   // so `proxy.js` can enforce the forced-change gate on every request at the
   // edge, without a DB round-trip per request.
-  const session = await encrypt({ userId, role, mustChangePassword: !!mustChangePassword, expiresAt });
+  const session = await encryptFor(TOKEN_AUDIENCE.CMS, {
+    userId,
+    role,
+    mustChangePassword: !!mustChangePassword,
+    expiresAt,
+  });
   const cookieStore = await cookies();
 
   cookieStore.set("cms-session", session, {
@@ -24,7 +27,7 @@ export async function createSession(userId, role, mustChangePassword = false) {
 export async function updateSession() {
   const cookieStore = await cookies();
   const session = cookieStore.get("cms-session")?.value;
-  const payload = await decrypt(session);
+  const payload = await decryptFor(TOKEN_AUDIENCE.CMS, session);
 
   if (!session || !payload) return null;
 
@@ -46,5 +49,5 @@ export async function deleteSession() {
 export async function getSession() {
   const cookieStore = await cookies();
   const session = cookieStore.get("cms-session")?.value;
-  return decrypt(session);
+  return decryptFor(TOKEN_AUDIENCE.CMS, session);
 }

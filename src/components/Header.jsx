@@ -71,6 +71,7 @@ export default function Header({ locale }) {
     { labelAr: "الأخبار",          labelEn: "News",       href: `/${locale}/news` },
     { labelAr: "الروزنامة الثقافية", labelEn: "Cultural Calendar", href: `/${locale}/calendar` },
     { labelAr: "الخدمات",          labelEn: "Services",   href: `/${locale}/services` },
+    { labelAr: "دخول المواطن",      labelEn: "Citizen Login", href: `/${locale}/account/login` },
     { labelAr: "إنجازات الوزارة",  labelEn: "Achievements", href: `/${locale}/achievements` },
     { labelAr: "حول الوزارة",      labelEn: "About",      href: `/${locale}/about-ministry` },
     { labelAr: "تواصل معنا",       labelEn: "Contact",    href: `/${locale}/contact-us` },
