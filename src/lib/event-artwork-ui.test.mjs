@@ -20,3 +20,12 @@ test("image fallback forwards preload and eagerly loads its raw fallback", async
   assert.match(source, /preload=\{preload\}/);
   assert.match(source, /loading=\{preload\s*\|\|\s*priority\s*\?\s*"eager"\s*:\s*"lazy"\}/);
 });
+
+test("calendar event images use the shared portrait artwork", async () => {
+  const source = await readFile(new URL("../components/CulturalCalendarSection.jsx", import.meta.url), "utf8");
+
+  assert.match(source, /import\s+EventArtwork\s+from\s+["']\.\/EventArtwork["']/);
+  assert.ok((source.match(/<EventArtwork\b/g) ?? []).length >= 2);
+  assert.doesNotMatch(source, /aspect-\[16\/9\]/);
+  assert.match(source, /lg:grid-cols-\[minmax\(0,380px\)_1fr\]/);
+});

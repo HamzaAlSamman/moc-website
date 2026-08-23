@@ -1,10 +1,9 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import DecorativeCorners from "./DecorativeCorners";
-import ImageWithFallback from "./ImageWithFallback";
+import EventArtwork from "./EventArtwork";
 import { translations } from "../data/translations";
 import SubpageHero from "./SubpageHero";
 
@@ -729,13 +728,13 @@ export default function CulturalCalendarSection({ locale, isDedicated = false })
                       className="group bg-white rounded-2xl overflow-hidden hover:shadow-lg transition-all duration-300 flex p-3 gap-3.5 text-start cursor-pointer shadow-sm relative border border-slate-100 hover:border-[#988561]/40"
                     >
                       {/* Mini Thumbnail */}
-                      <div className="relative w-16 h-16 sm:w-20 sm:h-20 bg-slate-100 rounded-xl overflow-hidden shrink-0">
-                        <ImageWithFallback
+                      <div className="relative w-14 sm:w-16 shrink-0">
+                        <EventArtwork
                           src={ev.featuredImage}
                           alt={isRtl ? ev.titleAr : (ev.titleEn || ev.titleAr)}
-                          fill
-                          sizes="80px"
-                          className="object-cover transition-transform duration-500 group-hover:scale-105"
+                          sizes="64px"
+                          className="w-full rounded-xl"
+                          imageClassName="transition-transform duration-500 group-hover:scale-105"
                         />
                         {/* Mini Overlay Status Banner */}
                         <div className="absolute bottom-1 inset-x-1 z-10 flex">
@@ -996,118 +995,114 @@ export default function CulturalCalendarSection({ locale, isDedicated = false })
         
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-[fadeIn_0.25s_ease-out]">
-            <div className="relative w-full max-w-2xl bg-white rounded-3xl overflow-hidden border border-slate-100 shadow-2xl flex flex-col max-h-[90vh] animate-[scaleIn_0.3s_ease-out]">
+            <div className="relative w-full max-w-5xl bg-white rounded-3xl overflow-hidden border border-slate-100 shadow-2xl max-h-[90vh] animate-[scaleIn_0.3s_ease-out]">
               <DecorativeCorners />
-              
-              {/* Featured Image */}
-              <div className="relative aspect-[16/9] w-full bg-slate-100 shrink-0">
-                <ImageWithFallback
-                  src={detailEvent.featuredImage}
-                  alt={title}
-                  fill
-                  sizes="(max-width: 768px) 100vw, 672px"
-                  className="object-cover"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
-                
-                {/* Close button */}
-                <button
-                  onClick={() => setDetailEvent(null)}
-                  className="absolute top-4 end-4 w-9 h-9 rounded-full bg-black/50 hover:bg-black/85 text-white flex items-center justify-center cursor-pointer transition shadow-md"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-5 h-5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
 
-                {/* Overlaid Title */}
-                <div className="absolute bottom-6 inset-x-6 text-start">
-                  <h2 className="text-white font-extrabold text-xl sm:text-2xl font-sans drop-shadow-md">
-                    {title}
-                  </h2>
-                </div>
-              </div>
+              {/* Close button */}
+              <button
+                onClick={() => setDetailEvent(null)}
+                className="absolute top-4 end-4 z-30 w-9 h-9 rounded-full bg-black/50 hover:bg-black/85 text-white flex items-center justify-center cursor-pointer transition shadow-md"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-5 h-5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
 
-              {/* Scrollable details content */}
-              <div className="p-6 overflow-y-auto space-y-6 text-start">
-                
-                {/* Detailed description */}
-                <div>
-                  <h4 className="text-xs text-[#A48E68] font-bold uppercase tracking-widest mb-2">
-                    {isRtl ? "تفاصيل الفعالية" : "Event details"}
-                  </h4>
-                  <div 
-                    className="text-slate-700 text-sm sm:text-base leading-relaxed font-sans space-y-2 html-content"
-                    dangerouslySetInnerHTML={{
-                      __html: desc || (isRtl ? "لا يوجد تفاصيل إضافية لهذه الفعالية." : "No additional details available for this event.")
-                    }}
+              <div className="max-h-[90vh] overflow-y-auto lg:grid lg:grid-cols-[minmax(0,380px)_1fr]">
+                {/* Featured artwork */}
+                <div className="flex justify-center bg-[#002723] lg:items-center">
+                  <EventArtwork
+                    src={detailEvent.featuredImage}
+                    alt={title}
+                    sizes="(max-width: 1024px) 100vw, 380px"
+                    className="w-full max-w-[380px] lg:max-w-none"
                   />
                 </div>
 
-                {/* Event attributes */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-b border-slate-100 py-5">
-                  <div className="flex items-start gap-3">
-                    <div className="p-2 bg-[#988561]/10 rounded-xl text-[#988561] border border-[#988561]/20">
-                      <IconCalendar />
+                {/* Independently scrollable details content */}
+                <div className="min-h-0 overflow-y-auto p-6 sm:p-8 space-y-6 text-start lg:max-h-[90vh]">
+                  <h2 className="pe-12 text-[#002723] font-extrabold text-xl sm:text-2xl font-sans">
+                    {title}
+                  </h2>
+
+                  {/* Detailed description */}
+                  <div>
+                    <h4 className="text-xs text-[#A48E68] font-bold uppercase tracking-widest mb-2">
+                      {isRtl ? "تفاصيل الفعالية" : "Event details"}
+                    </h4>
+                    <div
+                      className="text-slate-700 text-sm sm:text-base leading-relaxed font-sans space-y-2 html-content"
+                      dangerouslySetInnerHTML={{
+                        __html: desc || (isRtl ? "لا يوجد تفاصيل إضافية لهذه الفعالية." : "No additional details available for this event.")
+                      }}
+                    />
+                  </div>
+
+                  {/* Event attributes */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-b border-slate-100 py-5">
+                    <div className="flex items-start gap-3">
+                      <div className="p-2 bg-[#988561]/10 rounded-xl text-[#988561] border border-[#988561]/20">
+                        <IconCalendar />
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-[10px] text-[#A48E68] font-bold uppercase tracking-wider">{isRtl ? "التاريخ" : "Date"}</span>
+                        <span className="text-slate-800 text-sm font-semibold mt-0.5">{formatEventDateRange(detailEvent.startDate, detailEvent.endDate, isRtl, false)}</span>
+                      </div>
                     </div>
-                    <div className="flex flex-col">
-                      <span className="text-[10px] text-[#A48E68] font-bold uppercase tracking-wider">{isRtl ? "التاريخ" : "Date"}</span>
-                      <span className="text-slate-800 text-sm font-semibold mt-0.5">{formatEventDateRange(detailEvent.startDate, detailEvent.endDate, isRtl, false)}</span>
+
+                    <div className="flex items-start gap-3">
+                      <div className="p-2 bg-[#988561]/10 rounded-xl text-[#988561] border border-[#988561]/20">
+                        <IconClock />
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-[10px] text-[#A48E68] font-bold uppercase tracking-wider">{isRtl ? "التوقيت" : "Time"}</span>
+                        <span className="text-slate-800 text-sm font-semibold mt-0.5">{formatEventTimeRange(detailEvent.startDate, detailEvent.endDate, isRtl)}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-start gap-3 sm:col-span-2">
+                      <div className="p-2 bg-[#988561]/10 rounded-xl text-[#988561] border border-[#988561]/20">
+                        <IconPin />
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-[10px] text-[#A48E68] font-bold uppercase tracking-wider">{isRtl ? "المكان" : "Location"}</span>
+                        <span className="text-slate-800 text-sm font-semibold mt-0.5">{formatFullLocation(detailEvent, isRtl)}</span>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="flex items-start gap-3">
-                    <div className="p-2 bg-[#988561]/10 rounded-xl text-[#988561] border border-[#988561]/20">
-                      <IconClock />
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="text-[10px] text-[#A48E68] font-bold uppercase tracking-wider">{isRtl ? "التوقيت" : "Time"}</span>
-                      <span className="text-slate-800 text-sm font-semibold mt-0.5">{formatEventTimeRange(detailEvent.startDate, detailEvent.endDate, isRtl)}</span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-start gap-3 sm:col-span-2">
-                    <div className="p-2 bg-[#988561]/10 rounded-xl text-[#988561] border border-[#988561]/20">
-                      <IconPin />
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="text-[10px] text-[#A48E68] font-bold uppercase tracking-wider">{isRtl ? "المكان" : "Location"}</span>
-                      <span className="text-slate-800 text-sm font-semibold mt-0.5">{formatFullLocation(detailEvent, isRtl)}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Bottom buttons */}
-                <div className="flex justify-end gap-3 shrink-0 pt-2">
-                  {!detailEvent.bookingUrl && (
-                    <Link
-                      href={`/${locale}/events/${detailEvent.id}`}
-                      className="inline-flex min-h-11 items-center gap-2 px-6 py-2.5 bg-[#054239] hover:bg-[#03332c] text-white text-sm font-bold rounded-full transition shadow-sm border-b-2 border-[#b9a779] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#A48E68]"
+                  {/* Bottom buttons */}
+                  <div className="flex flex-wrap justify-end gap-3 shrink-0 pt-2">
+                    {!detailEvent.bookingUrl && (
+                      <Link
+                        href={`/${locale}/events/${detailEvent.id}`}
+                        className="inline-flex min-h-11 items-center gap-2 px-6 py-2.5 bg-[#054239] hover:bg-[#03332c] text-white text-sm font-bold rounded-full transition shadow-sm border-b-2 border-[#b9a779] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#A48E68]"
+                      >
+                        {isRtl ? "تفاصيل الفعالية والحجز" : "Event details & booking"}
+                      </Link>
+                    )}
+                    {detailEvent.bookingUrl && (
+                      <a
+                        href={detailEvent.bookingUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 px-6 py-2.5 bg-[#054239] hover:bg-[#03332c] text-white text-sm font-bold rounded-full cursor-pointer transition shadow-sm border-b-2 border-[#b9a779]"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 0 0-2 2v3a2 2 0 1 1 0 4v3a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3a2 2 0 1 1 0-4V7a2 2 0 0 0-2-2H5Z" />
+                        </svg>
+                        {isRtl ? "احجز الآن" : "Book now"}
+                      </a>
+                    )}
+                    <button
+                      onClick={() => setDetailEvent(null)}
+                      className="px-6 py-2.5 border border-slate-200 hover:border-slate-300 text-slate-600 hover:text-slate-800 text-sm font-bold rounded-full cursor-pointer transition"
                     >
-                      {isRtl ? "تفاصيل الفعالية والحجز" : "Event details & booking"}
-                    </Link>
-                  )}
-                  {detailEvent.bookingUrl && (
-                    <a
-                      href={detailEvent.bookingUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 px-6 py-2.5 bg-[#054239] hover:bg-[#03332c] text-white text-sm font-bold rounded-full cursor-pointer transition shadow-sm border-b-2 border-[#b9a779]"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 0 0-2 2v3a2 2 0 1 1 0 4v3a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3a2 2 0 1 1 0-4V7a2 2 0 0 0-2-2H5Z" />
-                      </svg>
-                      {isRtl ? "احجز الآن" : "Book now"}
-                    </a>
-                  )}
-                  <button
-                    onClick={() => setDetailEvent(null)}
-                    className="px-6 py-2.5 border border-slate-200 hover:border-slate-300 text-slate-600 hover:text-slate-800 text-sm font-bold rounded-full cursor-pointer transition"
-                  >
-                    {isRtl ? "إغلاق" : "Close"}
-                  </button>
-                </div>
+                      {isRtl ? "إغلاق" : "Close"}
+                    </button>
+                  </div>
 
+                </div>
               </div>
 
             </div>
