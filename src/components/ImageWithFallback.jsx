@@ -21,6 +21,7 @@ export default function ImageWithFallback({
   className = "",
   fallbackClassName = "",
   sizes,
+  preload = false,
   priority = false,
   ...rest
 }) {
@@ -62,7 +63,7 @@ export default function ImageWithFallback({
       <img
         src={src}
         alt={alt}
-        loading={priority ? "eager" : "lazy"}
+        loading={preload || priority ? "eager" : "lazy"}
         className={fill ? `absolute inset-0 h-full w-full ${className}` : className}
         onError={() => setStage("failed")}
       />
@@ -75,6 +76,7 @@ export default function ImageWithFallback({
       alt={alt}
       fill={fill}
       sizes={sizes}
+      preload={preload}
       priority={priority}
       className={className}
       onError={() => setStage("raw")}
