@@ -29,3 +29,24 @@ test("calendar event images use the shared portrait artwork", async () => {
   assert.doesNotMatch(source, /aspect-\[16\/9\]/);
   assert.match(source, /lg:grid-cols-\[minmax\(0,380px\)_1fr\]/);
 });
+
+test("calendar event dialog is keyboard accessible and owns scrolling responsively", async () => {
+  const source = await readFile(new URL("../components/CulturalCalendarSection.jsx", import.meta.url), "utf8");
+
+  assert.match(source, /<button\s+type="button"\s+key=\{ev\.id\}/);
+  assert.match(source, /role="dialog"/);
+  assert.match(source, /aria-modal="true"/);
+  assert.match(source, /aria-labelledby="event-dialog-title"/);
+  assert.match(source, /id="event-dialog-title"/);
+  assert.match(source, /aria-label=\{isRtl\s*\?\s*"إغلاق نافذة الفعالية"\s*:\s*"Close event dialog"\}/);
+  assert.match(source, /eventDialogCloseRef/);
+  assert.match(source, /eventDialogOpenerRef\.current\?\.focus\(\)/);
+  assert.match(source, /event\.key\s*===\s*"Escape"/);
+  assert.match(source, /event\.key\s*!==\s*"Tab"/);
+  assert.match(source, /querySelectorAll/);
+  assert.match(source, /size-11/);
+  assert.match(source, /sizes="\(max-width: 412px\) calc\(100vw - 2rem\), 380px"/);
+  assert.match(source, /max-h-\[90dvh\]\s+overflow-y-auto\s+lg:grid\s+lg:grid-cols-\[minmax\(0,380px\)_1fr\]\s+lg:overflow-hidden/);
+  assert.match(source, /lg:max-w-\[min\(380px,72dvh\)\]/);
+  assert.match(source, /lg:max-h-\[90dvh\]\s+lg:overflow-y-auto/);
+});

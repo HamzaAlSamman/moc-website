@@ -252,6 +252,56 @@ export default function CulturalCalendarSection({ locale, isDedicated = false })
   const [loading, setLoading] = useState(true);
   const [detailEvent, setDetailEvent] = useState(null); // Selected event for Detail Modal
   const [selectedKind, setSelectedKind] = useState("الكل");
+  const eventDialogRef = useRef(null);
+  const eventDialogCloseRef = useRef(null);
+  const eventDialogOpenerRef = useRef(null);
+
+  const openEventDialog = useCallback((event, opener) => {
+    eventDialogOpenerRef.current = opener;
+    setDetailEvent(event);
+  }, []);
+
+  const closeEventDialog = useCallback(() => {
+    setDetailEvent(null);
+    window.requestAnimationFrame(() => eventDialogOpenerRef.current?.focus());
+  }, []);
+
+  useEffect(() => {
+    if (!detailEvent) return undefined;
+
+    const dialog = eventDialogRef.current;
+    eventDialogCloseRef.current?.focus();
+
+    const handleDialogKeyDown = (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeEventDialog();
+        return;
+      }
+
+      if (event.key !== "Tab" || !dialog) return;
+
+      const focusableElements = Array.from(dialog.querySelectorAll(
+        'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      ));
+      if (focusableElements.length === 0) return;
+
+      const firstFocusable = focusableElements[0];
+      const lastFocusable = focusableElements[focusableElements.length - 1];
+      const focusIsOutside = !dialog.contains(document.activeElement);
+
+      if (event.shiftKey && (document.activeElement === firstFocusable || focusIsOutside)) {
+        event.preventDefault();
+        lastFocusable.focus();
+      } else if (!event.shiftKey && (document.activeElement === lastFocusable || focusIsOutside)) {
+        event.preventDefault();
+        firstFocusable.focus();
+      }
+    };
+
+    document.addEventListener("keydown", handleDialogKeyDown);
+    return () => document.removeEventListener("keydown", handleDialogKeyDown);
+  }, [detailEvent, closeEventDialog]);
 
   useEffect(() => {
     const today = new Date();
@@ -722,10 +772,11 @@ export default function CulturalCalendarSection({ locale, isDedicated = false })
                   const isOngoing = status === "ongoing";
 
                   return (
-                    <div
+                    <button
+                      type="button"
                       key={ev.id}
-                      onClick={() => setDetailEvent(ev)}
-                      className="group bg-white rounded-2xl overflow-hidden hover:shadow-lg transition-all duration-300 flex p-3 gap-3.5 text-start cursor-pointer shadow-sm relative border border-slate-100 hover:border-[#988561]/40"
+                      onClick={(event) => openEventDialog(ev, event.currentTarget)}
+                      className="group w-full bg-white rounded-2xl overflow-hidden hover:shadow-lg transition-all duration-300 flex p-3 gap-3.5 text-start cursor-pointer shadow-sm relative border border-slate-100 hover:border-[#988561]/40"
                     >
                       {/* Mini Thumbnail */}
                       <div className="relative w-14 sm:w-16 shrink-0">
@@ -793,7 +844,7 @@ export default function CulturalCalendarSection({ locale, isDedicated = false })
                           </div>
                         </div>
                       </div>
-                    </div>
+                    </button>
                   );
                 })
               ) : (
@@ -995,33 +1046,42 @@ export default function CulturalCalendarSection({ locale, isDedicated = false })
         
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-[fadeIn_0.25s_ease-out]">
-            <div className="relative w-full max-w-5xl bg-white rounded-3xl overflow-hidden border border-slate-100 shadow-2xl max-h-[90vh] animate-[scaleIn_0.3s_ease-out]">
+            <div
+              ref={eventDialogRef}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="event-dialog-title"
+              className="relative w-full max-w-5xl bg-white rounded-3xl overflow-hidden border border-slate-100 shadow-2xl max-h-[90dvh] animate-[scaleIn_0.3s_ease-out]"
+            >
               <DecorativeCorners />
 
               {/* Close button */}
               <button
-                onClick={() => setDetailEvent(null)}
-                className="absolute top-4 end-4 z-30 w-9 h-9 rounded-full bg-black/50 hover:bg-black/85 text-white flex items-center justify-center cursor-pointer transition shadow-md"
+                ref={eventDialogCloseRef}
+                type="button"
+                onClick={closeEventDialog}
+                aria-label={isRtl ? "إغلاق نافذة الفعالية" : "Close event dialog"}
+                className="absolute top-4 end-4 z-30 size-11 rounded-full bg-black/50 hover:bg-black/85 text-white flex items-center justify-center cursor-pointer transition shadow-md"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-5 h-5">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
 
-              <div className="max-h-[90vh] overflow-y-auto lg:grid lg:grid-cols-[minmax(0,380px)_1fr]">
+              <div className="max-h-[90dvh] overflow-y-auto lg:grid lg:grid-cols-[minmax(0,380px)_1fr] lg:overflow-hidden">
                 {/* Featured artwork */}
                 <div className="flex justify-center bg-[#002723] lg:items-center">
                   <EventArtwork
                     src={detailEvent.featuredImage}
                     alt={title}
-                    sizes="(max-width: 1024px) 100vw, 380px"
-                    className="w-full max-w-[380px] lg:max-w-none"
+                    sizes="(max-width: 412px) calc(100vw - 2rem), 380px"
+                    className="w-full max-w-[380px] lg:max-w-[min(380px,72dvh)]"
                   />
                 </div>
 
                 {/* Independently scrollable details content */}
-                <div className="min-h-0 overflow-y-auto p-6 sm:p-8 space-y-6 text-start lg:max-h-[90vh]">
-                  <h2 className="pe-12 text-[#002723] font-extrabold text-xl sm:text-2xl font-sans">
+                <div className="min-h-0 p-6 sm:p-8 space-y-6 text-start lg:max-h-[90dvh] lg:overflow-y-auto">
+                  <h2 id="event-dialog-title" className="pe-12 text-[#002723] font-extrabold text-xl sm:text-2xl font-sans">
                     {title}
                   </h2>
 
@@ -1095,7 +1155,8 @@ export default function CulturalCalendarSection({ locale, isDedicated = false })
                       </a>
                     )}
                     <button
-                      onClick={() => setDetailEvent(null)}
+                      type="button"
+                      onClick={closeEventDialog}
                       className="px-6 py-2.5 border border-slate-200 hover:border-slate-300 text-slate-600 hover:text-slate-800 text-sm font-bold rounded-full cursor-pointer transition"
                     >
                       {isRtl ? "إغلاق" : "Close"}
