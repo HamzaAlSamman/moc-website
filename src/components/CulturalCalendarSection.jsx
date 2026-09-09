@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import DecorativeCorners from "./DecorativeCorners";
 import EventArtwork from "./EventArtwork";
@@ -36,7 +37,7 @@ const GOVERNORATES = [
 const DAYS_SHORT_AR = ["أحد", "اثنين", "ثلاثاء", "أربعاء", "خميس", "جمعة", "سبت"];
 const DAYS_SHORT_EN = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const DAYS_MOBILE_AR = ["أح", "اث", "ثل", "أر", "خم", "جم", "سب"];
-const MONTHS_AR = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
+const MONTHS_AR = ["كانون الثاني", "شباط", "آذار", "نيسان", "أيار", "حزيران", "تموز", "آب", "أيلول", "تشرين الأول", "تشرين الثاني", "كانون الأول"];
 const MONTHS_EN = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
 /* ─────────────────────────────────────────────
@@ -270,6 +271,8 @@ export default function CulturalCalendarSection({ locale, isDedicated = false })
     if (!detailEvent) return undefined;
 
     const dialog = eventDialogRef.current;
+    const previousBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     eventDialogCloseRef.current?.focus();
 
     const handleDialogKeyDown = (event) => {
@@ -300,7 +303,10 @@ export default function CulturalCalendarSection({ locale, isDedicated = false })
     };
 
     document.addEventListener("keydown", handleDialogKeyDown);
-    return () => document.removeEventListener("keydown", handleDialogKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleDialogKeyDown);
+      document.body.style.overflow = previousBodyOverflow;
+    };
   }, [detailEvent, closeEventDialog]);
 
   useEffect(() => {
@@ -785,7 +791,6 @@ export default function CulturalCalendarSection({ locale, isDedicated = false })
                           alt={isRtl ? ev.titleAr : (ev.titleEn || ev.titleAr)}
                           sizes="64px"
                           className="w-full rounded-xl"
-                          imageClassName="transition-transform duration-500 group-hover:scale-105"
                         />
                         {/* Mini Overlay Status Banner */}
                         <div className="absolute bottom-1 inset-x-1 z-10 flex">
@@ -944,7 +949,7 @@ export default function CulturalCalendarSection({ locale, isDedicated = false })
             {calendarContent}
 
             {/* Full-Width Proposal CTA Banner */}
-            <div className="group mt-16 relative rounded-3xl overflow-hidden border border-[#A48E68]/20 bg-gradient-to-r rtl:bg-gradient-to-l from-[#002723] via-[#0D443C] to-[#1C665A] p-8 sm:p-10 shadow-lg text-start flex flex-col md:flex-row items-center justify-between gap-6">
+            <div className="group mt-16 relative rounded-3xl overflow-hidden border border-[#A48E68]/20 bg-gradient-to-r rtl:bg-gradient-to-l from-[#002723] via-[#0D443C] to-[#1C665A] p-8 sm:p-10 shadow-lg text-start flex flex-col items-start md:flex-row md:items-center justify-between gap-6">
               <DecorativeCorners />
               
               {/* UNESCO repeating pattern as background */}
@@ -1040,7 +1045,7 @@ export default function CulturalCalendarSection({ locale, isDedicated = false })
       )}
 
       {/* ── Event Detail Modal ── */}
-      {detailEvent && (() => {
+      {detailEvent && createPortal((() => {
         const title = isRtl ? detailEvent.titleAr : (detailEvent.titleEn || detailEvent.titleAr);
         const desc = isRtl ? detailEvent.descriptionAr : (detailEvent.descriptionEn || detailEvent.descriptionAr);
         
@@ -1068,19 +1073,19 @@ export default function CulturalCalendarSection({ locale, isDedicated = false })
                 </svg>
               </button>
 
-              <div className="max-h-[90dvh] overflow-y-auto lg:grid lg:grid-cols-[minmax(0,380px)_1fr] lg:overflow-hidden">
+              <div className="max-h-[90dvh] overflow-y-auto overscroll-contain lg:grid lg:grid-cols-[minmax(0,380px)_1fr] lg:overflow-hidden">
                 {/* Featured artwork */}
                 <div className="flex justify-center bg-[#002723] lg:items-center">
                   <EventArtwork
                     src={detailEvent.featuredImage}
                     alt={title}
-                    sizes="(max-width: 412px) calc(100vw - 2rem), 380px"
-                    className="w-full max-w-[380px] lg:max-w-[min(380px,72dvh)]"
+                    sizes="(max-width: 639px) 260px, (max-width: 1023px) 320px, 380px"
+                    className="w-[min(260px,100%)] sm:w-[min(320px,100%)] lg:w-[min(380px,72dvh)]"
                   />
                 </div>
 
                 {/* Independently scrollable details content */}
-                <div className="min-h-0 p-6 sm:p-8 space-y-6 text-start lg:max-h-[90dvh] lg:overflow-y-auto">
+                <div className="min-h-0 p-6 sm:p-8 space-y-6 text-start lg:max-h-[90dvh] lg:overflow-y-auto lg:overscroll-contain">
                   <h2 id="event-dialog-title" className="pe-12 text-[#002723] font-extrabold text-xl sm:text-2xl font-sans">
                     {title}
                   </h2>
@@ -1169,7 +1174,7 @@ export default function CulturalCalendarSection({ locale, isDedicated = false })
             </div>
           </div>
         );
-      })()}
+      })(), document.body)}
 
     </div>
   );

@@ -5,57 +5,33 @@ import {
   classifyCitizenRoute,
   decideCitizenRouteAccess,
 } from "./lib/citizen-route-access.mjs";
-
-// --- Temporary password gate for not-yet-public services -------------------
-// Requirement: these services are deployed for internal testing only; each
-// one's public launch (and removal from this list) happens later, on its own
-// schedule. One shared password unlocks all of them — see gate page/API for
-// the unlock flow.
-const SERVICES_GATE_COOKIE = "services-gate";
-const GATED_SERVICES = [
-  {
-    slug: "copyright",
-    pageRegex: /^\/(ar|en)\/services\/copyright(\/.*)?$/,
-    gateRegex: /^\/(ar|en)\/services\/copyright\/gate\/?$/,
-    apiBase: "/api/copyright",
-  },
-  {
-    slug: "legal-licenses",
-    pageRegex: /^\/(ar|en)\/services\/legal-licenses(\/.*)?$/,
-    gateRegex: /^\/(ar|en)\/services\/legal-licenses\/gate\/?$/,
-    apiBase: "/api/legal-licenses",
-  },
-];
-
-function matchGatedService(pathname) {
-  for (const service of GATED_SERVICES) {
-    const isGatePage = service.gateRegex.test(pathname);
-    const isPage = service.pageRegex.test(pathname) && !isGatePage;
-    const isApi = pathname === service.apiBase || pathname.startsWith(`${service.apiBase}/`);
-    if (isPage || isApi) {
-      return { slug: service.slug, isApi };
-    }
-  }
-  return null;
-}
+import {
+  SERVICES_GATE_COOKIE,
+  decideServicesGateAccess,
+  matchGatedService,
+} from "./lib/services-gate.mjs";
 
 export async function proxy(request) {
   const { pathname } = request.nextUrl;
 
-  const gatedMatch = matchGatedService(pathname);
-
-  if (gatedMatch) {
+  if (matchGatedService(pathname)) {
     const gateCookie = request.cookies.get(SERVICES_GATE_COOKIE)?.value;
     const gateSession = gateCookie ? await decryptFor(TOKEN_AUDIENCE.GATE, gateCookie) : null;
+    const staffCookie = request.cookies.get("cms-session")?.value;
+    const staffSession = staffCookie ? await decryptFor(TOKEN_AUDIENCE.CMS, staffCookie) : null;
 
-    if (gateSession?.gate !== "restricted-services") {
-      if (gatedMatch.isApi) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-      }
-      const locale = pathname.split("/")[1];
-      const gateUrl = new URL(`/${locale}/services/${gatedMatch.slug}/gate`, request.url);
-      gateUrl.searchParams.set("next", pathname + request.nextUrl.search);
-      return NextResponse.redirect(gateUrl);
+    const decision = decideServicesGateAccess(
+      pathname,
+      pathname + request.nextUrl.search,
+      gateSession,
+      staffSession
+    );
+
+    if (decision.action === "json401") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (decision.action === "redirect") {
+      return NextResponse.redirect(new URL(decision.to, request.url));
     }
   }
 
@@ -150,6 +126,12 @@ export const config = {
     "/en/services/legal-licenses/:path*",
     "/api/legal-licenses",
     "/api/legal-licenses/:path*",
+    "/ar/services/international-cooperation",
+    "/ar/services/international-cooperation/:path*",
+    "/en/services/international-cooperation",
+    "/en/services/international-cooperation/:path*",
+    "/api/cooperation-contact",
+    "/api/cooperation-contact/:path*",
     "/ar/account",
     "/ar/account/:path*",
     "/en/account",

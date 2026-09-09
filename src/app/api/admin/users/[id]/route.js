@@ -21,15 +21,24 @@ export async function PUT(request, { params }) {
 
   const target = await prisma.user.findUnique({
     where: { id },
-    select: { id: true, email: true, role: true },
+    select: { id: true, email: true, role: true, createdById: true },
   });
   if (!target) return NextResponse.json({ error: "المستخدم غير موجود" }, { status: 404 });
+
+  if (session.role === "DIRECTORATE") {
+    if (target.role !== "TICKET_OFFICER" || target.createdById !== session.userId) {
+      return NextResponse.json({ error: "غير مصرح لك بتعديل هذا الحساب" }, { status: 403 });
+    }
+    if (data.role && data.role !== "TICKET_OFFICER") {
+      return NextResponse.json({ error: "يمكنك فقط تعديل الحسابات كرتبة موظف تذاكر" }, { status: 403 });
+    }
+  }
 
   // Vertical privilege check: never let an actor edit an account that
   // outranks them. Without this an ADMIN (who holds EDIT_USER but not
   // CHANGE_ROLE/RESET_USER_PASSWORD) could rename, re-email, deactivate or
   // (via the password field below) take over a SUPER_ADMIN account.
-  if (target.id !== session.userId && !hasRole(session.role, target.role)) {
+  if (target.id !== session.userId && session.role !== "DIRECTORATE" && !hasRole(session.role, target.role)) {
     return NextResponse.json({ error: "لا يمكنك تعديل حساب بصلاحيات أعلى من صلاحياتك" }, { status: 403 });
   }
 
@@ -58,7 +67,7 @@ export async function PUT(request, { params }) {
   // /reset-password endpoint (RESET_USER_PASSWORD + vertical check).
   let passwordChanged = false;
   if (data.password?.trim()) {
-    if (!can(session.role, "RESET_USER_PASSWORD")) {
+    if (session.role !== "DIRECTORATE" && !can(session.role, "RESET_USER_PASSWORD")) {
       return NextResponse.json(
         { error: "غير مصرح بتغيير كلمة المرور من هنا، استخدم خيار إعادة التعيين" },
         { status: 403 }
@@ -117,12 +126,18 @@ export async function PATCH(request, { params }) {
     return NextResponse.json({ error: "لا يمكنك تغيير حالة حسابك" }, { status: 400 });
   }
 
-  const target = await prisma.user.findUnique({ where: { id }, select: { role: true } });
+  const target = await prisma.user.findUnique({ where: { id }, select: { role: true, createdById: true } });
   if (!target) return NextResponse.json({ error: "المستخدم غير موجود" }, { status: 404 });
+
+  if (session.role === "DIRECTORATE") {
+    if (target.role !== "TICKET_OFFICER" || target.createdById !== session.userId) {
+      return NextResponse.json({ error: "غير مصرح لك بتعديل هذا الحساب" }, { status: 403 });
+    }
+  }
 
   // Same vertical check: an ADMIN must not be able to deactivate (lock out) a
   // SUPER_ADMIN account.
-  if (!hasRole(session.role, target.role)) {
+  if (session.role !== "DIRECTORATE" && !hasRole(session.role, target.role)) {
     return NextResponse.json({ error: "لا يمكنك تعديل حساب بصلاحيات أعلى من صلاحياتك" }, { status: 403 });
   }
 
@@ -148,10 +163,16 @@ export async function DELETE(request, { params }) {
     return NextResponse.json({ error: "لا يمكنك حذف حسابك" }, { status: 400 });
   }
 
-  const target = await prisma.user.findUnique({ where: { id }, select: { role: true } });
+  const target = await prisma.user.findUnique({ where: { id }, select: { role: true, createdById: true } });
   if (!target) return NextResponse.json({ error: "المستخدم غير موجود" }, { status: 404 });
 
-  if (!hasRole(session.role, target.role)) {
+  if (session.role === "DIRECTORATE") {
+    if (target.role !== "TICKET_OFFICER" || target.createdById !== session.userId) {
+      return NextResponse.json({ error: "غير مصرح لك بحذف هذا الحساب" }, { status: 403 });
+    }
+  }
+
+  if (session.role !== "DIRECTORATE" && !hasRole(session.role, target.role)) {
     return NextResponse.json({ error: "لا يمكنك حذف حساب بصلاحيات أعلى من صلاحياتك" }, { status: 403 });
   }
 

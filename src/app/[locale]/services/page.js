@@ -73,7 +73,7 @@ const SERVICES = [
       "Query submission status online",
     ],
   },
-  /* ── Legal License Applications ── INTERNAL TESTING */
+  /* ── Legal License Applications ── COMING SOON (password-gated for internal testing) */
   {
     id: "legal-licenses",
     status: "soon",
@@ -86,8 +86,8 @@ const SERVICES = [
         <path d="M6 3h9l3 3v15H6z" /><path d="M15 3v4h4M9 11h6M9 15h6M9 19h4" />
       </svg>
     ),
-    titleAr: "طلبات التراخيص القانونية",
-    titleEn: "Legal License Applications",
+    titleAr: "بوابة التراخيص والاعتمادات الثقافية",
+    titleEn: "Cultural Licensing & Accreditation Portal",
     descAr: "تقديم ومتابعة طلبات تراخيص الجهات والأنشطة الثقافية مع وثائق المؤسسين وسير اعتماد قانوني موثّق.",
     descEn: "Apply for and track licenses for cultural entities and activities through a documented legal review workflow.",
     featuresAr: ["عشرة أنواع من التراخيص الثقافية", "حفظ المسودة ومتابعتها برمز سري", "رفع آمن للوثائق خارج التخزين العام"],
@@ -142,12 +142,12 @@ const SERVICES = [
     featuresAr: [
       "متاحة لأي شخص بدون شرط أو صفة معينة",
       "يمكن تقديم الشكوى دون ذكر الاسم أو أي معلومة شخصية",
-      "مدة المعالجة المتوقعة 3 أيام عمل",
+      "بدء المعالجة في غضون 3 أيام عمل",
     ],
     featuresEn: [
       "Open to anyone, no specific capacity required",
       "Can be submitted fully anonymously",
-      "Expected processing time is 3 working days",
+      "Processing starts within 3 working days",
     ],
   },
 ];
@@ -211,7 +211,7 @@ export default function ServicesPage(props) {
         <div className="flex items-center gap-8 mt-4">
           {[
             { num: active.length, label: isRtl ? "خدمات متاحة" : "Available Services" },
-            { num: soon.length,   label: isRtl ? "خدمات قادمة" : "Upcoming Services" },
+            ...(soon.length > 0 ? [{ num: soon.length, label: isRtl ? "خدمات قادمة" : "Upcoming Services" }] : []),
           ].map((s) => (
             <div key={s.label} className="text-center">
               <p className="text-3xl font-black text-[#b9a779] font-qomra">{s.num}</p>
@@ -307,6 +307,7 @@ export default function ServicesPage(props) {
         </div>
 
         {/* ═══ Coming Soon ═══ */}
+        {soon.length > 0 && (
         <div>
           <div className="flex items-center gap-3 mb-8">
             <span className="w-2 h-2 rounded-full bg-[#b9a779]" />
@@ -369,6 +370,7 @@ export default function ServicesPage(props) {
           </div>
 
         </div>
+        )}
 
       </main>
     </div>

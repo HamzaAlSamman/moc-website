@@ -4,12 +4,25 @@ import { z } from "zod";
 // numbers (optional leading +, 8-15 digits) for non-Syrian applicants.
 const phoneRegex = /^\+?\d{8,15}$/;
 
+export const COPYRIGHT_APPLICANT_ROLES = [
+  "المؤلف", "الابن", "الشريك", "المؤدي", "المؤلف والمؤدي", "المؤلف والمنتج", "المؤلف والملحن", "المؤلفات",
+  "المبرمج", "المخرج", "المنتج", "المدير العام", "المستثمر", "المصمم", "المصور", "المعد للبرنامج", "المفوض",
+  "المكلف", "الملحن", "الموزع الموسيقي", "الناشر", "النحات", "الوالد", "الورثة", "الوكيل", "الوكيل القانوني",
+  "رئيس مجلس إدارة", "صاحب الحقوق", "صاحب الشركة", "سيناريست",
+];
+
 export const fullSubmissionSchema = z
   .object({
     applicantName: z.string().trim().min(3, "الاسم الرباعي مطلوب (3 أحرف على الأقل)"),
     applicantPhone: z.string().trim().regex(phoneRegex, "رقم الموبايل غير صحيح"),
     applicantEmail: z.string().trim().email("صيغة البريد الإلكتروني غير صحيحة"),
-    applicantRole: z.string().trim().min(1, "صفة مقدم الطلب مطلوبة"),
+    applicantRole: z.string().trim().pipe(z.enum(COPYRIGHT_APPLICANT_ROLES, "صفة مقدم الطلب غير صالحة")),
+    authors: z.array(z.object({
+      name: z.string().trim().min(1),
+      idDocType: z.enum(["national_id", "passport"]).default("national_id"),
+      fileFront: z.string(),
+      fileBack: z.string().nullable().optional(),
+    })).max(50).nullable().optional(),
     idDocType: z.enum(["national_id", "passport"]).optional().default("national_id"),
     workTitle: z.string().trim().min(3, "عنوان العمل مطلوب (3 أحرف على الأقل)"),
     workCategory: z.enum(["written", "informational", "audio_visual", "fine_arts", "folklore"]),

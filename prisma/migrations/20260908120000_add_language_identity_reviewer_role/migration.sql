@@ -1,0 +1,9 @@
+-- Reviewer role for the English text of cultural-calendar events and for
+-- citizen identity submissions.
+--
+-- Kept alone in its own migration on purpose: PostgreSQL refuses
+-- `ALTER TYPE ... ADD VALUE` when it arrives as part of a multi-command
+-- string, and on PostgreSQL 11 and older it may not run inside a transaction
+-- at all. A single-statement migration applies cleanly either way, and the
+-- new value is not referenced anywhere else in this file.
+ALTER TYPE "Role" ADD VALUE IF NOT EXISTS 'LANGUAGE_IDENTITY_REVIEWER';

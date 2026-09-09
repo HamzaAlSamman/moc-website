@@ -17,12 +17,17 @@ import {
   Inbox,
   Award,
   Copyright,
+  QrCode,
   ChevronDown,
   Layers,
   ShieldCheck,
   MapPin,
   Bookmark,
   FileKey2,
+  ShieldAlert,
+  Handshake,
+  Mail,
+  Languages,
 } from "lucide-react";
 import { useShell } from "./AdminShell";
 import { can, ROLE_LABELS } from "@/lib/permissions";
@@ -40,7 +45,9 @@ const navGroups = [
       { href: "/admin/posts",      icon: Newspaper,   labelAr: "الأخبار", permission: "CREATE_POST" },
       { href: "/admin/achievements", icon: Award,     labelAr: "الإنجازات",          permission: "CREATE_ACHIEVEMENT" },
       { href: "/admin/bookings",   icon: CalendarDays, labelAr: "إدارة الحجوزات", permission: "VIEW_EVENT_BOOKINGS" },
-      { href: "/admin/events",     icon: CalendarDays, labelAr: "الفعاليات",          permission: "CREATE_EVENT" },
+      { href: "/admin/scan",       icon: QrCode,       labelAr: "تدقيق التذاكر",  permission: "SCAN_EVENT_TICKETS" },
+      { href: "/admin/events",     icon: CalendarDays, labelAr: "الفعاليات",          permission: "VIEW_EVENTS" },
+      { href: "/admin/language-review", icon: Languages, labelAr: "التدقيق اللغوي", permission: "REVIEW_EVENT_LANGUAGE" },
       { href: "/admin/categories", icon: Tag,          labelAr: "التصنيفات",          permission: "MANAGE_CATEGORIES" },
       { href: "/admin/event-categories",icon: Layers,  labelAr: "فئات الفعاليات",    permission: "CREATE_EVENT" },
       { href: "/admin/event-kinds",     icon: Bookmark, labelAr: "أنواع الفعاليات",   permission: "CREATE_EVENT" },
@@ -55,6 +62,8 @@ const navGroups = [
       { href: "/admin/event-submissions", icon: Inbox,      labelAr: "طلبات الفعاليات", permission: "VIEW_SUBMISSIONS" },
       { href: "/admin/copyright",   icon: Copyright,  labelAr: "حقوق المؤلف",     permission: "VIEW_SUBMISSIONS" },
       { href: "/admin/legal-licenses", icon: FileKey2, labelAr: "التراخيص القانونية", permission: "VIEW_LEGAL_LICENSES" },
+      { href: "/admin/oversight-complaints", icon: ShieldAlert, labelAr: "شكاوى الرقابة الداخلية", permission: "REVIEW_OVERSIGHT_COMPLAINTS" },
+      { href: "/admin/cooperation-messages", icon: Handshake, labelAr: "التعاون الدولي", permission: "REVIEW_COOPERATION_MESSAGES" },
     ],
     // EVENT_MANAGER sees only this group and Events from المحتوى
     eventManagerOnly: false,
@@ -64,6 +73,7 @@ const navGroups = [
     items: [
       { href: "/admin/users",    icon: Users,    labelAr: "المستخدمون", permission: "VIEW_USERS" },
       { href: "/admin/audit-log", icon: ShieldCheck, labelAr: "سجل التدقيق", permission: "VIEW_AUDIT_LOG" },
+      { href: "/admin/emails", icon: Mail, labelAr: "سجل البريد", permission: "VIEW_EMAIL_OUTBOX" },
       { href: "/admin/settings", icon: Settings, labelAr: "الإعدادات",  permission: "VIEW_SETTINGS" },
     ],
   },
@@ -99,7 +109,7 @@ export default function AdminSidebar({ collapsed, onLinkClick }) {
     role === "EVENT_MANAGER"
       ? ["/admin/events", "/admin/bookings", "/admin/event-categories", "/admin/event-kinds", "/admin/cultural-centers", "/admin/event-submissions", "/admin/dashboard"]
       : role === "DIRECTORATE"
-        ? ["/admin/events", "/admin/bookings", "/admin/dashboard"]
+        ? ["/admin/events", "/admin/bookings", "/admin/scan", "/admin/dashboard"]
       : role === "MEDIA_OFFICE"
         ? ["/admin/posts", "/admin/achievements", "/admin/categories", "/admin/dashboard"]
         : ["FINANCE", "STUDIES_ASSESSOR", "STUDIES_HEAD"].includes(role)
@@ -108,7 +118,16 @@ export default function AdminSidebar({ collapsed, onLinkClick }) {
             ? ["/admin/copyright", "/admin/legal-licenses", "/admin/dashboard"]
             : ["LICENSING_OFFICER", "LICENSING_COMMITTEE"].includes(role)
               ? ["/admin/legal-licenses", "/admin/dashboard"]
-              : null;
+              // Door staff get exactly one screen. No dashboard link either:
+              // these accounts live on shared phones at a public entrance.
+              : role === "TICKET_OFFICER"
+                ? ["/admin/scan"]
+                // Proofreads event English and reviews citizen IDs — the media
+                // library is reachable (the event form uploads through it) but
+                // stays out of the nav, which is scoped to the two jobs.
+                : role === "LANGUAGE_IDENTITY_REVIEWER"
+                  ? ["/admin/events", "/admin/language-review", "/admin/citizens", "/admin/dashboard"]
+                  : null;
   const isVisible = (item) =>
     can(role, item.permission) && (!roleAllowedHrefs || roleAllowedHrefs.includes(item.href));
 

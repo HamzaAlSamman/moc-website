@@ -335,6 +335,38 @@ export async function checkInBooking({ bookingId, actorId, now = new Date() }) {
   });
 }
 
+/**
+ * Reverses a check-in recorded by mistake — the wrong row tapped at a busy
+ * desk, or the wrong ticket scanned at the door.
+ *
+ * Returns to NOT_CHECKED_IN rather than NO_SHOW: the honest state after an
+ * erroneous record is erased is "no record", and closing the register later
+ * (markNoShows) is what turns it into an absence if nobody ever arrived.
+ *
+ * `restrictToActor` is what lets the narrow TICKET_OFFICER role hold this at
+ * all. A door phone may undo the check-in it just made; rewriting an
+ * attendance record somebody else created stays with the roles that manage
+ * bookings.
+ */
+export async function undoCheckIn({ bookingId, actorId, restrictToActor = false }) {
+  const existing = await prisma.eventBooking.findUnique({ where: { id: bookingId }, select: { eventId: true } });
+  if (!existing) throw new EventBookingError("BOOKING_NOT_FOUND");
+  return runBookingTransaction(async (tx) => {
+    await lockEvent(tx, existing.eventId);
+    const booking = await lockBooking(tx, bookingId);
+    // Nothing to undo is a success, not an error: two officers tapping the
+    // same correction must not produce a failure on the second one.
+    if (booking.attendanceStatus !== "ATTENDED") return { ...booking, idempotent: true };
+    if (restrictToActor && booking.checkedInById !== actorId) {
+      throw new EventBookingError("CHECK_IN_NOT_YOURS");
+    }
+    return tx.eventBooking.update({
+      where: { id: bookingId },
+      data: { attendanceStatus: "NOT_CHECKED_IN", checkedInAt: null, checkedInById: null },
+    });
+  });
+}
+
 export async function markNoShows({ eventId, now = new Date() }) {
   return runBookingTransaction(async (tx) => {
     const event = await lockEvent(tx, eventId);

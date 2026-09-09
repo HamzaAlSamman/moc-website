@@ -21,10 +21,16 @@ function createRepository(seed = []) {
         (citizen) => citizen.nationalIdHash === nationalIdHash && citizen.emailVerifiedAt,
       ) ?? null;
     },
+    async findUnverifiedCitizenByNationalId(nationalIdHash) {
+      return [...citizens.values()]
+        .filter((citizen) => citizen.nationalIdHash === nationalIdHash && !citizen.emailVerifiedAt)
+        .sort((a, b) => new Date(b.createdAt ?? 0) - new Date(a.createdAt ?? 0))[0] ?? null;
+    },
     async createCitizen(data) {
       const citizen = {
         id: `citizen-${nextId++}`,
         emailVerifiedAt: null,
+        createdAt: new Date(),
         sessionVersion: 1,
         failedLogins: 0,
         lockedUntil: null,
@@ -92,7 +98,13 @@ function createRepository(seed = []) {
   };
 }
 
-function createService({ repository = createRepository(), issueOtp, comparePassword, sendReset } = {}) {
+function createService({
+  repository = createRepository(),
+  issueOtp,
+  comparePassword,
+  sendReset,
+  env = { APP_BASE_URL: "https://moc.gov.sy" },
+} = {}) {
   const calls = { otp: [], sessions: [], deleted: 0, comparisons: [], resetMail: [] };
   const service = createCitizenAuthService({
     repository,
@@ -120,7 +132,7 @@ function createService({ repository = createRepository(), issueOtp, comparePassw
     sendPasswordResetEmail: sendReset ?? (async (input) => calls.resetMail.push(input)),
     randomToken: () => "raw-reset-token",
     now: () => new Date(NOW),
-    env: { APP_BASE_URL: "https://moc.gov.sy" },
+    env,
   });
   return { repository, service, calls };
 }
@@ -133,12 +145,32 @@ const registration = {
   phone: "+963900000000",
 };
 
-test("registration allows an unverified account with the same national ID", async () => {
+test("a recent unverified national ID blocks a second sign-up", async () => {
   const repository = createRepository([{
     id: "old-unverified",
     email: "typo@example.com",
     nationalIdHash: "nid:12345678901",
     emailVerifiedAt: null,
+    createdAt: NOW,
+  }]);
+  const { service } = createService({ repository });
+
+  await assert.rejects(
+    service.registerCitizen(registration),
+    (error) => error.code === "NATIONAL_ID_PENDING" && error.recover === "verify-or-wait",
+  );
+  // Nothing new was written — the duplicate never got created.
+  assert.equal(repository.citizens.size, 1);
+});
+
+test("a stale unverified national ID no longer blocks a new sign-up", async () => {
+  const repository = createRepository([{
+    id: "old-unverified",
+    email: "typo@example.com",
+    nationalIdHash: "nid:12345678901",
+    emailVerifiedAt: null,
+    // Older than the 24h hold window: an abandoned stub must not squat the ID.
+    createdAt: new Date(NOW.getTime() - 25 * 60 * 60 * 1000),
   }]);
   const { service, calls } = createService({ repository });
 
@@ -147,6 +179,21 @@ test("registration allows an unverified account with the same national ID", asyn
   assert.equal(repository.citizens.size, 2);
   assert.equal(result.challengeId, "otp-1");
   assert.equal(calls.otp.length, 1);
+});
+
+test("CITIZEN_UNVERIFIED_ID_HOLD_HOURS=0 disables the hold", async () => {
+  const repository = createRepository([{
+    id: "old-unverified",
+    email: "typo@example.com",
+    nationalIdHash: "nid:12345678901",
+    emailVerifiedAt: null,
+    createdAt: NOW,
+  }]);
+  const { service } = createService({ repository, env: { CITIZEN_UNVERIFIED_ID_HOLD_HOURS: "0" } });
+
+  const result = await service.registerCitizen(registration);
+  assert.equal(repository.citizens.size, 2);
+  assert.equal(result.challengeId, "otp-1");
 });
 
 test("registration with the same unverified email updates the row instead of inserting", async () => {
@@ -263,6 +310,46 @@ test("forgot password is generic and builds links only from APP_BASE_URL", async
   assert.equal(calls.resetMail[0].resetUrl, "https://moc.gov.sy/ar/account/reset?token=raw-reset-token");
   assert.doesNotMatch(calls.resetMail[0].resetUrl, /evil/);
   assert.equal(repository.resetTokens.has(createHash("sha256").update("raw-reset-token").digest("hex")), true);
+});
+
+test("forgot password falls back to NEXT_PUBLIC_APP_URL when APP_BASE_URL is unset", async () => {
+  const repository = createRepository([{
+    id: "forgot-fallback",
+    email: "forgot@example.com",
+    emailVerifiedAt: new Date("2026-01-01T00:00:00.000Z"),
+    isActive: true,
+    isBlocked: false,
+  }]);
+  const { service, calls } = createService({
+    repository,
+    env: { NEXT_PUBLIC_APP_URL: "https://moc.gov.sy" },
+  });
+
+  await service.forgotCitizenPassword({ email: "forgot@example.com" });
+
+  assert.equal(calls.resetMail.length, 1);
+  assert.equal(calls.resetMail[0].resetUrl, "https://moc.gov.sy/ar/account/reset?token=raw-reset-token");
+});
+
+test("reset reports a weak password separately from an invalid link", async () => {
+  const repository = createRepository([{ id: "weak-account", email: "weak@example.com" }]);
+  const { service } = createService({ repository });
+  await repository.replacePasswordReset({
+    citizenId: "weak-account",
+    purpose: "PASSWORD_RESET",
+    tokenHash: createHash("sha256").update("valid-token").digest("hex"),
+    expiresAt: new Date("2026-08-02T13:00:00.000Z"),
+    consumedAt: null,
+    createdAt: NOW,
+  });
+
+  await assert.rejects(
+    service.resetCitizenPassword({ token: "valid-token", password: "weakpassword" }),
+    (error) => error.code === "PASSWORD_WEAK",
+  );
+  // The token survives so the citizen can retry with a compliant password.
+  const result = await service.resetCitizenPassword({ token: "valid-token", password: "NewStrong1!" });
+  assert.equal(result.reset, true);
 });
 
 test("reset consumes a single-use token, changes the password, and bumps sessionVersion", async () => {

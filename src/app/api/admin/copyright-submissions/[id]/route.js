@@ -9,6 +9,7 @@ import {
   sendSuspendedEmail,
   sendRejectedEmail,
   sendCompletedEmail,
+  sendPaymentCorrectionEmail,
 } from "@/lib/copyright-mailer";
 import { notifyByRole } from "@/lib/notify";
 import { logAudit } from "@/lib/audit";
@@ -19,6 +20,7 @@ import { canTransitionCopyright } from "@/lib/business-rules.mjs";
 // after a suspension) goes through the public /api/copyright PUT instead —
 // this route is reserved for the reviewer workflow gated by MANAGE_SUBMISSIONS.
 const ALLOWED_STATUSES = [
+  "submitted",
   "finance_review",
   "under_review",
   "suspended",
@@ -36,7 +38,17 @@ export async function PATCH(request, { params }) {
   }
 
   const { id } = await params;
-  const data = await request.json();
+  let data;
+  try { data = await request.json(); }
+  catch { return NextResponse.json({ error: "بيانات الطلب غير صالحة" }, { status: 400 }); }
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    return NextResponse.json({ error: "بيانات الطلب غير صالحة" }, { status: 400 });
+  }
+  for (const field of ["applicationStatus", "assessorReportFile", "studiesRecommendationsFile", "reviewNote", "deficiencyNote", "internalRefNumber"]) {
+    if (data[field] !== undefined && (typeof data[field] !== "string" || data[field].length > 20000)) {
+      return NextResponse.json({ error: `قيمة غير صالحة: ${field}` }, { status: 400 });
+    }
+  }
   const {
     applicationStatus,
     assessorReportFile,
@@ -59,6 +71,16 @@ export async function PATCH(request, { params }) {
   }
 
   const nextStatus = applicationStatus ?? existing.applicationStatus;
+  const isPaymentCorrection = data.paymentCorrection === true;
+  const correctionTarget = existing.applicationStatus === "finance_review" ? "submitted"
+    : existing.applicationStatus === "final_review" ? "pending_fees" : null;
+  if (isPaymentCorrection && (!["FINANCE", "SUPER_ADMIN", "ADMIN"].includes(session.role)
+    || !correctionTarget || applicationStatus !== correctionTarget || !deficiencyNote?.trim())) {
+    return NextResponse.json({ error: "إرجاع الدفع يحتاج صلاحية المالية وسبب التصحيح" }, { status: 409 });
+  }
+  if (applicationStatus === correctionTarget && !isPaymentCorrection) {
+    return NextResponse.json({ error: "يجب تحديد إجراء إرجاع الدفع للتصحيح" }, { status: 409 });
+  }
   if (applicationStatus && !canTransitionCopyright(session.role, existing.applicationStatus, nextStatus)) {
     return NextResponse.json({ error: "Invalid workflow transition for the current role" }, { status: 409 });
   }
@@ -66,17 +88,42 @@ export async function PATCH(request, { params }) {
     return NextResponse.json({ error: "deficiencyNote is required" }, { status: 400 });
   }
   const isAdmin = ["SUPER_ADMIN", "ADMIN"].includes(session.role);
+  if (!isAdmin && existing.applicationStatus === "under_review" && ["suspended", "rejected"].includes(applicationStatus)) {
+    const owner = !existing.assessorReportFile ? "STUDIES_ASSESSOR"
+      : !existing.studiesRecommendationsFile ? "STUDIES_HEAD" : "LEGAL_DIRECTOR";
+    if (session.role !== owner) return NextResponse.json({ error: "المعاملة لدى مرحلة مراجعة أخرى" }, { status: 409 });
+  }
   if (assessorReportFile !== undefined && session.role !== "STUDIES_ASSESSOR" && !isAdmin) {
     return NextResponse.json({ error: "Only the studies assessor may submit this report" }, { status: 403 });
   }
   if (studiesRecommendationsFile !== undefined && session.role !== "STUDIES_HEAD" && !isAdmin) {
     return NextResponse.json({ error: "Only the studies head may submit recommendations" }, { status: 403 });
   }
+  for (const report of [assessorReportFile, studiesRecommendationsFile]) {
+    if (report !== undefined && !report.trim()) {
+      return NextResponse.json({ error: "ملاحظات الدراسة مطلوبة" }, { status: 400 });
+    }
+  }
+  const hasStudyAction = assessorReportFile !== undefined || studiesRecommendationsFile !== undefined;
+  if (hasStudyAction && (existing.applicationStatus !== "under_review" || nextStatus !== "under_review")) {
+    return NextResponse.json({ error: "الدراسة متاحة بعد تدقيق المالية فقط" }, { status: 409 });
+  }
+  if ((studiesRecommendationsFile !== undefined && !existing.assessorReportFile)
+    || (assessorReportFile !== undefined && existing.assessorReportFile)
+    || (studiesRecommendationsFile !== undefined && existing.studiesRecommendationsFile)
+    || (nextStatus === "pending_final_approval" && (!existing.assessorReportFile || !existing.studiesRecommendationsFile))) {
+    return NextResponse.json({ error: "يجب استكمال مراحل الدراسة بالترتيب" }, { status: 409 });
+  }
+  if ((applicationStatus === "under_review" && existing.applicationStatus === "finance_review" && existing.paymentStatus !== "initial_paid")
+    || (applicationStatus === "completed" && existing.paymentStatus !== "final_paid")) {
+    return NextResponse.json({ error: "لم يُسجل دفع الرسم المطلوب" }, { status: 409 });
+  }
 
   const updateData = {};
   if (applicationStatus) updateData.applicationStatus = applicationStatus;
   // Finance confirming the final fee closes the payment record too.
   if (applicationStatus === "completed") updateData.paymentStatus = "fully_paid";
+  if (isPaymentCorrection) updateData.paymentStatus = correctionTarget === "submitted" ? "pending" : "initial_paid";
   // These two carry the assessor's / studies head's stage notes (they used to
   // be file uploads). They still double as the study-phase progress markers the
   // workflow stepper and hand-off notifications below depend on.
@@ -104,7 +151,7 @@ export async function PATCH(request, { params }) {
   // Append any note to the shared review thread, visible to the whole chain.
   // The assessor/head stage notes (sent as assessorReportFile/…RecommendationsFile)
   // are threaded here too so every reviewer sees the full discussion.
-  const noteText = (reviewNote ?? assessorReportFile ?? studiesRecommendationsFile ?? "").trim();
+  const noteText = (reviewNote ?? assessorReportFile ?? studiesRecommendationsFile ?? (isPaymentCorrection ? deficiencyNote : "")).trim();
   if (noteText) {
     const actor = await prisma.user.findUnique({ where: { id: session.userId }, select: { nameAr: true } });
     const thread = Array.isArray(existing.reviewNotes) ? existing.reviewNotes : [];
@@ -116,9 +163,24 @@ export async function PATCH(request, { params }) {
 
   let result;
   try {
-    result = await prisma.copyrightSubmission.updateMany({
-      where: { id, applicationStatus: existing.applicationStatus, updatedAt: existing.updatedAt },
-      data: updateData,
+    result = await prisma.$transaction(async (tx) => {
+      const changed = await tx.copyrightSubmission.updateMany({
+        where: { id, applicationStatus: existing.applicationStatus, updatedAt: existing.updatedAt },
+        data: updateData,
+      });
+      if (changed.count === 1 && ((applicationStatus === "under_review" && existing.applicationStatus === "finance_review") || applicationStatus === "completed")) {
+        await tx.copyrightPayment.updateMany({
+          where: { submissionId: id, stage: applicationStatus === "completed" ? "final" : "initial" },
+          data: { verifiedAt: new Date() },
+        });
+      }
+      if (changed.count === 1 && isPaymentCorrection) {
+        await tx.copyrightPayment.updateMany({
+          where: { submissionId: id, stage: correctionTarget === "submitted" ? "initial" : "final", verifiedAt: null },
+          data: { rejectedAt: new Date() },
+        });
+      }
+      return changed;
     });
   } catch (error) {
     if (error.code === "P2002") {
@@ -132,9 +194,13 @@ export async function PATCH(request, { params }) {
   const updated = await prisma.copyrightSubmission.findUnique({ where: { id } });
 
   // Approving the final stage hands the citizen a fee-payment link — send it.
-  if (applicationStatus === "pending_fees") {
+  if (isPaymentCorrection) {
+    sendPaymentCorrectionEmail(updated).catch((err) => console.error("Payment correction email error:", err));
+    await logAudit({ action: "COPYRIGHT_PAYMENT_RETURNED", actorId: session.userId, actorEmail: session.role,
+      targetId: id, ipAddress: getClientIp(request), metadata: { reference: existing.paymentRef, gateway: existing.paymentGateway, reason: deficiencyNote } });
+  } else if (applicationStatus === "pending_fees") {
     sendApprovalEmail(updated).catch((err) => console.error("Approval email send error async:", err));
-  } else if (applicationStatus === "under_review") {
+  } else if (applicationStatus === "under_review" && existing.applicationStatus === "finance_review") {
     sendUnderReviewEmail(updated).catch((err) => console.error("Under-review email send error async:", err));
   } else if (applicationStatus === "pending_final_approval") {
     sendPendingFinalApprovalEmail(updated).catch((err) => console.error("Pending-final-approval email send error async:", err));

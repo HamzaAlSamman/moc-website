@@ -56,9 +56,14 @@ export function citizenAuthErrorResponse(error) {
     OTP_EXPIRED: [400, "انتهت صلاحية رمز التحقق"],
     OTP_RESEND_COOLDOWN: [429, "يرجى الانتظار قبل إعادة الإرسال"],
     NATIONAL_ID_VERIFIED: [409, "يوجد حساب موثق بهذا الرقم الوطني"],
+    NATIONAL_ID_PENDING: [409, "يوجد تسجيل قيد الانتظار بهذا الرقم الوطني. أكمِل تفعيل بريدك أو حاول لاحقاً."],
     RESET_INVALID: [400, "رابط إعادة التعيين غير صالح أو منتهي"],
+    PASSWORD_WEAK: [400, "كلمة المرور لا تستوفي الشروط الأمنية"],
   };
-  const [status, message] = mapping[error?.code] ?? [500, "حدث خطأ في الخادم"];
+  const [status, fallbackMessage] = mapping[error?.code] ?? [500, "حدث خطأ في الخادم"];
+  const message = error?.code === "PASSWORD_WEAK" && error.errors?.length
+    ? error.errors.join(" • ")
+    : fallbackMessage;
   const headers = error?.retryAfterSeconds
     ? { "Retry-After": String(error.retryAfterSeconds) }
     : {};

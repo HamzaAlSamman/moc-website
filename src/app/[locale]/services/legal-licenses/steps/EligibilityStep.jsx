@@ -18,7 +18,7 @@ export default function EligibilityStep({
           <CheckCircle2 className="h-6 w-6 shrink-0" />
           <div>
             <h3 className="font-qomra text-lg font-black">{isRtl ? "لا توجد أسئلة أهلية إضافية" : "No additional eligibility questions"}</h3>
-            <p className="mt-1 text-sm">{isRtl ? "يمكنك متابعة تعبئة بيانات الطلب." : "You can continue completing the application."}</p>
+            <p className="mt-1 text-sm">{isRtl ? "يمكنكم متابعة استكمال بيانات الطلب." : "You can continue completing the application."}</p>
           </div>
         </div>
       </div>
@@ -60,12 +60,12 @@ export default function EligibilityStep({
             {answer === false && requirement.blocking ? (
               <p role="alert" className="mt-3 flex items-start gap-2 text-xs font-bold leading-6 text-rose-800">
                 <AlertTriangle className="mt-1 h-4 w-4 shrink-0" />
-                {isRtl ? "هذا الشرط مانع. لا يمكن متابعة الطلب قبل استيفائه." : "This is a blocking condition. The application cannot continue until it is met."}
+                {isRtl ? "يعد هذا الشرط إلزامياً للاستمرار في تقديم طلب الترخيص." : "This is a blocking condition. The application cannot continue until it is met."}
               </p>
             ) : null}
             <details className="mt-4 rounded-xl bg-slate-50 px-4 py-3">
               <summary className="cursor-pointer text-xs font-bold text-[#054239]">
-                {isRtl ? "لماذا هذا مطلوب؟" : "Why is this required?"}
+                {isRtl ? "الأساس القانوني والتشريعي لهذا الشرط" : "Why is this required?"}
               </summary>
               <p className="mt-2 text-xs leading-6 text-slate-600">{isRtl ? requirement.help.ar : requirement.help.en}</p>
               {source ? (

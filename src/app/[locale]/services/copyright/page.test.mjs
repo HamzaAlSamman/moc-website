@@ -19,12 +19,13 @@ test("Arabic applicant role options use display labels without changing stored v
   assert.equal(source.includes("{isRtl ? role.labelAr : role.en}"), true);
 });
 
-test("Arabic Google Drive copy is translated and the URL field stays LTR", () => {
+test("copyright work upload accepts PDF and ZIP while Google Drive stays LTR", () => {
   assert.equal(
     source.includes('isRtl ? "رابط غوغل درايف للمصنفات التي يتجاوز حجمها 100 ميغابايت" : "Google Drive URL for works larger than 100 MiB"'),
     true,
   );
   assert.match(source, /value=\{workDriveUrl\}[\s\S]*?dir="ltr"[\s\S]*?className="[^"]*text-left[^"]*"/);
-  assert.equal(source.includes('isRtl ? "يُسمح برفع ملفات ZIP فقط" : "Only ZIP files are allowed"'), true);
-  assert.equal(source.includes('isRtl ? "يتجاوز ملف ZIP حجم 100 ميغابايت؛ استخدم غوغل درايف" : "ZIP exceeds 100 MiB; use Google Drive"'), true);
+  assert.match(source, /accept="\.pdf,application\/pdf,\.zip,application\/zip,application\/x-zip-compressed"/);
+  assert.match(source, /"application\/pdf", "application\/zip", "application\/x-zip-compressed"/);
+  assert.equal(source.includes('isRtl ? "يُسمح برفع ملفات PDF أو ZIP فقط" : "Only PDF or ZIP files are allowed"'), true);
 });

@@ -6,13 +6,22 @@ import { can } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 
+// Mirrors the CitizenIdentityStatus enum in schema.prisma. Passing anything
+// else straight into `where` makes Prisma throw a validation error, which
+// surfaced as a 500 and an empty list in the admin UI instead of "no matches".
+const IDENTITY_STATUSES = new Set(["NOT_SUBMITTED", "PENDING", "VERIFIED", "REJECTED"]);
+
 export async function GET(request) {
   const session = await verifySession();
   if (!can(session.role, "MANAGE_CITIZEN_ACCOUNTS") && !can(session.role, "REVIEW_CITIZEN_IDENTITY")) {
     return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
   }
   const url = new URL(request.url);
-  const identityStatus = url.searchParams.get("identityStatus");
+  const rawStatus = url.searchParams.get("identityStatus");
+  if (rawStatus && !IDENTITY_STATUSES.has(rawStatus)) {
+    return NextResponse.json({ error: "حالة توثيق غير معروفة" }, { status: 400 });
+  }
+  const identityStatus = rawStatus;
   const query = url.searchParams.get("q")?.trim().slice(0, 100);
   const page = Math.max(1, Number.parseInt(url.searchParams.get("page") || "1", 10) || 1);
   const perPage = 50;

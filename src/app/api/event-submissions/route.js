@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
 import { notifyByPermission } from "@/lib/notify";
-import { sendCitizenAck } from "@/lib/mailer";
+import { sendCitizenAck } from "@/lib/queued-mail";
 import { createHash } from "node:crypto";
 import { validateEventSubmissionInput } from "@/lib/business-rules.mjs";
 import { nextReferenceNumberSafe, REFERENCE_SCOPES } from "@/lib/reference-number";

@@ -1,8 +1,89 @@
-import { CalendarDays, MapPin, ShieldCheck, TicketCheck, UserRound } from "lucide-react";
+import { CalendarDays, Download, MapPin, ShieldCheck, TicketCheck, UserRound } from "lucide-react";
 
-function date(value, locale) { return new Intl.DateTimeFormat(locale === "ar" ? "ar-SY" : "en-GB", { dateStyle: "full", timeStyle: "short" }).format(new Date(value)); }
+function date(value, locale) {
+  return new Intl.DateTimeFormat(locale === "ar" ? "ar-SY" : "en-GB", { dateStyle: "full", timeStyle: "short" }).format(new Date(value));
+}
 
-export default function BookingTicket({ booking, locale = "ar" }) {
-  const isAr = locale === "ar"; const valid = booking.status === "CONFIRMED";
-  return <article className="overflow-hidden rounded-[1.75rem] border border-[#A48E68]/35 bg-white shadow-xl"><div className="relative bg-[#003D33] p-6 text-white sm:p-8"><div className="absolute inset-0 opacity-[0.08]" style={{ backgroundImage: "url(/svg/pattern-hex.svg)", backgroundSize: "260px" }} /><div className="relative flex items-start justify-between gap-5"><div><p className="text-xs font-black tracking-[0.2em] text-[#d6c39d]">{isAr ? "تذكرة حضور رسمية" : "Official admission ticket"}</p><h2 className="mt-3 text-2xl font-black sm:text-3xl">{isAr ? booking.event.titleAr : (booking.event.titleEn || booking.event.titleAr)}</h2></div><TicketCheck className="shrink-0 text-[#A48E68]" size={38} /></div></div><div className="relative grid gap-6 p-6 sm:grid-cols-[1fr_auto] sm:p-8"><div className="space-y-4"><p className="flex items-start gap-3 text-sm text-slate-700"><CalendarDays className="mt-0.5 shrink-0 text-[#006455]" size={19} /><span>{date(booking.event.startDate, locale)}</span></p><p className="flex items-start gap-3 text-sm text-slate-700"><MapPin className="mt-0.5 shrink-0 text-[#006455]" size={19} /><span>{isAr ? booking.event.location : (booking.event.locationEn || booking.event.location)}</span></p><p className="flex items-start gap-3 text-sm text-slate-700"><UserRound className="mt-0.5 shrink-0 text-[#006455]" size={19} /><span>{booking.fullName}<br /><small>{isAr ? "الرقم الوطني المنتهي بـ" : "National ID ending in"} {booking.nationalIdLast4}</small></span></p></div><div className="flex min-w-44 flex-col items-center justify-center rounded-2xl border-2 border-dashed border-[#A48E68]/45 bg-[#faf9f5] p-5 text-center"><span className={`h-3 w-3 rounded-full ${valid ? "bg-emerald-500" : "bg-slate-400"}`} /><p className="mt-3 text-xs font-bold text-slate-500">{isAr ? "الرقم المرجعي" : "Reference"}</p><strong className="mt-1 font-mono text-sm tracking-wider text-[#002723]" dir="ltr">{booking.referenceNo}</strong><p className="mt-3 text-xs font-black text-[#006455]">{valid ? (isAr ? "حجز مؤكد" : "Confirmed") : (isAr ? "غير صالح للدخول" : "Not valid for entry")}</p></div></div><footer className="flex items-center gap-2 border-t border-slate-100 bg-slate-50 px-6 py-4 text-xs leading-5 text-slate-500 sm:px-8"><ShieldCheck size={17} className="shrink-0 text-[#006455]" />{isAr ? "أبرز الرقم المرجعي والهوية عند الدخول. هذه التذكرة مرتبطة بصاحب الحساب ولا يجوز نقلها." : "Present this reference and your ID at entry. This ticket is bound to the account holder and is non-transferable."}</footer></article>;
+export default function BookingTicket({ booking, ticket = null, locale = "ar" }) {
+  const isAr = locale === "ar";
+  const valid = booking.status === "CONFIRMED";
+
+  return (
+    <article className="overflow-hidden rounded-[1.75rem] border border-[#A48E68]/35 bg-white shadow-xl">
+      <div className="relative bg-[#003D33] p-6 text-white sm:p-8">
+        <div className="absolute inset-0 opacity-[0.08]" style={{ backgroundImage: "url(/svg/pattern-hex.svg)", backgroundSize: "260px" }} />
+        <div className="relative flex items-start justify-between gap-5">
+          <div>
+            <p className="text-xs font-black tracking-[0.2em] text-[#d6c39d]">{isAr ? "تذكرة حضور رسمية" : "Official admission ticket"}</p>
+            <h2 className="mt-3 text-2xl font-black sm:text-3xl">{isAr ? booking.event.titleAr : (booking.event.titleEn || booking.event.titleAr)}</h2>
+          </div>
+          <TicketCheck className="shrink-0 text-[#A48E68]" size={38} />
+        </div>
+      </div>
+
+      <div className="relative grid gap-6 p-6 sm:grid-cols-[1fr_auto] sm:p-8">
+        <div className="space-y-4">
+          <p className="flex items-start gap-3 text-sm text-slate-700">
+            <CalendarDays className="mt-0.5 shrink-0 text-[#006455]" size={19} />
+            <span>{date(booking.event.startDate, locale)}</span>
+          </p>
+          <p className="flex items-start gap-3 text-sm text-slate-700">
+            <MapPin className="mt-0.5 shrink-0 text-[#006455]" size={19} />
+            <span>{isAr ? booking.event.location : (booking.event.locationEn || booking.event.location)}</span>
+          </p>
+          <p className="flex items-start gap-3 text-sm text-slate-700">
+            <UserRound className="mt-0.5 shrink-0 text-[#006455]" size={19} />
+            <span>
+              {booking.fullName}
+              <br />
+              <small>{isAr ? "الرقم الوطني المنتهي بـ" : "National ID ending in"} {booking.nationalIdLast4}</small>
+            </span>
+          </p>
+
+          {valid && (
+            <a
+              href={`/api/citizen/bookings/${booking.id}/ticket-pdf`}
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#003D33] px-5 text-sm font-black text-white transition hover:bg-[#002b24] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#A48E68] focus-visible:ring-offset-2"
+            >
+              <Download size={17} />
+              {isAr ? "تحميل التذكرة PDF" : "Download ticket PDF"}
+            </a>
+          )}
+        </div>
+
+        <div className="flex min-w-48 flex-col items-center justify-center rounded-2xl border-2 border-dashed border-[#A48E68]/45 bg-[#faf9f5] p-5 text-center">
+          {ticket?.qrDataUri ? (
+            <>
+              {/* Server-rendered data URI, so next/image would only add a proxy hop. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={ticket.qrDataUri} alt={isAr ? "رمز التحقق من التذكرة" : "Ticket verification QR code"} className="h-36 w-36" />
+              <p className="mt-3 text-xs font-bold text-slate-500">{isAr ? "رمز التحقق" : "Verification code"}</p>
+              <strong className="font-mono text-sm tracking-[0.15em] text-[#006455]" dir="ltr">{ticket.code}</strong>
+              {/* Sets the expectation before a citizen tries their own camera
+                  on it and thinks the ticket is broken. */}
+              <p className="mt-3 border-t border-[#A48E68]/30 pt-3 text-[10px] leading-5 text-slate-400">
+                {isAr
+                  ? "رمز مشفّر يُقرأ بجهاز التدقيق المعتمد لدى الوزارة فقط"
+                  : "Encrypted code — readable only by the ministry's authorised scanner"}
+              </p>
+            </>
+          ) : (
+            <span className={`h-3 w-3 rounded-full ${valid ? "bg-emerald-500" : "bg-slate-400"}`} />
+          )}
+          <p className="mt-3 text-xs font-bold text-slate-500">{isAr ? "الرقم المرجعي" : "Reference"}</p>
+          <strong className="mt-1 font-mono text-sm tracking-wider text-[#002723]" dir="ltr">{booking.referenceNo}</strong>
+          <p className="mt-3 text-xs font-black text-[#006455]">
+            {valid ? (isAr ? "حجز مؤكد" : "Confirmed") : (isAr ? "غير صالح للدخول" : "Not valid for entry")}
+          </p>
+        </div>
+      </div>
+
+      <footer className="flex items-center gap-2 border-t border-slate-100 bg-slate-50 px-6 py-4 text-xs leading-5 text-slate-500 sm:px-8">
+        <ShieldCheck size={17} className="shrink-0 text-[#006455]" />
+        {isAr
+          ? "أبرز التذكرة والهوية عند الدخول ليُمسح الرمز ويُسجّل حضورك. هذه التذكرة مرتبطة بصاحب الحساب ولا يجوز نقلها."
+          : "Present this ticket and your ID at entry so the code can be scanned and your attendance recorded. This ticket is bound to the account holder and is non-transferable."}
+      </footer>
+    </article>
+  );
 }

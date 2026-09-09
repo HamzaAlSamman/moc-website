@@ -1,5 +1,6 @@
 import "server-only";
-import { sendMail, wrapMinistryEmail } from "@/lib/mailer";
+import { wrapMinistryEmail } from "@/lib/mailer";
+import { sendMailQueued } from "@/lib/queued-mail";
 
 const TITLES = {
   DRAFT_SAVED: ["\u062a\u0645 \u062d\u0641\u0638 \u0645\u0633\u0648\u062f\u0629 \u0637\u0644\u0628 \u0627\u0644\u062a\u0631\u062e\u064a\u0635", "Legal-license draft saved"],
@@ -29,10 +30,12 @@ export async function sendLegalLicenseCitizenEmail(application, event, { accessT
     ${note ? `<p>${escapeHtml(note)}</p>` : ""}
     <p><a href="${escapeHtml(resume)}">${event === "DRAFT_SAVED" ? "Resume draft / \u0627\u0633\u062a\u0643\u0645\u0627\u0644 \u0627\u0644\u0645\u0633\u0648\u062f\u0629" : "Track application / \u0645\u062a\u0627\u0628\u0639\u0629 \u0627\u0644\u0637\u0644\u0628"}</a></p>
   `;
-  await sendMail({
+  await sendMailQueued({
     to: application.email,
     subject: `${titleAr} - ${application.referenceNo || ""}`,
     html: wrapMinistryEmail({ directorate: "Legal Affairs", titleAr, contentHtml: body }),
+    kindAr: "التراخيص والاعتمادات",
+    contextAr: `${titleAr}${application.referenceNo ? ` — ${application.referenceNo}` : ""}`,
   });
   return true;
 }

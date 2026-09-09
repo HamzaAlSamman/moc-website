@@ -4,31 +4,31 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
-const INPUT = "min-h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#A48E68] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#A48E68]/35";
-const BUTTON = "min-h-11 w-full rounded-xl bg-[#003D33] px-5 text-sm font-black text-white shadow-sm transition hover:bg-[#002b24] disabled:cursor-not-allowed disabled:opacity-55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#A48E68] focus-visible:ring-offset-2";
+const INPUT = "h-10 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#003D33] focus:ring-2 focus:ring-[#003D33]/20";
+const BUTTON = "h-10 w-full rounded-xl bg-[#003D33] px-5 text-sm font-black text-white shadow-sm transition hover:bg-[#002b24] disabled:cursor-not-allowed disabled:opacity-55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#A48E68] focus-visible:ring-offset-2";
 
 const modeCopy = {
   ar: {
-    login: ["تسجيل الدخول", "ادخل إلى حجوزاتك وتذاكرك", "دخول"],
-    register: ["إنشاء حساب مواطن", "ابدأ بتأكيد بريدك ثم ارفع صور الهوية", "إنشاء الحساب"],
-    verify: ["تأكيد البريد الإلكتروني", "أدخل الرمز المكوّن من 6 أرقام المرسل إلى بريدك", "تأكيد الرمز"],
-    forgot: ["استعادة كلمة المرور", "سنرسل رابط الاستعادة إذا كان البريد مسجلاً", "إرسال الرابط"],
-    reset: ["تعيين كلمة مرور جديدة", "اختر كلمة قوية لحماية تذاكرك", "حفظ كلمة المرور"],
+    login: ["تسجيل الدخول إلى الحساب الإلكتروني", "يرجى إدخال بيانات الاعتماد لتمكينكم من الوصول إلى حجوزاتكم وخدماتكم المعتمدة.", "تسجيل الدخول"],
+    register: ["تسجيل حساب إلكتروني جديد", "يرجى إدخال البيانات الشخصية المطلوبة لإنشاء الحساب واستكمال التوثيق الرسمي.", "تسجيل الحساب الإلكتروني"],
+    verify: ["التحقق من البريد الإلكتروني", "يرجى إدخال رمز التحقق المكوّن من (6) أرقام المرسل إلى عنوان بريدكم الإلكتروني.", "تأكيد الرمز"],
+    forgot: ["استعادة بيانات الوصول", "يرجى إدخال البريد الإلكتروني المعتمد لإرسال رابط إعادة تعيين كلمة المرور.", "إرسال رابط الاستعادة"],
+    reset: ["إعادة تعيين كلمة المرور", "يرجى إدخال كلمة مرور جديدة مستوفية للشروط الأمنية لحماية حسابكم.", "اعتماد كلمة المرور الجديدة"],
   },
   en: {
-    login: ["Sign in", "Access your bookings and tickets", "Sign in"],
-    register: ["Create citizen account", "Verify your email, then submit identity images", "Create account"],
-    verify: ["Verify your email", "Enter the 6-digit code sent to your email", "Verify code"],
-    forgot: ["Recover password", "We will send a reset link if the email is registered", "Send link"],
-    reset: ["Set a new password", "Choose a strong password to protect your tickets", "Save password"],
+    login: ["Sign in to Electronic Account", "Please enter your credentials to access your approved bookings and services.", "Sign In"],
+    register: ["Register New Electronic Account", "Please enter the required personal information to create your account and complete verification.", "Register Account"],
+    verify: ["Email Address Verification", "Please enter the 6-digit verification code sent to your registered email address.", "Verify Code"],
+    forgot: ["Account Access Recovery", "Please enter your registered email address to receive a password reset link.", "Send Recovery Link"],
+    reset: ["Reset Account Password", "Please enter a new password meeting security requirements to protect your account.", "Save New Password"],
   },
 };
 
 function Field({ label, id, hint, children }) {
-  return <div><label htmlFor={id} className="mb-1.5 block text-sm font-bold text-slate-700">{label}</label>{children}{hint && <p id={`${id}-hint`} className="mt-1.5 text-xs leading-5 text-slate-500">{hint}</p>}</div>;
+  return <div><label htmlFor={id} className="mb-1 block text-xs font-bold text-slate-700">{label}</label>{children}{hint && <p id={`${id}-hint`} className="mt-1 text-[11px] leading-4 text-slate-500">{hint}</p>}</div>;
 }
 
-export default function CitizenAuthForm({ locale = "ar", mode, challengeId = "", resetToken = "" }) {
+export default function CitizenAuthForm({ locale = "ar", mode, challengeId = "", resetToken = "", returnUrl = "" }) {
   const router = useRouter();
   const isAr = locale === "ar";
   const c = (modeCopy[locale] || modeCopy.ar)[mode];
@@ -52,7 +52,7 @@ export default function CitizenAuthForm({ locale = "ar", mode, challengeId = "",
   }, [mode]);
 
   function update(key, value) { setForm((current) => ({ ...current, [key]: value })); }
-  function errorText(data) { return data?.error || (isAr ? "تعذر إتمام الطلب. تحقق من البيانات وحاول مجدداً." : "The request could not be completed. Check your information and try again."); }
+  function errorText(data) { return data?.error || (isAr ? "تعذر إتمام الطلب. يرجى التحقق من البيانات والرمز والتأكد من المحاولة لاحقاً." : "The request could not be completed. Please verify your data and try again."); }
 
   async function submit(event) {
     event.preventDefault(); setBusy(true); setError(""); setMessage("");
@@ -75,10 +75,38 @@ export default function CitizenAuthForm({ locale = "ar", mode, challengeId = "",
         if (data.code === "EMAIL_UNVERIFIED") router.push(`/${locale}/account/verify-email`);
         throw new Error(errorText(data));
       }
-      if (mode === "register") router.push(`/${locale}/account/verify-email?challenge=${encodeURIComponent(data.challengeId || "")}`);
-      else if (mode === "login" || mode === "verify") router.push(`/${locale}/account/profile`);
-      else if (mode === "reset") router.push(`/${locale}/account/login?reset=1`);
-      else setMessage(isAr ? "إذا كان البريد مسجلاً فستصلك رسالة الاستعادة قريباً." : "If the email is registered, a recovery message will arrive shortly.");
+      if (mode === "register") {
+        router.push(`/${locale}/account/verify-email?challenge=${encodeURIComponent(data.challengeId || "")}`);
+      } else if (mode === "login" || mode === "verify") {
+        let targetUrl = returnUrl && returnUrl.startsWith("/") ? returnUrl : null;
+        if (!targetUrl && typeof window !== "undefined") {
+          try {
+            const params = new URLSearchParams(window.location.search);
+            const qp = params.get("returnUrl") || params.get("callbackUrl") || params.get("redirect") || params.get("next");
+            if (qp && qp.startsWith("/")) {
+              targetUrl = qp;
+            } else if (document.referrer) {
+              const refUrl = new URL(document.referrer);
+              if (
+                refUrl.origin === window.location.origin &&
+                !refUrl.pathname.includes("/account/login") &&
+                !refUrl.pathname.includes("/account/register") &&
+                !refUrl.pathname.includes("/account/verify") &&
+                !refUrl.pathname.includes("/account/forgot") &&
+                !refUrl.pathname.includes("/account/reset")
+              ) {
+                targetUrl = refUrl.pathname + refUrl.search + refUrl.hash;
+              }
+            }
+          } catch (_) {}
+        }
+        if (!targetUrl) targetUrl = `/${locale}/account/profile`;
+        router.push(targetUrl);
+      } else if (mode === "reset") {
+        router.push(`/${locale}/account/login?reset=1`);
+      } else {
+        setMessage(isAr ? "تم إرسال تعليمات الاستعادة إلى البريد الإلكتروني في حال كونه مسجلاً لدى البوابة." : "Recovery instructions sent to the email address if registered.");
+      }
       router.refresh();
     } catch (cause) { setError(cause.message); }
     finally { setBusy(false); }
@@ -100,26 +128,47 @@ export default function CitizenAuthForm({ locale = "ar", mode, challengeId = "",
     setBusy(true); setError("");
     const response = await fetch("/api/citizen/auth/resend-email-code", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ challengeId: challenge }) });
     const data = await response.json().catch(() => ({}));
-    if (response.ok) { setChallenge(data.challengeId || challenge); setResendCountdown(60); setExpiresIn(600); setMessage(isAr ? "أرسلنا رمزاً جديداً." : "A new code was sent."); }
+    if (response.ok) { setChallenge(data.challengeId || challenge); setResendCountdown(60); setExpiresIn(600); setMessage(isAr ? "تم إعادة إرسال رمز التحقق بنجاح." : "Verification code resent successfully."); }
     else setError(errorText(data));
     setBusy(false);
   }
 
   return (
-    <form onSubmit={submit} className="space-y-5" noValidate>
-      <header><p className="text-xs font-black uppercase tracking-[0.18em] text-[#A48E68]">{isAr ? "وزارة الثقافة" : "Ministry of Culture"}</p><h2 className="mt-2 text-2xl font-black text-[#002723] sm:text-3xl">{c[0]}</h2><p className="mt-2 text-sm leading-6 text-slate-500">{c[1]}</p></header>
-      {mode === "register" && <Field label={isAr ? "الاسم الكامل" : "Full name"} id="fullName"><input id="fullName" className={INPUT} value={form.fullName} onChange={(e) => update("fullName", e.target.value)} autoComplete="name" required aria-describedby="fullName-hint" /></Field>}
-      {!["verify", "reset"].includes(mode) && <Field label={isAr ? "البريد الإلكتروني" : "Email"} id="email"><input id="email" type="email" className={INPUT} value={form.email} onChange={(e) => update("email", e.target.value)} autoComplete="email" required aria-describedby="email-hint" /></Field>}
-      {mode === "register" && <div className="grid gap-4 sm:grid-cols-2"><Field label={isAr ? "الرقم الوطني" : "National ID"} id="nationalId" hint={isAr ? "يُحفظ مشفراً ولا يظهر للموظفين." : "Stored as a protected hash."}><input id="nationalId" inputMode="numeric" className={INPUT} value={form.nationalId} onChange={(e) => update("nationalId", e.target.value)} required aria-describedby="nationalId-hint" /></Field><Field label={isAr ? "رقم الهاتف" : "Phone"} id="phone"><input id="phone" type="tel" className={INPUT} value={form.phone} onChange={(e) => update("phone", e.target.value)} autoComplete="tel" required aria-describedby="phone-hint" /></Field></div>}
-      {["login", "register", "reset"].includes(mode) && <Field label={isAr ? "كلمة المرور" : "Password"} id="password" hint={mode !== "login" ? (isAr ? "12 محرفاً على الأقل، مع أحرف وأرقام." : "At least 12 characters with letters and numbers.") : undefined}><input id="password" type="password" className={INPUT} value={form.password} onChange={(e) => update("password", e.target.value)} autoComplete={mode === "login" ? "current-password" : "new-password"} required aria-describedby="password-hint" /></Field>}
+    <form onSubmit={submit} className="space-y-4" noValidate>
+      <header>
+        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#A48E68]">{isAr ? "الجمهورية العربية السورية — وزارة الثقافة" : "Syrian Arab Republic — Ministry of Culture"}</p>
+        <h2 className="mt-1 text-xl font-black text-[#002723] sm:text-2xl">{c[0]}</h2>
+        <p className="mt-1 text-xs leading-5 text-slate-500">{c[1]}</p>
+      </header>
+      {mode === "register" && <Field label={isAr ? "الاسم الكامل (وفق الهوية الشخصية)" : "Full name (as in identity document)"} id="fullName"><input id="fullName" className={INPUT} value={form.fullName} onChange={(e) => update("fullName", e.target.value)} autoComplete="name" required aria-describedby="fullName-hint" /></Field>}
+      {!["verify", "reset"].includes(mode) && <Field label={isAr ? "عنوان البريد الإلكتروني" : "Email address"} id="email"><input id="email" type="email" className={INPUT} value={form.email} onChange={(e) => update("email", e.target.value)} autoComplete="email" required aria-describedby="email-hint" /></Field>}
+      {mode === "register" && <div className="grid gap-4 sm:grid-cols-2"><Field label={isAr ? "الرقم الوطني (11 رقماً)" : "National ID number"} id="nationalId" hint={isAr ? "تُحفظ البيانات وتُعالج وفق الضوابط والأحكام الخاصة بالخصوصية وحماية البيانات الشخصية." : "Data is stored and processed in accordance with official privacy and data protection standards."}><input id="nationalId" inputMode="numeric" className={INPUT} value={form.nationalId} onChange={(e) => update("nationalId", e.target.value)} required aria-describedby="nationalId-hint" /></Field><Field label={isAr ? "رقم الهاتف المحمول" : "Mobile phone number"} id="phone"><input id="phone" type="tel" className={INPUT} value={form.phone} onChange={(e) => update("phone", e.target.value)} autoComplete="tel" required aria-describedby="phone-hint" /></Field></div>}
+      {["login", "register", "reset"].includes(mode) && <Field label={isAr ? "كلمة المرور" : "Password"} id="password" hint={mode !== "login" ? (isAr ? "تتطلب كلمة المرور (8) محارف على الأقل، وتتضمن حرفاً كبيراً (A-Z) وحرفاً صغيراً (a-z) ورقماً ورمزاً خاصاً (مثل !@#$%)." : "Password requires at least 8 characters, including an uppercase letter (A-Z), a lowercase letter (a-z), a digit, and a special character (e.g. !@#$%).") : undefined}><input id="password" type="password" className={INPUT} value={form.password} onChange={(e) => update("password", e.target.value)} autoComplete={mode === "login" ? "current-password" : "new-password"} required aria-describedby="password-hint" /></Field>}
       {["register", "reset"].includes(mode) && <Field label={isAr ? "تأكيد كلمة المرور" : "Confirm password"} id="confirmPassword"><input id="confirmPassword" type="password" className={INPUT} value={form.confirmPassword} onChange={(e) => update("confirmPassword", e.target.value)} autoComplete="new-password" required aria-describedby="confirmPassword-hint" /></Field>}
-      {mode === "verify" && <div><div className="flex justify-center gap-2" dir="ltr" onPaste={pasteCode}>{digits.map((digit, index) => <input key={index} ref={(node) => { digitRefs.current[index] = node; }} value={digit} onChange={(e) => changeDigit(index, e.target.value)} onKeyDown={(e) => { if (e.key === "Backspace" && !digit && index > 0) digitRefs.current[index - 1]?.focus(); }} inputMode="numeric" maxLength={1} aria-label={`${isAr ? "الرقم" : "Digit"} ${index + 1}`} className="h-12 w-10 rounded-xl border border-slate-200 bg-slate-50 text-center text-xl font-black text-[#003D33] outline-none focus:border-[#A48E68] focus-visible:ring-2 focus-visible:ring-[#A48E68]/35 sm:h-14 sm:w-12" />)}</div><div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500"><span>{isAr ? `ينتهي الرمز خلال ${Math.floor(expiresIn / 60)}:${String(expiresIn % 60).padStart(2, "0")}` : `Code expires in ${Math.floor(expiresIn / 60)}:${String(expiresIn % 60).padStart(2, "0")}`}</span><button type="button" onClick={resend} disabled={busy || resendCountdown > 0} className="min-h-11 rounded-lg px-3 font-bold text-[#006455] disabled:text-slate-400 focus-visible:ring-2 focus-visible:ring-[#A48E68]">{resendCountdown > 0 ? `${isAr ? "إعادة الإرسال بعد" : "Resend in"} ${resendCountdown}` : (isAr ? "إعادة إرسال الرمز" : "Resend code")}</button></div></div>}
-      <div aria-live="polite" className="min-h-6 text-sm">{error && <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-red-700">{error}</p>}{message && <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-emerald-800">{message}</p>}</div>
+      {mode === "verify" && <div><div className="flex justify-center gap-2" dir="ltr" onPaste={pasteCode}>{digits.map((digit, index) => <input key={index} ref={(node) => { digitRefs.current[index] = node; }} value={digit} onChange={(e) => changeDigit(index, e.target.value)} onKeyDown={(e) => { if (e.key === "Backspace" && !digit && index > 0) digitRefs.current[index - 1]?.focus(); }} inputMode="numeric" maxLength={1} aria-label={`${isAr ? "الرقم" : "Digit"} ${index + 1}`} className="h-10 w-10 rounded-xl border border-slate-300 bg-white text-center text-xl font-black text-[#003D33] outline-none focus:border-[#003D33] focus-visible:ring-2 focus-visible:ring-[#003D33]/20 sm:h-12 sm:w-12" />)}</div><div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500"><span>{isAr ? `تنتهي صلاحية الرمز خلال ${Math.floor(expiresIn / 60)}:${String(expiresIn % 60).padStart(2, "0")}` : `Code expires in ${Math.floor(expiresIn / 60)}:${String(expiresIn % 60).padStart(2, "0")}`}</span><button type="button" onClick={resend} disabled={busy || resendCountdown > 0} className="min-h-10 rounded-lg px-3 font-bold text-[#006455] disabled:text-slate-400 focus-visible:ring-2 focus-visible:ring-[#003D33]/20">{resendCountdown > 0 ? `${isAr ? "إعادة الإرسال بعد" : "Resend in"} ${resendCountdown}` : (isAr ? "طلب إعادة إرسال الرمز" : "Resend code")}</button></div></div>}
+      <div aria-live="polite" className="min-h-4 text-xs">{error && <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-1.5 text-red-700">{error}</p>}{message && <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-emerald-800">{message}</p>}</div>
       <button type="submit" disabled={busy || (mode === "verify" && digits.some((digit) => !digit))} className={BUTTON}>{busy ? (isAr ? "يرجى الانتظار..." : "Please wait...") : c[2]}</button>
-      <nav className="flex flex-wrap justify-center gap-x-5 gap-y-2 text-sm font-bold text-[#006455]">
-        {mode === "login" && <><Link href={`/${locale}/account/register`}>{isAr ? "إنشاء حساب" : "Create account"}</Link><Link href={`/${locale}/account/forgot`}>{isAr ? "نسيت كلمة المرور؟" : "Forgot password?"}</Link></>}
-        {mode !== "login" && <Link href={`/${locale}/account/login`}>{isAr ? "لديك حساب؟ سجل الدخول" : "Already registered? Sign in"}</Link>}
-      </nav>
+
+      {mode === "login" && (
+        <div className="space-y-3 pt-1">
+          <Link href={`/${locale}/account/register`} className="flex h-10 w-full items-center justify-center rounded-xl border border-[#003D33] px-5 text-sm font-bold text-[#003D33] transition hover:bg-[#003D33] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#003D33]">
+            {isAr ? "تسجيل حساب إلكتروني جديد" : "Register new electronic account"}
+          </Link>
+          <div className="text-center">
+            <Link href={`/${locale}/account/forgot`} className="text-xs font-bold text-[#006455] hover:underline">
+              {isAr ? "نسيان كلمة المرور؟" : "Forgot password?"}
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {mode !== "login" && (
+        <nav className="flex justify-center text-sm font-bold text-[#006455] pt-1">
+          <Link href={`/${locale}/account/login`} className="hover:underline">
+            {isAr ? "يرجى الضغط هنا لتسجيل الدخول في حال وجود حساب سابق" : "Click here to sign in if you already have an account"}
+          </Link>
+        </nav>
+      )}
     </form>
   );
 }

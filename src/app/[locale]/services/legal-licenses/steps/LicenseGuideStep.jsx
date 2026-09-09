@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Clock3, Download, FileCheck2, LockKeyhole } from "lucide-react";
+import { Check, Clock3, Download, LockKeyhole } from "lucide-react";
 import { LEGAL_LICENSE_TYPES } from "@/lib/legal-license.mjs";
 
 export default function LicenseGuideStep({
@@ -15,14 +15,6 @@ export default function LicenseGuideStep({
   const types = Object.values(LEGAL_LICENSE_TYPES);
   return (
     <div className="space-y-6">
-      <div className="rounded-2xl border border-[#b9a779]/35 bg-[#b9a779]/10 p-4 text-sm leading-7 text-[#054239]">
-        <div className="flex items-start gap-3">
-          <FileCheck2 className="mt-1 h-5 w-5 shrink-0" />
-          <p>{isRtl
-            ? "اختر نوع الترخيص، وسيحوّل النظام الشروط القانونية إلى أسئلة وحقول واضحة. لن تحتاج إلى تنزيل ملف Word أو تنسيقه."
-            : "Choose the license type and the service will turn its legal conditions into clear questions and fields. You do not need to edit a Word file."}</p>
-        </div>
-      </div>
 
       <fieldset disabled={disabled}>
         <legend className="mb-3 font-qomra text-lg font-black text-[#054239]">
@@ -62,22 +54,22 @@ export default function LicenseGuideStep({
             <div className="mt-3 flex flex-wrap gap-2 text-xs font-bold">
               <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-slate-600">
                 <Clock3 className="h-3.5 w-3.5" />
-                {estimatedEvidenceCount} {isRtl ? "وثيقة متوقعة" : "estimated documents"}
+                {isRtl ? `عدد الوثائق المطلوبة: ${estimatedEvidenceCount}` : `Required documents: ${estimatedEvidenceCount}`}
               </span>
               <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 ${profile.gated
                 ? "bg-amber-100 text-amber-800"
                 : "bg-emerald-100 text-emerald-800"}`}>
                 {profile.gated ? <LockKeyhole className="h-3.5 w-3.5" /> : <Check className="h-3.5 w-3.5" />}
                 {profile.gated
-                  ? (isRtl ? "بانتظار اعتماد التعليمات الرسمية" : "Pending official guidance approval")
-                  : (isRtl ? "المصدر القانوني مرتبط بالخدمة" : "Legal source linked")}
+                  ? (isRtl ? "الخدمة قيد التفعيل التجريبي" : "Service under pilot phase")
+                  : (isRtl ? "المستندات التنظيمية متاحة" : "Regulatory documents available")}
               </span>
             </div>
             {profile.gated ? (
               <p className="mt-3 text-xs leading-6 text-amber-800">
                 {isRtl
-                  ? "هذه الخدمة متاحة ضمن بوابة الاختبار الداخلية. سيظهر أي تحديث معتمد للشروط هنا دون أن يطلب منك إعادة تحرير مستند."
-                  : "This service is available through the internal test gate. Approved requirement updates will appear here without asking you to edit a document."}
+                  ? "تتوفر هذه الخدمة حالياً كنسخة تجريبية؛ وقد تخضع الشروط والوثائق المطلوبة للتحديث تماشياً مع القرارات والتعليمات التنظيمية الصادرة لاحقاً."
+                  : "This service is currently available as a pilot version. Required conditions and documents are subject to update in accordance with subsequent regulatory decisions."}
               </p>
             ) : null}
           </div>
@@ -95,7 +87,7 @@ export default function LicenseGuideStep({
               </a>
             )) : (
               <p className="rounded-xl border border-dashed border-slate-300 bg-white p-3 text-xs leading-6 text-slate-500">
-                {isRtl ? "لا توجد وثيقة مرجعية رسمية مرفقة لهذا النوع بعد." : "No official source document is attached to this type yet."}
+                {isRtl ? "لا تتوفر مستندات مرجعية رسمية مرفقة لهذا النوع حالياً." : "No official source document is attached to this type yet."}
               </p>
             )}
           </div>

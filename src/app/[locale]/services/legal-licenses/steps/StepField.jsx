@@ -1,6 +1,7 @@
 "use client";
 
 import { useId } from "react";
+import ApexDateTimePicker from "@/components/ApexDateTimePicker";
 
 export default function StepField({
   label,
@@ -13,6 +14,9 @@ export default function StepField({
   dir,
   help,
   error,
+  isRtl = true,
+  maxDate,
+  showPresets,
 }) {
   const id = useId();
   const helpId = help ? `${id}-help` : undefined;
@@ -25,7 +29,22 @@ export default function StepField({
       <span className="mb-1.5 block text-xs font-bold text-slate-600">
         {label}{required ? <span aria-hidden="true"> *</span> : null}
       </span>
-      {multiline ? (
+      {type === "date" ? (
+        <ApexDateTimePicker
+          id={id}
+          type="date"
+          value={value || ""}
+          onChange={onChange}
+          isAdmin={false}
+          locale={isRtl ? "ar" : "en"}
+          required={required}
+          disabled={disabled}
+          aria-invalid={Boolean(error)}
+          aria-describedby={describedBy}
+          maxDate={maxDate}
+          showPresets={showPresets}
+        />
+      ) : multiline ? (
         <textarea
           id={id}
           rows={4}

@@ -52,7 +52,7 @@ function RequirementAnswer({ requirement, value, onChange, disabled, source, isR
 function RequirementHelp({ requirement, source, isRtl }) {
   return (
     <details className="mt-3 text-xs leading-6 text-slate-600">
-      <summary className="cursor-pointer font-bold text-[#054239]">{isRtl ? "لماذا هذا مطلوب؟" : "Why is this required?"}</summary>
+      <summary className="cursor-pointer font-bold text-[#054239]">{isRtl ? "الأساس القانوني والتشريعي لهذا الشرط" : "Why is this required?"}</summary>
       <p className="mt-1">{isRtl ? requirement.help.ar : requirement.help.en}</p>
       {source ? (
         <a href={source.publicUrl} target="_blank" rel="noreferrer" className="mt-1 inline-flex items-center gap-1 font-bold text-[#054239] underline decoration-[#b9a779] underline-offset-4">
@@ -97,8 +97,8 @@ export default function EntityPremisesStep({
         <h3 className="font-qomra text-lg font-black text-[#054239]">{isRtl ? "أسئلة المقر والتجهيزات" : "Premises and equipment questions"}</h3>
         <p className="mt-1 text-xs leading-6 text-slate-500">
           {requirements.length
-            ? (isRtl ? "هذه الأسئلة مأخوذة من ملف المتطلبات الخاص بنوع الترخيص." : "These questions come from the selected license profile.")
-            : (isRtl ? "لا توجد أسئلة فنية إضافية لهذا النوع حالياً." : "There are no additional technical questions for this type yet.")}
+            ? (isRtl ? "تستند هذه الأسئلة إلى الشروط والضوابط القانونية المعتمدة لكل ترخيص." : "These questions come from the selected license profile.")
+            : (isRtl ? "لا تتوفر شروط أو متطلبات فنية إضافية خاصة بهذا الترخيص حالياً." : "There are no additional technical questions for this type yet.")}
         </p>
         <div className="mt-4 space-y-4">
           {requirements.map((requirement) => (

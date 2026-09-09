@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { generateReceiptPdf } from "@/lib/receipt-pdf";
+import { copyrightReceiptSubmission } from "@/lib/copyright-payments";
 
 // GET /api/copyright/receipt?code=<submissionId>&stage=initial|final
 //
@@ -25,14 +26,12 @@ export async function GET(request) {
     }
 
     // The receipt only exists once the matching fee has actually been paid.
-    const paid = submission.paymentStatus;
-    const initialAvailable = paid === "initial_paid" || paid === "final_paid" || paid === "fully_paid";
-    const finalAvailable = paid === "fully_paid";
-    if ((stage === "initial" && !initialAvailable) || (stage === "final" && !finalAvailable)) {
+    const receiptSubmission = await copyrightReceiptSubmission(submission, stage);
+    if (!receiptSubmission) {
       return NextResponse.json({ error: "الإيصال غير متاح لهذه المرحلة بعد" }, { status: 409 });
     }
 
-    const pdf = await generateReceiptPdf(submission, { stage });
+    const pdf = await generateReceiptPdf(receiptSubmission, { stage });
     return new NextResponse(pdf, {
       status: 200,
       headers: {

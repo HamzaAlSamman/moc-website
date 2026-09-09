@@ -67,6 +67,7 @@ const GATEWAY_NAMES = {
   syriatel_cash: "سيريتل كاش / Syriatel Cash",
   mtn_cash: "كاش موبايل / Cash Mobile",
   cham_cash: "شام كاش / Cham Cash",
+  paymearia: "بيميرا / Paymeara",
 };
 
 const PROVINCE_LABEL = (sub) =>

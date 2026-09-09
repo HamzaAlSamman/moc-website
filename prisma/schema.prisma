@@ -28,6 +28,15 @@ enum Role {
   LICENSING_COMMITTEE
   FINANCE
   DIRECTORATE
+  // Door staff at an event venue. Scans ticket QR codes and records
+  // attendance — and nothing else; deliberately the narrowest role in the
+  // system, because these accounts are used on phones at a public entrance.
+  TICKET_OFFICER
+  // Proofreads the English side of cultural-calendar events and decides on
+  // citizen identity submissions. Sees no other part of the panel: it may edit
+  // an event but never create, delete, publish or approve one, and it reviews
+  // identity documents without being able to block or erase an account.
+  LANGUAGE_IDENTITY_REVIEWER
 }
 
 enum LegalLicenseType {
@@ -298,6 +307,7 @@ model User {
   // Set when an admin force-resets this user's password; the user is locked
   // out of the rest of the CMS until they set their own new password.
   mustChangePassword Boolean  @default(false)
+  createdById        String?
   posts              Post[]
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
@@ -436,6 +446,12 @@ model Event {
   bookingClosesAt     DateTime?
   bookingNoteAr       String?                  @db.Text
   bookingNoteEn       String?                  @db.Text
+  // English proofreading sign-off (LANGUAGE_IDENTITY_REVIEWER). Cleared
+  // automatically whenever an English field changes afterwards — a tick that
+  // survives a later edit would vouch for text nobody read. Denormalized
+  // reviewer id, same as reviewedById above.
+  languageReviewedAt   DateTime?
+  languageReviewedById String?
   bookings            EventBooking[]
   createdAt           DateTime                 @default(now())
   updatedAt           DateTime                 @updatedAt
@@ -443,6 +459,7 @@ model Event {
   @@unique([source, externalId])
   @@index([reviewStatus])
   @@index([createdById])
+  @@index([languageReviewedAt, startDate])
 }
 
 enum EventBookingAvailability {
@@ -591,6 +608,7 @@ model CopyrightSubmission {
   authors                    Json? // Array of joint authors: { name: String, signature: String, idLabel: String }
   paymentGateway             String?  @default("syriatel_cash")
   paymentRef                 String?
+  payments                   CopyrightPayment[]
   paymentReceipt             String?  @db.Text
   commercialRegisterFile     String?  @db.Text
   delegationFile             String?  @db.Text
@@ -626,6 +644,22 @@ model CopyrightSubmission {
 
   @@unique([paymentRef])
   @@unique([internalRefNumber])
+}
+
+// Preserve both wallet transfers; a reference cannot pay two fees or cases.
+model CopyrightPayment {
+  id           String              @id @default(cuid())
+  submissionId String
+  submission   CopyrightSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  stage        String
+  reference    String              @unique
+  gateway      String
+  receipt      String?             @db.Text
+  verifiedAt   DateTime?
+  rejectedAt   DateTime?
+  createdAt    DateTime            @default(now())
+
+  @@unique([submissionId, stage])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -883,6 +917,13 @@ model NotificationOutbox {
   recipient   String
   payloadJson Json
 
+  // Display columns for the admin email-audit screen. They are denormalized on
+  // purpose: payloadJson can hold a base64 attachment, so the list must be able
+  // to render a row without ever loading it.
+  subject   String?
+  kindAr    String? // "تأكيد استلام طلب"
+  contextAr String? // "رسالة عبر نموذج «تواصل معنا»"
+
   status      NotificationOutboxStatus @default(PENDING)
   attempts    Int                      @default(0)
   maxAttempts Int                      @default(8)
@@ -896,4 +937,69 @@ model NotificationOutbox {
   updatedAt DateTime @updatedAt
 
   @@index([status, availableAt, createdAt])
+  @@index([createdAt])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Internal Oversight complaints and International Cooperation messages were
+// previously email-only (see git history of their API routes): the request
+// was mailed to a directorate inbox and nothing was kept in the database. If
+// the mail send failed, or the inbox wasn't monitored, the submission simply
+// vanished with no recovery path. These two models make every submission
+// durable regardless of email outcome, and give staff an admin list to review.
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum ComplaintStatus {
+  NEW
+  IN_REVIEW
+  RESOLVED
+  CLOSED
+}
+
+model OversightComplaint {
+  id           String          @id @default(cuid())
+  referenceNo  String?         @unique
+  category     String
+  isAnonymous  Boolean         @default(false)
+  name         String?
+  email        String?
+  phone        String?
+  against      String          @db.Text
+  subject      String          @db.Text
+  incidentDate String?
+  message      String          @db.Text
+  // [{ filename, mimeType, size, storageKey }] — images live under
+  // private-uploads/oversight-complaints/<id>/, never in the DB itself.
+  attachments  Json?
+  status       ComplaintStatus @default(NEW)
+  adminNote    String?         @db.Text
+  emailSent    Boolean         @default(false)
+  emailError   String?         @db.Text
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  @@index([status, createdAt])
+}
+
+model CooperationMessage {
+  id          String          @id @default(cuid())
+  referenceNo String?         @unique
+  contactType String
+  name        String
+  email       String
+  phone       String
+  workplace   String
+  subject     String          @db.Text
+  message     String          @db.Text
+  // [{ filename, mimeType, size, storageKey }] — images live under
+  // private-uploads/cooperation-messages/<id>/, never in the DB itself.
+  attachments Json?
+  status      ComplaintStatus @default(NEW)
+  adminNote   String?         @db.Text
+  emailSent   Boolean         @default(false)
+  emailError  String?         @db.Text
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([status, createdAt])
 }

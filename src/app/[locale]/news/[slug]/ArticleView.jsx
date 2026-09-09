@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from "react";
-import Image from "next/image";
 import Link from "next/link";
+import PostArtwork from "../../../../components/PostArtwork";
 import BlockRenderer from "../../../../components/BlockRenderer";
 import { toWesternNums } from "../../../../lib/numbers";
 
@@ -76,17 +76,14 @@ function ImageSlider({ images, title }) {
       onMouseLeave={() => setPaused(false)}
     >
       {/* Main image container */}
-      <div className="relative aspect-[16/9] w-full">
-        <Image
-          key={idx}
-          src={images[idx]}
-          alt={`${title} - ${idx + 1}`}
-          fill
-          unoptimized
-          className="object-cover transition-opacity duration-500 ease-in-out"
-          sizes="(max-width: 1280px) 100vw, 1280px"
-          priority
-        />
+      <PostArtwork
+        key={idx}
+        src={images[idx]}
+        alt={`${title} - ${idx + 1}`}
+        preload
+        sizes="(max-width: 1280px) 100vw, 1280px"
+        imageClassName="transition-opacity duration-500 ease-in-out"
+      >
         {/* Gradient bottom overlay */}
         <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-black/90 via-black/40 to-transparent pointer-events-none" />
 
@@ -129,7 +126,7 @@ function ImageSlider({ images, title }) {
             ))}
           </div>
         )}
-      </div>
+      </PostArtwork>
     </div>
   );
 }
@@ -246,17 +243,13 @@ export default function ArticleView({ post, latestNews = [], locale }) {
             {images.length > 1 ? (
               <ImageSlider images={images} title={title} />
             ) : (
-              <div className="w-full aspect-[16/9] relative rounded-3xl overflow-hidden bg-slate-900 border border-[#b9a779]/15 shadow-xl">
-                <Image
-                  src={images[0]}
-                  alt={title}
-                  fill
-                  unoptimized
-                  priority
-                  className="object-cover"
-                  sizes="(max-width: 1280px) 100vw, 1280px"
-                />
-              </div>
+              <PostArtwork
+                src={images[0]}
+                alt={title}
+                preload
+                sizes="(max-width: 1280px) 100vw, 1280px"
+                className="w-full rounded-3xl border border-[#b9a779]/15 shadow-xl"
+              />
             )}
           </div>
         )}
@@ -360,20 +353,17 @@ export default function ArticleView({ post, latestNews = [], locale }) {
                       href={`/${locale}/news/${news.slug || news.id}`}
                       className="group flex flex-col bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 hover:-translate-y-1 h-full"
                     >
-                      <div className="relative aspect-[16/9] w-full bg-slate-100 overflow-hidden">
-                        <Image
-                          src={news.featuredImage || "/images/cultural-principle1.jpg"}
-                          alt={newsTitle}
-                          fill
-                          unoptimized
-                          className="object-cover transition-transform duration-500 group-hover:scale-105"
-                        />
+                      <PostArtwork
+                        src={news.featuredImage || "/images/cultural-principle1.jpg"}
+                        alt={newsTitle}
+                        imageClassName="transition-transform duration-500 group-hover:scale-105"
+                      >
                         {newsCategory && (
                           <span className="absolute top-3 right-3 bg-white/90 backdrop-blur-sm text-[10px] text-[#054239] font-bold px-2 py-0.5 rounded-full border border-slate-100 shadow-sm">
                             {newsCategory}
                           </span>
                         )}
-                      </div>
+                      </PostArtwork>
                       <div className="p-4 flex flex-col grow">
                         <h4 className="text-sm font-bold text-slate-800 line-clamp-2 leading-snug group-hover:text-[#b9a779] transition-colors mb-2 min-h-[2.5rem]">
                           {newsTitle}

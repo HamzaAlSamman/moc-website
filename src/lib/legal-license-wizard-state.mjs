@@ -617,3 +617,187 @@ export function isWizardAttachmentEditable(kind, subjectRef = null, context = {}
     && (item.subjectRef ?? null) === (subjectRef ?? null)
   ));
 }
+
+export function getWizardStepValidationError(stepId, { profile, form = {}, application } = {}, language = "en") {
+  const isAr = language === "ar";
+  
+  if (stepId === "guide") {
+    if (!profile || form.licenseType !== profile.licenseType) {
+      return isAr ? "يرجى اختيار نوع الترخيص أولاً للمتابعة." : "Please select a license type first to continue.";
+    }
+  }
+  
+  if (stepId === "eligibility") {
+    const el = wizardEligibility(profile, form);
+    if (!el.eligible) {
+      return isAr 
+        ? "يرجى استكمال جميع شروط الأهلية والموافقة عليها للمتابعة." 
+        : "Please complete and accept all eligibility requirements to continue.";
+    }
+  }
+  
+  if (stepId === "people") {
+    // 1. Applicant validation
+    if (!nonEmpty(form.applicantName)) {
+      return isAr ? "بيانات مقدم الطلب: الاسم الكامل مطلوب." : "Applicant Details: Full name is required.";
+    }
+    if (!nonEmpty(form.capacity)) {
+      return isAr ? "بيانات مقدم الطلب: الصفة القانونية مطلوبة." : "Applicant Details: Legal capacity is required.";
+    }
+    if (!nonEmpty(form.nationalId)) {
+      return isAr ? "بيانات مقدم الطلب: الرقم الوطني مطلوب." : "Applicant Details: National ID is required.";
+    }
+    if (!isValidLegalLicenseNationalId(form.nationalId)) {
+      return isAr ? "بيانات مقدم الطلب: الرقم الوطني يجب أن يتكون من 11 رقماً." : "Applicant Details: National ID must be exactly 11 digits.";
+    }
+    if (!nonEmpty(form.phone)) {
+      return isAr ? "بيانات مقدم الطلب: رقم الهاتف مطلوب." : "Applicant Details: Phone number is required.";
+    }
+    if (!isValidLegalLicensePhone(form.phone)) {
+      return isAr ? "بيانات مقدم الطلب: رقم الهاتف غير صالح (يجب أن يتكون من 8 إلى 15 رقماً)." : "Applicant Details: Phone number is invalid (8 to 15 digits).";
+    }
+    if (!nonEmpty(form.email)) {
+      return isAr ? "بيانات مقدم الطلب: البريد الإلكتروني مطلوب." : "Applicant Details: Email is required.";
+    }
+    if (!isValidLegalLicenseEmail(form.email)) {
+      return isAr ? "بيانات مقدم الطلب: البريد الإلكتروني غير صالح." : "Applicant Details: Email address is invalid.";
+    }
+
+    // 2. Founders validation
+    const founders = Array.isArray(form.founders) ? form.founders : [];
+    if (founders.length === 0) {
+      return isAr ? "بيانات المؤسسين: يجب إضافة مؤسس واحد على الأقل." : "Founders: At least one founder must be added.";
+    }
+    
+    const usedNationalIds = new Set([form.nationalId.trim()]);
+    for (let i = 0; i < founders.length; i++) {
+      const founder = founders[i];
+      const indexDisplay = i + 1;
+      if (!isRecord(founder) || !nonEmpty(founder.fullName)) {
+        return isAr ? `بيانات المؤسس ${indexDisplay}: الاسم الكامل مطلوب.` : `Founder ${indexDisplay}: Full name is required.`;
+      }
+      if (!nonEmpty(founder.nationalId)) {
+        return isAr ? `بيانات المؤسس ${indexDisplay}: الرقم الوطني مطلوب.` : `Founder ${indexDisplay}: National ID is required.`;
+      }
+      if (!isValidLegalLicenseNationalId(founder.nationalId)) {
+        return isAr ? `بيانات المؤسس ${indexDisplay}: الرقم الوطني يجب أن يتكون من 11 رقماً.` : `Founder ${indexDisplay}: National ID must be exactly 11 digits.`;
+      }
+      
+      const nationalId = founder.nationalId.trim();
+      if (usedNationalIds.has(nationalId)) {
+        return isAr 
+          ? `بيانات المؤسس ${indexDisplay}: الرقم الوطني مكرر (مستخدم لمقدم الطلب أو لمؤسس آخر).` 
+          : `Founder ${indexDisplay}: National ID is duplicated.`;
+      }
+      usedNationalIds.add(nationalId);
+
+      if (founder.phone && !optionalValueIsValid(founder.phone, isValidLegalLicensePhone)) {
+        return isAr ? `بيانات المؤسس ${indexDisplay}: رقم الهاتف غير صالح.` : `Founder ${indexDisplay}: Phone number is invalid.`;
+      }
+      if (founder.email && !optionalValueIsValid(founder.email, isValidLegalLicenseEmail)) {
+        return isAr ? `بيانات المؤسس ${indexDisplay}: البريد الإلكتروني غير صالح.` : `Founder ${indexDisplay}: Email address is invalid.`;
+      }
+    }
+
+    // 3. Authorized signatory check
+    const representativeCount = founders.filter((founder) => founder?.isAuthorizedRepresentative === true).length;
+    if (representativeCount === 0) {
+      return isAr 
+        ? "بيانات المؤسسين: يرجى تحديد مؤسس واحد كـ 'مفوض وحيد بالتوقيع'." 
+        : "Founders: Please select exactly one founder as the sole authorized signatory.";
+    }
+    if (representativeCount > 1) {
+      return isAr 
+        ? "بيانات المؤسسين: يمكن تحديد مفوض واحد فقط بالتوقيع." 
+        : "Founders: Only one founder can be the authorized signatory.";
+    }
+
+    // 4. Manager validation
+    const manager = form.managerDetails;
+    if (isRecord(manager) && manager.enabled === true) {
+      if (!nonEmpty(manager.fullName)) {
+        return isAr ? "المدير المسؤول: الاسم الكامل مطلوب." : "Manager: Full name is required.";
+      }
+      if (manager.nationalId && !isValidLegalLicenseNationalId(manager.nationalId)) {
+        return isAr ? "المدير المسؤول: الرقم الوطني يجب أن يتكون من 11 رقماً." : "Manager: National ID must be exactly 11 digits.";
+      }
+      if (manager.nationalId && usedNationalIds.has(manager.nationalId.trim())) {
+        return isAr ? "المدير المسؤول: الرقم الوطني مكرر ومستخدم لشخص آخر." : "Manager: National ID is duplicated.";
+      }
+      if (manager.phone && !isValidLegalLicensePhone(manager.phone)) {
+        return isAr ? "المدير المسؤول: رقم الهاتف غير صالح." : "Manager: Phone number is invalid.";
+      }
+      if (manager.email && !isValidLegalLicenseEmail(manager.email)) {
+        return isAr ? "المدير المسؤول: البريد الإلكتروني غير صالح." : "Manager: Email is invalid.";
+      }
+    }
+  }
+
+  if (stepId === "entity") {
+    if (!profile) return isAr ? "يرجى استكمال اختيار نوع الترخيص." : "License profile not loaded.";
+    
+    // Check required fields based on profile requirements
+    for (const field of profile.requiredFields) {
+      if (!nonEmpty(form[field])) {
+        const fieldLabels = isAr ? {
+          entityName: "اسم الجهة مطلوب.",
+          purpose: "الغرض من التأسيس مطلوب.",
+          objectives: "أهداف الجهة مطلوبة.",
+          activityDescription: "وصف النشاط مطلوب.",
+          governorate: "المحافظة مطلوبة.",
+          address: "عنوان المقر مطلوب."
+        } : {
+          entityName: "Entity name is required.",
+          purpose: "Purpose of establishment is required.",
+          objectives: "Objectives are required.",
+          activityDescription: "Activity description is required.",
+          governorate: "Governorate is required.",
+          address: "Address is required."
+        };
+        return fieldLabels[field] || (isAr ? `الحقل ${field} مطلوب.` : `Field ${field} is required.`);
+      }
+    }
+
+    const requirements = applicableBlocking(profile, form, [
+      LEGAL_LICENSE_REQUIREMENT_CATEGORIES.PREMISES,
+      LEGAL_LICENSE_REQUIREMENT_CATEGORIES.EQUIPMENT,
+      LEGAL_LICENSE_REQUIREMENT_CATEGORIES.EVIDENCE,
+    ]);
+    if (!requirementsSatisfied(requirements, form.premisesAnswers)) {
+      return isAr 
+        ? "متطلبات المقر والتجهيزات: يرجى الإجابة على جميع الحقول والشروط المطلوبة." 
+        : "Premises & Equipment: Please answer all required conditions.";
+    }
+  }
+
+  if (stepId === "documents") {
+    if (!baseStepCompleted("documents", { profile, form, application })) {
+      return isAr 
+        ? "الوثائق والمستندات: يرجى رفع جميع الأوراق الثبوتية والوثائق المطلوبة للطلب ولأعضاء الهيئة التأسيسية." 
+        : "Documents: Please upload all required files for the application and founders.";
+    }
+  }
+
+  if (stepId === "bylaws") {
+    if (!baseStepCompleted("bylaws", { profile, form, application })) {
+      return isAr 
+        ? "النظام الأساسي: يرجى مراجعة مسودة النظام الأساسي المتولدة والموافقة على إقرار الالتزام به." 
+        : "Bylaws: Please review the draft bylaws and check the commitment acknowledgment.";
+    }
+  }
+
+  if (stepId === "declaration") {
+    const requirements = applicableBlocking(profile, form, [LEGAL_LICENSE_REQUIREMENT_CATEGORIES.POST_LICENSE]);
+    if (form.declarationAccuracy !== true || form.declarationResponsibility !== true || form.declarationPrivacy !== true) {
+      return isAr ? "الإقرار والتعهد: يرجى الموافقة على جميع بنود التعهد والإقرار." : "Declarations: Please check all required agreement items.";
+    }
+    if (!isValidLegalLicenseVisualSignature(form.applicantSignature)) {
+      return isAr ? "الإقرار والتعهد: يرجى رسم توقيعكم الخطي في المربع المخصص لإتمام الطلب." : "Declarations: Visual signature is required.";
+    }
+    if (!requirementsSatisfied(requirements, form.postLicenseDeclarations)) {
+      return isAr ? "الإقرار والتعهد: يرجى استكمال شروط ما بعد الترخيص." : "Declarations: Please satisfy post-license requirements.";
+    }
+  }
+
+  return null;
+}

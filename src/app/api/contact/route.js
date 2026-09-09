@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import nodemailer from "nodemailer";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
-import { sendCitizenAck } from "@/lib/mailer";
+import { sendCitizenAck } from "@/lib/queued-mail";
 import { nextReferenceNumberSafe, REFERENCE_SCOPES } from "@/lib/reference-number";
 
 // Strip CR/LF so user input can never inject extra mail headers (Bcc:, etc.)

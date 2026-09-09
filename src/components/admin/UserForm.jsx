@@ -13,6 +13,14 @@ const ALL_ROLES = [
   // Cultural-calendar contributor — creates events that the festivals & events
   // directorate (EVENT_MANAGER) must approve before they publish.
   "DIRECTORATE",
+  // Legal-licence workflow roles. They carry VIEW/MANAGE_LEGAL_LICENSES and own
+  // stages of that pipeline, so they have to be assignable here or the whole
+  // licensing queue can only ever be worked by an ADMIN.
+  "LICENSING_OFFICER", "LICENSING_COMMITTEE",
+  // Venue door staff — scans ticket QR codes and records attendance, nothing else.
+  "TICKET_OFFICER",
+  // Proofreads the English text of calendar events and reviews citizen IDs.
+  "LANGUAGE_IDENTITY_REVIEWER",
 ];
 const INPUT = "w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-[#A48E68] focus:ring-2 focus:ring-[#A48E68]/20 disabled:bg-gray-50 disabled:text-gray-400";
 
@@ -26,7 +34,7 @@ export default function UserForm({ user, currentUserRole, isNew }) {
     nameEn:   user?.nameEn   ?? "",
     email:    user?.email    ?? "",
     password: "",
-    role:     user?.role     ?? "AUTHOR",
+    role:     user?.role     ?? (currentUserRole === "DIRECTORATE" ? "TICKET_OFFICER" : "AUTHOR"),
     isActive: user?.isActive ?? true,
   });
 
@@ -80,8 +88,8 @@ export default function UserForm({ user, currentUserRole, isNew }) {
           <div>
             <label className="mb-1.5 block text-sm font-medium text-gray-700">الدور والصلاحيات</label>
             <select value={form.role} onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}
-              disabled={!can(currentUserRole, "CHANGE_ROLE")} className={INPUT}>
-              {ALL_ROLES.map((r) => (
+              disabled={!can(currentUserRole, "CHANGE_ROLE") && currentUserRole !== "DIRECTORATE"} className={INPUT}>
+              {(currentUserRole === "DIRECTORATE" ? ["TICKET_OFFICER"] : ALL_ROLES).map((r) => (
                 <option key={r} value={r}>{ROLE_LABELS.ar[r]} — {ROLE_LABELS.en[r]}</option>
               ))}
             </select>

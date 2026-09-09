@@ -86,6 +86,13 @@ const CATEGORIES = {
   folklore: "مأثورات وتراث شعبي سوري"
 };
 
+const GATEWAY_LABELS = {
+  cham_cash: "شام كاش (Cham Cash)",
+  syriatel_cash: "سيريتل كاش (Syriatel Cash)",
+  mtn_cash: "ام تي ان كاش (MTN Cash)",
+  paymearia: "بيميرا (Paymeara)"
+};
+
 const ROLES = {
   author: "صاحب العمل الأصلي",
   agent: "وكيل رسمي مفوض",
@@ -744,7 +751,7 @@ export default function CopyrightDetailView({ submission, currentUser }) {
                 <FileCard
                   file={sub.paymentReceipt}
                   title="إيصال الدفع الإلكتروني"
-                  subtitle="شام كاش — إثبات تسديد الرسوم"
+                  subtitle={`${GATEWAY_LABELS[sub.paymentGateway] || sub.paymentGateway || "شام كاش"} — إثبات تسديد الرسوم`}
                   downloadName={`receipt_${sub.id}.${getFileExtensionFromBase64(sub.paymentReceipt)}`}
                   onPreviewImage={setImagePreview}
                 />
@@ -903,7 +910,7 @@ export default function CopyrightDetailView({ submission, currentUser }) {
               </div>
               <div className="flex justify-between">
                 <span>بوابة الدفع:</span>
-                <span className="text-slate-600 font-bold">شام كاش (Cham Cash)</span>
+                <span className="text-slate-600 font-bold">{GATEWAY_LABELS[sub.paymentGateway] || sub.paymentGateway || "شام كاش (Cham Cash)"}</span>
               </div>
               <div className="flex justify-between">
                 <span>حالة التسديد:</span>

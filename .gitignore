@@ -49,3 +49,6 @@ next-env.d.ts
 
 # Local Git worktrees
 /.worktrees/
+
+# Citizen-submitted documents (PII) — never commit
+/private-uploads/

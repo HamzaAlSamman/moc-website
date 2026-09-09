@@ -9,7 +9,9 @@ export default async function UsersPage() {
   const user = await getCurrentUser();
   if (!can(user.role, "VIEW_USERS")) redirect("/admin/dashboard");
 
+  const where = user.role === "DIRECTORATE" ? { createdById: user.id } : undefined;
   const users = await prisma.user.findMany({
+    where,
     orderBy: { createdAt: "desc" },
     select: {
       id: true,

@@ -44,11 +44,15 @@ export async function POST(request, { params }) {
   let storageKey;
   try {
     validateLegalLicenseSubmissionRecord(application);
-    const pdf = await generateLegalLicensePdf(application);
-    storageKey = legalLicenseStorageKey(id, "application.pdf", "application/pdf");
-    await writeLegalLicensePrivateFile(storageKey, pdf);
     const nextStatus = application.status === "DRAFT" ? "SUBMITTED" : "UNDER_REVIEW";
     const archiveVersion = application.revision + 1;
+    // The PDF must embed the verification code for the revision the DB will
+    // actually hold once this transaction commits (archiveVersion), not the
+    // pre-submit revision — otherwise the QR code baked into the citizen's
+    // own submitted document never matches /legal-licenses/verify.
+    const pdf = await generateLegalLicensePdf({ ...application, revision: archiveVersion });
+    storageKey = legalLicenseStorageKey(id, "application.pdf", "application/pdf");
+    await writeLegalLicensePrivateFile(storageKey, pdf);
     const updated = await prisma.$transaction(async (tx) => {
       const result = await tx.legalLicenseApplication.updateMany({
         where: {

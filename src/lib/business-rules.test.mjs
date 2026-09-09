@@ -59,14 +59,17 @@ test("public copyright DTO never exposes attachments or internal review data", (
   }
 });
 
-test("copyright work is a zip up to 100 MiB or a Google Drive URL", () => {
+test("copyright work is a PDF or ZIP up to 100 MiB, or a Google Drive URL", () => {
   const zip = `data:application/zip;base64,${Buffer.from([0x50, 0x4b, 0x03, 0x04]).toString("base64")}`;
+  const pdf = `data:application/pdf;base64,${Buffer.from("%PDF-1.7\n").toString("base64")}`;
   assert.deepEqual(validateCopyrightWorkSource({ workFile: zip }), { workFile: zip, workDriveUrl: null });
+  assert.deepEqual(validateCopyrightWorkSource({ workFile: pdf }), { workFile: pdf, workDriveUrl: null });
   assert.deepEqual(
     validateCopyrightWorkSource({ workDriveUrl: "https://drive.google.com/file/d/abc/view" }),
     { workFile: null, workDriveUrl: "https://drive.google.com/file/d/abc/view" },
   );
-  assert.throws(() => validateCopyrightWorkSource({ workFile: "data:text/plain;base64,SGk=" }), /ZIP/);
+  assert.throws(() => validateCopyrightWorkSource({ workFile: "data:application/pdf;base64,SGk=" }), /valid PDF/);
+  assert.throws(() => validateCopyrightWorkSource({ workFile: "data:text/plain;base64,SGk=" }), /PDF or ZIP/);
   assert.throws(() => validateCopyrightWorkSource({ workDriveUrl: "https://example.com/file" }), /Drive/);
 });
 

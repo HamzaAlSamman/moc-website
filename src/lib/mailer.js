@@ -1,6 +1,8 @@
 import "server-only";
 import nodemailer from "nodemailer";
 
+import { ministryHexTileDataUri } from "./ministry-hex-tile.mjs";
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared SMTP transport + email helpers.
 //
@@ -76,7 +78,7 @@ export async function sendMail({ from, ...options }) {
   return info;
 }
 
-function escapeHtml(value) {
+export function escapeHtml(value) {
   return String(value ?? "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -91,16 +93,11 @@ function escapeHtml(value) {
  */
 export function wrapMinistryEmail({ directorate, titleAr, contentHtml }) {
   // Ministry hexagon identity as a lightweight (~0.6KB) seamless tile at 5%
-  // opacity, embedded inline. We deliberately do NOT embed the full
-  // public/svg/pattern-hex.svg (~80KB) — that would bloat the message past
-  // Gmail's 102KB clipping limit and hurt spam scoring. Rendered inline via a
-  // data URI with a solid fallback colour, so clients that strip SVG
-  // backgrounds (notably Gmail/Outlook) simply show the clean solid design.
-  const HEX_TILE =
-    "<svg xmlns='http://www.w3.org/2000/svg' width='28' height='49' viewBox='0 0 28 49'>" +
-    "<path fill='#002723' fill-opacity='0.05' fill-rule='evenodd' d='M13.99 9.25l13 7.5v15l-13 7.5L1 31.75v-15l12.99-7.5zM3 17.9v12.7l10.99 6.34 11-6.35V17.9l-11-6.34L3 17.9zM0 15l12.98-7.5V0h-2v6.35L0 12.69v2.3zm0 18.5L12.98 41v8h-2v-6.85L0 35.81v-2.3zM15 0v7.5L27.99 15H28v-2.31h-.01L17 6.35V0h-2zm0 49v-8l12.99-7.5H28v2.31h-.01L17 42.15V49h-2z'/>" +
-    "</svg>";
-  const hexBg = `url(data:image/svg+xml,${encodeURIComponent(HEX_TILE)}) repeat`;
+  // opacity, embedded inline — see ministry-hex-tile.mjs for why the full
+  // public/svg/pattern-hex.svg is never embedded in anything that travels.
+  // Rendered via a data URI with a solid fallback colour, so clients that
+  // strip SVG backgrounds (notably Gmail/Outlook) show the clean solid design.
+  const hexBg = `url(${ministryHexTileDataUri()}) repeat`;
   return `
     <div style="font-family: Arial, sans-serif; direction: rtl; text-align: right; padding: 20px; background-color: #fcfcfc; background: #fcfcfc ${hexBg}; border: 1px solid #eaeaea; border-radius: 12px; max-width: 650px; margin: 0 auto;">
       <div style="background-color: #002723; padding: 20px; border-radius: 8px 8px 0 0; text-align: center; border-bottom: 3px solid #B9A779;">
@@ -118,70 +115,5 @@ export function wrapMinistryEmail({ directorate, titleAr, contentHtml }) {
   `;
 }
 
-/**
- * Sends a generic "we received your request" acknowledgement to the citizen's
- * OWN email address. Best-effort and self-contained: it swallows every error
- * (SMTP down, no recipient, misconfiguration) so it can never break the request
- * that triggered it. Call it fire-and-forget.
- *
- * @param {object}   opts
- * @param {string}   opts.to           Citizen email. If falsy, nothing is sent.
- * @param {string}  [opts.name]        Citizen name, for the greeting.
- * @param {string}   opts.serviceLabel Human name of the service, e.g. "طلب إقامة فعالية".
- * @param {string}  [opts.directorate] Directorate sub-heading in the header.
- * @param {string}  [opts.reference]   Tracking/reference number, shown if present.
- * @param {string}  [opts.extraNote]   Optional extra reassurance line (plain text).
- */
-export async function sendCitizenAck({ to, name, serviceLabel, directorate, reference, extraNote }) {
-  const recipient = typeof to === "string" ? to.trim() : "";
-  if (!recipient) return; // No email → nothing to send (per product decision).
-
-  try {
-    const greeting = name?.trim()
-      ? `عزيزنا <strong>${escapeHtml(name.trim())}</strong>،`
-      : "عزيزنا مقدّم الطلب،";
-
-    const referenceRow = reference
-      ? `
-        <table style="width:100%;border-collapse:collapse;margin:18px 0;font-size:13px;background:#fdfdfd;border:1px solid #f0f0f0;border-radius:8px;">
-          <tr style="background:#f9f9f9;">
-            <td style="padding:11px 12px;font-weight:bold;color:#002723;width:45%;">الرقم المرجعي / Reference:</td>
-            <td style="padding:11px 12px;font-family:monospace;font-weight:bold;color:#428177;">${escapeHtml(reference)}</td>
-          </tr>
-        </table>`
-      : "";
-
-    const extraNoteHtml = extraNote
-      ? `<p style="font-size:13px;color:#444;line-height:1.7;">${escapeHtml(extraNote)}</p>`
-      : "";
-
-    const contentHtml = `
-      <p style="font-size:14px;">
-        ${greeting}<br/>
-        نؤكد لك استلام طلبك الخاص بـ<strong>${escapeHtml(serviceLabel)}</strong> عبر الموقع الرسمي لوزارة الثقافة السورية.
-        سيتم النظر فيه من قِبل الجهة المختصة، وسيتم التواصل معك عند الحاجة.
-      </p>
-      ${referenceRow}
-      ${extraNoteHtml}
-      <div style="margin-top:18px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:14px;font-size:12px;color:#1e3a8a;line-height:1.6;">
-        📌 هذه الرسالة لتأكيد وصول طلبك فقط. لست بحاجة لاتخاذ أي إجراء إضافي.
-      </div>
-    `;
-
-    await sendMail({
-      to: recipient,
-      subject: `تأكيد استلام طلبك — ${serviceLabel} | وزارة الثقافة السورية`,
-      html: wrapMinistryEmail({ directorate, titleAr: "تم استلام طلبك بنجاح", contentHtml }),
-      text:
-        `${name?.trim() ? `عزيزنا ${name.trim()}،` : "عزيزنا مقدّم الطلب،"}\n\n` +
-        `نؤكد لك استلام طلبك الخاص بـ${serviceLabel} عبر الموقع الرسمي لوزارة الثقافة السورية. ` +
-        `سيتم النظر فيه من قِبل الجهة المختصة، وسيتم التواصل معك عند الحاجة.\n` +
-        (reference ? `\nالرقم المرجعي: ${reference}\n` : "") +
-        (extraNote ? `\n${extraNote}\n` : "") +
-        `\nهذه رسالة تلقائية للتأكيد فقط، يُرجى عدم الرد عليها.`,
-    });
-  } catch (error) {
-    // Best-effort: never let a confirmation email failure break the submission.
-    console.error(`Citizen acknowledgement email failed (${serviceLabel}):`, error);
-  }
-}
+// sendCitizenAck moved to queued-mail.js when acknowledgements became queued -
+// it now records every message in NotificationOutbox before attempting delivery.

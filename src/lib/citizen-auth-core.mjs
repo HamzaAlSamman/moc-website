@@ -5,6 +5,19 @@ const LOGIN_LOCK_MS = 15 * 60 * 1000;
 const RESET_TTL_MS = 60 * 60 * 1000;
 const GENERIC_FORGOT_RESPONSE = Object.freeze({ accepted: true });
 
+// One account per national ID, enforced softly. A *verified* holder blocks new
+// sign-ups permanently (see registerCitizen + the DB partial unique index). An
+// *unverified* stub blocks them only for this window — a permanent block would
+// let a typo'd email or a failed OTP send squat someone's national ID forever,
+// which is exactly why this is not a hard DB unique. Override with
+// CITIZEN_UNVERIFIED_ID_HOLD_HOURS (0 disables the hold entirely).
+const DEFAULT_UNVERIFIED_ID_HOLD_MS = 24 * 60 * 60 * 1000;
+
+function unverifiedNationalIdHoldMs(env) {
+  const hours = Number(env?.CITIZEN_UNVERIFIED_ID_HOLD_HOURS);
+  return Number.isFinite(hours) && hours >= 0 ? hours * 60 * 60 * 1000 : DEFAULT_UNVERIFIED_ID_HOLD_MS;
+}
+
 export class CitizenAuthError extends Error {
   constructor(code, options = {}) {
     super(code);
@@ -23,7 +36,12 @@ function defaultRandomToken() {
 }
 
 function trustedBaseUrl(env) {
-  const raw = env.APP_BASE_URL;
+  // Server-configured values only — never the request Host header, which the
+  // caller controls and could use to point reset links at their own domain.
+  // APP_BASE_URL is the intended knob; the NEXT_PUBLIC_* names are accepted as
+  // fallbacks because deployments already set them, and a missing base URL
+  // silently kills the whole reset flow.
+  const raw = env.APP_BASE_URL || env.NEXT_PUBLIC_APP_URL || env.NEXT_PUBLIC_SITE_URL;
   if (!raw) throw new Error("APP_BASE_URL is required for citizen password reset links");
   const url = new URL(raw);
   if (!/^https?:$/.test(url.protocol)) throw new Error("APP_BASE_URL must use http or https");
@@ -82,8 +100,24 @@ export function createCitizenAuthService({
       throw new CitizenAuthError("NATIONAL_ID_VERIFIED", { recover: "forgot-password" });
     }
 
-    const password = await hashPassword(data.password);
     const existing = await repository.findCitizenByEmail(data.email);
+
+    // One account per national ID. A recent *unverified* stub with this ID
+    // blocks the sign-up (the abuse this guards against is creating many
+    // accounts at once), but only inside the hold window so an abandoned stub
+    // cannot squat the ID forever. Re-trying your OWN pending registration
+    // (same email, so same row) is never blocked. A missing/invalid createdAt
+    // is treated as brand-new — the safe default against the abuse case.
+    const pending = await repository.findUnverifiedCitizenByNationalId(nationalIdHash);
+    if (pending && pending.id !== existing?.id) {
+      const createdMs = new Date(pending.createdAt).getTime();
+      const ageMs = Number.isFinite(createdMs) ? now().getTime() - createdMs : 0;
+      if (ageMs < unverifiedNationalIdHoldMs(env)) {
+        throw new CitizenAuthError("NATIONAL_ID_PENDING", { recover: "verify-or-wait" });
+      }
+    }
+
+    const password = await hashPassword(data.password);
     const write = {
       email: data.email,
       fullName: data.fullName,
@@ -206,8 +240,13 @@ export function createCitizenAuthService({
   async function resetCitizenPassword(input) {
     const token = typeof input?.token === "string" ? input.token : "";
     const password = typeof input?.password === "string" ? input.password : "";
-    if (token.length < 8 || !validatePassword(password).valid) {
-      throw new CitizenAuthError("RESET_INVALID");
+    if (token.length < 8) throw new CitizenAuthError("RESET_INVALID");
+    // A weak password is the user's mistake, not a bad link — reporting it as
+    // RESET_INVALID sent people back to request a new email that would fail
+    // exactly the same way.
+    const strength = validatePassword(password);
+    if (!strength.valid) {
+      throw new CitizenAuthError("PASSWORD_WEAK", { errors: strength.errors ?? [] });
     }
     const tokenHash = hashCitizenToken(token);
     const reset = await repository.findPasswordReset(tokenHash);
@@ -249,6 +288,14 @@ export function createPrismaCitizenAuthRepository(prisma) {
       return prisma.citizen.findFirst({
         where: { nationalIdHash, emailVerifiedAt: { not: null } },
         select: { id: true },
+      });
+    },
+    findUnverifiedCitizenByNationalId(nationalIdHash) {
+      // Newest unverified stub for this ID — its age drives the hold window.
+      return prisma.citizen.findFirst({
+        where: { nationalIdHash, emailVerifiedAt: null },
+        orderBy: { createdAt: "desc" },
+        select: { id: true, email: true, createdAt: true },
       });
     },
     createCitizen(data) {

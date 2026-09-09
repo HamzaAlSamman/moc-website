@@ -36,7 +36,7 @@ export default function BylawsStep({
             <h3 className="font-qomra text-xl font-black text-[#054239]">{isRtl ? "مشروع النظام الأساسي" : "Draft bylaws"}</h3>
             <p className="mt-2 text-sm leading-7 text-slate-700">
               {isRtl
-                ? "سيُنشئ النظام مشروعاً منظماً من بيانات طلبك بالاستناد إلى النموذج الاسترشادي. راجع المصدر الآن، وستتوفر المعاينة المولدة بعد حفظ الوثائق."
+                ? "يتم توليد مشروع النظام الأساسي تلقائياً بناءً على بيانات الطلب المدخلة ووفقاً للنموذج الاسترشادي المعتمد. يمكنكم الاطلاع على النموذج المرجعي أدناه، وستتوفر نسخة المعاينة الخاصة بطلبكم بعد حفظ كافة الوثائق المطلوبة."
                 : "The service will build a structured draft from your answers using the model bylaws. Review the source now; the generated preview will be available after documents are saved."}
             </p>
           </div>

@@ -2,6 +2,8 @@ import "server-only";
 import fs from "node:fs";
 import path from "node:path";
 import puppeteer from "puppeteer-core";
+import { formatFee, getFeesForRole } from "@/lib/copyright-fees.mjs";
+import { requireChromiumExecutable } from "@/lib/chromium-executable.mjs";
 
 // ---------------------------------------------------------------------------
 // Official payment-receipt PDF generator (Syrian Ministry of Culture identity)
@@ -15,93 +17,72 @@ import puppeteer from "puppeteer-core";
 // never hold two Chromium processes at once on the memory-constrained host.
 // ---------------------------------------------------------------------------
 
-const PUBLIC_DIR = path.join(process.cwd(), "public");
+const RECEIPT_ASSET_PATHS = {
+  fontRegular: path.join(/* turbopackIgnore: true */ process.cwd(), "public", "fonts", "itfQomraArabic-Regular.otf"),
+  fontBold: path.join(/* turbopackIgnore: true */ process.cwd(), "public", "fonts", "itfQomraArabic-Bold.otf"),
+  logo: path.join(/* turbopackIgnore: true */ process.cwd(), "public", "logo.png"),
+  navShape: path.join(/* turbopackIgnore: true */ process.cwd(), "public", "moc-nav-shape.svg"),
+};
 
 // Read once, reuse forever — these assets are deployed with the app.
 let cachedAssets = null;
 function loadAssets() {
   if (cachedAssets) return cachedAssets;
-  const toDataUri = (file, mime) => {
+  const toDataUri = (assetPath, mime) => {
     try {
-      const buf = fs.readFileSync(path.join(PUBLIC_DIR, file));
+      const buf = fs.readFileSync(/* turbopackIgnore: true */ assetPath);
       return `data:${mime};base64,${buf.toString("base64")}`;
     } catch {
       return null;
     }
   };
   cachedAssets = {
-    fontRegular: toDataUri("fonts/itfQomraArabic-Regular.otf", "font/otf"),
-    fontBold: toDataUri("fonts/itfQomraArabic-Bold.otf", "font/otf"),
-    logo: toDataUri("logo.png", "image/png"),
+    fontRegular: toDataUri(RECEIPT_ASSET_PATHS.fontRegular, "font/otf"),
+    fontBold: toDataUri(RECEIPT_ASSET_PATHS.fontBold, "font/otf"),
+    logo: toDataUri(RECEIPT_ASSET_PATHS.logo, "image/png"),
     // Same decorative motif (white-gradient ornament over green) used on the
     // admin dashboard header bar, so the receipt header carries the MOC identity.
-    navShape: toDataUri("moc-nav-shape.svg", "image/svg+xml"),
+    navShape: toDataUri(RECEIPT_ASSET_PATHS.navShape, "image/svg+xml"),
   };
   return cachedAssets;
-}
-
-// Probe the usual locations so the same code runs on the AlmaLinux server and a
-// Windows dev box without extra config. PUPPETEER_EXECUTABLE_PATH always wins.
-function resolveExecutablePath() {
-  if (process.env.PUPPETEER_EXECUTABLE_PATH) return process.env.PUPPETEER_EXECUTABLE_PATH;
-  const candidates = [
-    "/usr/bin/chromium-browser",
-    "/usr/bin/chromium",
-    "/usr/lib64/chromium-browser/chromium-browser",
-    "/usr/bin/google-chrome",
-    "/usr/bin/google-chrome-stable",
-    "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
-    "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
-    "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe",
-  ];
-  for (const c of candidates) {
-    try {
-      if (fs.existsSync(c)) return c;
-    } catch {
-      /* ignore */
-    }
-  }
-  return null;
 }
 
 const GATEWAY_NAMES = {
   syriatel_cash: "سيريتل كاش / Syriatel Cash",
   mtn_cash: "كاش موبايل / Cash Mobile",
   cham_cash: "شام كاش / Cham Cash",
+  paymearia: "بيميرا / Paymeara",
 };
 
 const PROVINCE_LABEL = (sub) =>
   [sub.province, sub.center].filter(Boolean).join(" - ") || "—";
 
-// Per-stage receipt content. Updated to use the new fee structure:
-// For companies: initial total = 51,300 (51,000 + 300 stamps), final total = 47,300 (47,000 + 300 stamps)
-// For others: initial total = 31,300 (31,000 + 300 stamps), final total = 47,300 (47,000 + 300 stamps)
+// محتوى الإيصال لكل مرحلة. المبالغ من مصدر الرسوم الموحّد
+// (src/lib/copyright-fees.mjs) لا مكتوبةً هنا: الإيصال وثيقة يحملها المواطن،
+// وأي انحراف بينه وبين ما عُرض عليه في الصفحة يعني إيصالاً يخالف ما دفعه.
 function stageConfig(stage, role) {
-  const isCompany = ["الشريك", "المدير العام", "المستثمر", "رئيس مجلس إدارة", "صاحب الشركة"].includes(role);
+  const fees = getFeesForRole(role);
 
   if (stage === "final") {
     return {
       docTitle: "إيصال دفع الرسم النهائي",
       docTitleEn: "Final Fee Payment Receipt",
       lines: [
-        { label: "رسم إصدار شهادة حماية المصنف (الرسم النهائي)", value: "47000 ل.س" },
-        { label: "رسوم طوابع الخدمات الإلكترونية والخدمة السحابية", value: "300 ل.س" },
+        { label: "رسم إصدار شهادة حماية المصنف (الرسم النهائي)", value: formatFee(fees.finalBase) },
+        { label: "رسوم طوابع الخدمات الإلكترونية والخدمة السحابية", value: formatFee(fees.finalStamps) },
       ],
-      total: "47300 ل.س",
+      total: formatFee(fees.finalTotal),
     };
   }
-
-  const baseVal = isCompany ? "51000 ل.س" : "31000 ل.س";
-  const totalVal = isCompany ? "51300 ل.س" : "31300 ل.س";
 
   return {
     docTitle: "إيصال دفع الرسم الأولي",
     docTitleEn: "Initial Fee Payment Receipt",
     lines: [
-      { label: "رسم إيداع وحماية المصنف (الرسم الأولي)", value: baseVal },
-      { label: "رسوم طوابع الخدمات الإلكترونية والخدمة السحابية", value: "300 ل.س" },
+      { label: "رسم إيداع وحماية المصنف (الرسم الأولي)", value: formatFee(fees.initialBase) },
+      { label: "رسوم طوابع الخدمات الإلكترونية والخدمة السحابية", value: formatFee(fees.initialStamps) },
     ],
-    total: totalVal,
+    total: formatFee(fees.initialTotal),
   };
 }
 
@@ -185,7 +166,7 @@ export function buildReceiptHtml(submission, stage = "initial") {
   .header > * { position: relative; z-index: 1; }
   .header img { width: 64px; height: 64px; object-fit: contain; background:#fff; border-radius:10px; padding:4px; }
   .header .titles { flex: 1; text-align: center; }
-  .header h1 { font-size: 21px; font-weight: 700; letter-spacing: .3px; }
+  .header h1 { font-size: 21px; font-weight: 700; }
   .header h2 { font-size: 14px; color: #B9A779; margin-top: 4px; font-weight: 700; }
   .doc-band {
     background: #fbf9f6; padding: 14px 26px; border-bottom: 1px solid #efe7d4;
@@ -292,13 +273,7 @@ export function buildReceiptHtml(submission, stage = "initial") {
 let queue = Promise.resolve();
 
 async function renderPdf(html) {
-  const executablePath = resolveExecutablePath();
-  if (!executablePath) {
-    throw new Error(
-      "Chromium executable not found. Install it (e.g. `dnf install chromium`) " +
-        "or set PUPPETEER_EXECUTABLE_PATH."
-    );
-  }
+  const executablePath = requireChromiumExecutable();
 
   let browser;
   try {

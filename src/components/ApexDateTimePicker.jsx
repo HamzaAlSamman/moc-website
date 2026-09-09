@@ -29,9 +29,11 @@ export default function ApexDateTimePicker({
   theme = "",
   placeholder = "",
   required = false,
+  disabled = false,
   locale = "ar",
   id,
   maxDate, // optional Date/ISO-string — disables days after it (e.g. "no future incident dates")
+  showPresets = true,
   "aria-invalid": ariaInvalid,
   "aria-describedby": ariaDescribedby,
 }) {
@@ -388,9 +390,10 @@ export default function ApexDateTimePicker({
 
   // CSS class resolution for the input field to match native site inputs
   // Enforce font-cairo instead of font-qomra in RTL to prevent standard numbers (like 1) rendering as Roman/artistic glyphs (like I).
-  const inputClass = isAdmin
+  const inputClass = (isAdmin
     ? `w-full rounded-lg border border-gray-200 bg-white py-2 text-sm outline-none transition focus:border-[#b9a779] focus:ring-2 focus:ring-[#b9a779]/20 text-slate-800 cursor-pointer shadow-sm ${isRtl ? "font-cairo" : "font-inter"}`
-    : `w-full border border-slate-200 focus:border-[#b9a779] focus:ring-2 focus:ring-[#b9a779]/20 rounded-xl py-3.5 text-sm text-slate-800 outline-none transition bg-white placeholder:text-slate-400 cursor-pointer shadow-sm ${isRtl ? "font-cairo" : "font-inter"}`;
+    : `w-full border border-slate-200 focus:border-[#b9a779] focus:ring-2 focus:ring-[#b9a779]/20 rounded-xl py-3.5 text-sm text-slate-800 outline-none transition bg-white placeholder:text-slate-400 cursor-pointer shadow-sm ${isRtl ? "font-cairo" : "font-inter"}`
+  ) + (disabled ? " cursor-not-allowed bg-slate-100 text-slate-500" : "");
 
   const paddingClass = isRtl ? "pr-4 pl-10" : "pl-4 pr-10";
   const iconPositionClass = isRtl ? "left-3.5" : "right-3.5";
@@ -520,7 +523,13 @@ export default function ApexDateTimePicker({
                         key={idx}
                         type="button"
                         disabled={isDisabled}
-                        onClick={() => { setSelectedDate(cell.date); emitSelection(cell.date); }}
+                        onClick={() => {
+                          setSelectedDate(cell.date);
+                          emitSelection(cell.date);
+                          if (type === "date" && !isMobile) {
+                            setIsOpen(false);
+                          }
+                        }}
                         className={`
                           aspect-square text-xs rounded-lg flex items-center justify-center font-bold transition-all min-h-[38px] md:min-h-0 font-cairo
                           ${isDisabled ? "text-slate-250 cursor-not-allowed opacity-50" : "cursor-pointer"}
@@ -585,7 +594,7 @@ export default function ApexDateTimePicker({
             {/* Quick Presets Bar — hidden individually when the preset's target
                 date would fall after maxDate (e.g. "tomorrow" for a
                 can't-be-future incident date). */}
-            {!jumpPanel && (
+            {!jumpPanel && showPresets && (
               <div className="flex flex-wrap gap-1 mt-4 pt-3.5 border-t border-slate-100">
                 {!isDateDisabled(new Date()) && (
                   <button
@@ -625,24 +634,26 @@ export default function ApexDateTimePicker({
             )}
 
             {/* Confirm / Close Footer Buttons */}
-            <div className="flex gap-2 mt-4 pt-3.5 border-t border-slate-100 justify-end">
-              <button
-                type="button"
-                onClick={() => { setIsOpen(false); setJumpPanel(null); }}
-                className={`rounded-lg px-4 py-2.5 text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-500 transition cursor-pointer flex items-center justify-center gap-1 flex-1 md:flex-initial ${isRtl ? "font-qomra" : "font-inter"}`}
-              >
-                <X className="w-4.5 h-4.5" />
-                {isRtl ? "إلغاء" : "Cancel"}
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirm}
-                className={`rounded-lg px-5 py-2.5 text-xs font-extrabold transition cursor-pointer flex items-center justify-center gap-1 bg-gradient-to-r ${themeColors.goldGradient} ${themeColors.goldTextOnBtn} hover:brightness-110 shadow-sm flex-1 md:flex-initial ${isRtl ? "font-qomra" : "font-inter"}`}
-              >
-                <Check className="w-4.5 h-4.5" />
-                {isRtl ? "تأكيد" : "Confirm"}
-              </button>
-            </div>
+            {(isMobile || type === "datetime-local") && (
+              <div className="flex gap-2 mt-4 pt-3.5 border-t border-slate-100 justify-end">
+                <button
+                  type="button"
+                  onClick={() => { setIsOpen(false); setJumpPanel(null); }}
+                  className={`rounded-lg px-4 py-2.5 text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-500 transition cursor-pointer flex items-center justify-center gap-1 flex-1 md:flex-initial ${isRtl ? "font-qomra" : "font-inter"}`}
+                >
+                  <X className="w-4.5 h-4.5" />
+                  {isRtl ? "إلغاء" : "Cancel"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirm}
+                  className={`rounded-lg px-5 py-2.5 text-xs font-extrabold transition cursor-pointer flex items-center justify-center gap-1 bg-gradient-to-r ${themeColors.goldGradient} ${themeColors.goldTextOnBtn} hover:brightness-110 shadow-sm flex-1 md:flex-initial ${isRtl ? "font-qomra" : "font-inter"}`}
+                >
+                  <Check className="w-4.5 h-4.5" />
+                  {isRtl ? "تأكيد" : "Confirm"}
+                </button>
+              </div>
+            )}
 
           </div>
         </>
@@ -651,11 +662,12 @@ export default function ApexDateTimePicker({
   return (
     <div className="relative w-full" ref={ref} dir={isRtl ? "rtl" : "ltr"}>
       {/* Visible Interactive Input Field */}
-      <div className="relative flex items-center cursor-pointer" onClick={() => setIsOpen(!isOpen)}>
+      <div className="relative flex items-center">
         <input
           id={id}
           type="text"
           readOnly
+          disabled={disabled}
           aria-invalid={ariaInvalid}
           aria-describedby={ariaDescribedby}
           placeholder={placeholder || (type === "datetime-local" ?
@@ -663,13 +675,33 @@ export default function ApexDateTimePicker({
             (isRtl ? "اختر التاريخ..." : "Select date..."))}
           value={displayValue}
           required={required}
-          className={`${inputClass} ${paddingClass}`}
+          onClick={() => !disabled && setIsOpen(!isOpen)}
+          className={`${inputClass} cursor-pointer ${isRtl ? "pr-4 pl-12" : "pl-4 pr-12"}`}
           style={{
             direction: displayValue ? "ltr" : (isRtl ? "rtl" : "ltr"),
             textAlign: isRtl ? "right" : "left"
           }}
         />
-        <CalendarIcon className={`absolute ${iconPositionClass} w-4.5 h-4.5 text-slate-450 pointer-events-none transition-transform duration-200`} />
+        <div className={`absolute ${isRtl ? "left-3.5" : "right-3.5"} flex items-center gap-1.5`}>
+          {displayValue && !disabled && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onChange("");
+                setSelectedDate(null);
+              }}
+              className="text-slate-400 hover:text-rose-600 transition p-1 rounded-full hover:bg-slate-100 cursor-pointer"
+              title={isRtl ? "مسح التاريخ" : "Clear date"}
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
+          <CalendarIcon 
+            className="w-4.5 h-4.5 text-slate-450 cursor-pointer transition-transform duration-200" 
+            onClick={() => !disabled && setIsOpen(!isOpen)} 
+          />
+        </div>
       </div>
 
       {/* On mobile, portal the fixed bottom-sheet overlay to <body> so a

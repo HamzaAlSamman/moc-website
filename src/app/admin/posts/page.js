@@ -1,11 +1,18 @@
 import { getCurrentUser } from "@/lib/dal";
 import { prisma } from "@/lib/prisma";
+import { redirect } from "next/navigation";
 import AdminShell from "@/components/admin/AdminShell";
 import PostsTable from "@/components/admin/PostsTable";
 import { can } from "@/lib/permissions";
 
 export default async function PostsPage({ searchParams }) {
   const user   = await getCurrentUser();
+
+  // Same guard the sidebar already uses for this link: without it any signed-in
+  // role could open the news screen by typing the URL, which is how the events
+  // list used to behave before it was gated.
+  if (!can(user.role, "CREATE_POST")) redirect("/admin/dashboard");
+
   const params = await searchParams;
 
   const page     = Math.max(1, Number(params?.page    ?? 1));

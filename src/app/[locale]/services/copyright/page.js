@@ -1,5 +1,7 @@
 "use client";
 
+import { isCopyrightReceiptAvailable } from "@/lib/copyright-receipt-state.mjs";
+
 import React, { useState, useEffect, useRef, use } from "react";
 import { createPortal } from "react-dom";
 import Image from "next/image";
@@ -8,6 +10,9 @@ import { useSearchParams } from "next/navigation";
 import DecorativeCorners from "../../../../components/DecorativeCorners";
 import ApexDateTimePicker from "../../../../components/ApexDateTimePicker";
 import { validateField, validateAll } from "../../../../lib/copyright-validation";
+import { PAYMENT_GATEWAYS, isPaymentGatewayActive } from "../../../../lib/payment-gateways.mjs";
+import { getFeesForRole as feesForRole } from "../../../../lib/copyright-fees.mjs";
+import { useStepScrollReset } from "../../../../lib/use-step-scroll-reset";
 import { Lightbulb, Hourglass, AlertTriangle, Info, FileText, CheckCircle, AlertCircle, CreditCard, Clock, Award, Check, Trash2, Plus, Download, X } from "lucide-react";
 import SubpageHero from "../../../../components/SubpageHero";
 
@@ -16,7 +21,7 @@ const T = {
   ar: {
     metaTitle: "وزارة الثقافة – مديرية حماية حقوق المؤلف والحقوق المجاورة",
     title: "بوابة حماية حقوق المؤلف",
-    subtitle: "احمِ عملك الفكري (كتاب، برنامج، تطبيق، أغنية، أو لوحة) وسجّله رسمياً لمنع سرقته أو تقليده.",
+    subtitle: "المنصة الرسمية لإيداع وتسجيل المصنفات الفكرية والأدبية والفنية والبرمجية، وحمايتها قانونياً وفق التشريعات النافذة في الجمهورية العربية السورية.",
     step1: "الاستمارة والمرفقات",
     step1Desc: "إدخال معلومات المودع وتفاصيل المصنف ورفع الملفات والوثائق الثبوتية.",
     step2: "بوابة الدفع الإلكتروني",
@@ -24,7 +29,7 @@ const T = {
     step3: "معالجة وتتبع الطلب",
     step3Desc: "دراسة طلبك وتدقيقه فنيًا وقانونيًا من قبل المختصين بالوزارة.",
     step4: "الشهادة الرقمية الرسمية",
-    step4Desc: "تهانينا! تم إصدار وثيقة حماية الملكية الفكرية المعتمدة رسميًا.",
+    step4Desc: "تم إصدار وثيقة حماية الملكية الفكرية واعتمادها رسمياً من قِبل وزارة الثقافة.",
     stepNum: "الخطوة",
     stepOf: "من",
     republic: "الجمهورية العربية السورية – وزارة الثقافة",
@@ -32,12 +37,12 @@ const T = {
     switchApplicant: "بوابة تقديم الطلبات",
     switchReviewer: "لوحة تحكم الموظف",
     switchTracker: "متابعة طلب سابق",
-    termsTitle: "دليلك المبسط لحماية حقوقك الفكرية",
-    termsSubtitle: "اعرف كيف تحمي عملك الفني أو الأدبي أو البرمجي بخطوات بسيطة وبدون تعقيدات قانونية",
-    gavel: "خطوة إلزامية مسبقة",
-    agreeCheck: "لقد قرأت هذا الدليل المبسط وأتعهد بصحة كافة البيانات والمرفقات التي سأقدمها تحت مسؤوليتي الشخصية.",
-    btnNextStep: "الانتقال للاستمارة الرقمية",
-    btnBack: "← العودة لمراجعة الشروط",
+    termsTitle: "الدليل الإرشادي لحماية الحقوق الفكرية أصولاً",
+    termsSubtitle: "التعليمات التنظيمية والإجرائية الخاصة بإيداع وحماية الأعمال الفنية والأدبية والبرمجية وفقاً للقانون.",
+    gavel: "إقرار إلزامي مسبق",
+    agreeCheck: "أقر بالاطلاع على الدليل الإرشادي المرفق وأتعهد بصحة كافة البيانات والوثائق المقدمة تحت مسؤوليتي القانونية الشخصية.",
+    btnNextStep: "الاستمرار إلى استمارة التقديم",
+    btnBack: "← العودة إلى الإرشادات والشروط",
     section1: "البيانات الشخصية والتواصل",
     nameLabel: "الاسم الرباعي",
     namePlaceholder: "الاسم الرباعي الكامل",
@@ -83,7 +88,7 @@ const T = {
     fileSelect: "اختر الملف",
     fileSelected: "تم اختيار الملف",
     btnSubmitForm: "تأكيد البيانات والانتقال للدفع",
-    paySuccessTitle: "تم تسجيل معاملتك بنجاح!",
+    paySuccessTitle: "تم تقديم طلب حماية المصنف بنجاح",
     paySuccessDesc: "رقم طلبك:",
     payDetailsTitle: "تفاصيل رسوم الخدمة الإلكترونية:",
     payDetail1: "رسم إيداع وحماية مصنف فكري (الرسم الأولي):",
@@ -98,10 +103,18 @@ const T = {
     payReceiptLabel: "رفع إيصال الدفع الإلكتروني *",
     payReceiptDesc: "يرجى أخذ لقطة شاشة للإيصال أو رفع ملف PDF هنا (بحد أقصى 5MB).",
     btnPay: "تسديد الرسم الأولي (550 ل.س)",
+    paySyriatel: "سيريتل كاش",
+    paySyriatelDesc: "الدفع الإلكتروني الآمن عبر محفظة سيريتل كاش الرقمية",
+    payMtn: "ام تي ان كاش",
+    payMtnDesc: "الدفع الإلكتروني الآمن عبر محفظة كاش موبايل",
+    payPaymearia: "بيميرا",
+    payPaymeariaDesc: "الدفع الإلكتروني الآمن عبر بوابة بيميرا الإلكترونية",
+    toastGatewayInactive: "وسيلة الدفع المختارة لم تُفعّل بعد. يرجى اختيار بوابة شام كاش لإتمام الدفع.",
+    btnClose: "إغلاق",
     n8nTitle: "جاري إكمال طلبك...",
     n8nDesc: "يرجى الانتظار قليلاً، لن يستغرق هذا أكثر من لحظات.",
-    n8nTip: "احتفظ برمز معاملتك أعلاه — يمكنك استخدامه لاحقاً من تبويب \"متابعة طلب سابق\" لتتبع مراحل المراجعة والدفع وإصدار الشهادة.",
-    certSuccessMsg: "تهانينا! تمت الموافقة الفنية والقانونية الرسمية على طلبك وجرى توليد الشهادة.",
+    n8nTip: "يرجى الاحتفاظ برمز المعاملة المبين أعلاه لمتابعة الطلب واستكمال إجراءات التدقيق والاعتماد المالي وإصدار الشهادة لاحقاً.",
+    certSuccessMsg: "تمت الموافقة الفنية والقانونية على طلبكم وجرى إصدار شهادة الحماية الرسمية.",
     btnPrint: "طباعة الوثيقة الرسمية",
     certHeaderTitle: "شهادة إيداع وحماية مصنف فكري",
     certSub: "مديرية حماية حقوق المؤلف والحقوق المجاورة",
@@ -137,10 +150,10 @@ const T = {
     statusPending: "قيد الانتظار",
     toastSubmitSuccess: "تم إرسال الطلب بنجاح! يرجى تسديد الرسوم",
     toastPaySelect: "يرجى اختيار طريقة الدفع الإلكتروني للاستمرار",
-    toastPayProgress: "جاري معالجة الدفع الرقمي وحفظ المرفقات بالخوادم...",
-    toastPaySuccess: "تم تسليم المعاملة بنجاح! يمكنك الآن مراجعتها والموافقة عليها واعتمادها كموظف من لوحة التحكم بالأعلى",
-    toastApproved: "تم اعتماد المعاملة رسمياً وتوليد وثيقة الملكية المضمونة!",
-    toastRejected: "تم رفض المعاملة وإرسال التوجيهات للمتقدم لتعديل الطلب",
+    toastPayProgress: "جاري معالجة عملية الدفع وحفظ المرفقات المطلوبة...",
+    toastPaySuccess: "تم تسليم المعاملة بنجاح واستكمال متطلبات المرحلة الأولى.",
+    toastApproved: "تم اعتماد المعاملة رسمياً وإصدار وثيقة حماية الملكية الفكرية.",
+    toastRejected: "تم رفض المعاملة وإرسال إشعار للمتقدم لتعديل واستكمال الطلب.",
     btnSubmitAnother: "تقديم طلب حماية آخر",
     btnBackToCalendar: "العودة إلى الروزنامة الثقافية",
   },
@@ -229,6 +242,14 @@ const T = {
     payReceiptLabel: "Upload Payment Receipt Screenshot *",
     payReceiptDesc: "Please take a screenshot of your receipt or upload a PDF file here (max 5MB).",
     btnPay: "Pay Initial Fee (550 L.S.)",
+    paySyriatel: "Syriatel Cash",
+    paySyriatelDesc: "Secure electronic payment via Syriatel Cash mobile wallet",
+    payMtn: "MTN Cash",
+    payMtnDesc: "Secure electronic payment via MTN Cash Mobile wallet",
+    payPaymearia: "Paymeara",
+    payPaymeariaDesc: "Secure electronic payment via Paymeara gateway",
+    toastGatewayInactive: "The selected payment gateway is not active yet. Please choose Cham Cash to complete the payment.",
+    btnClose: "Close",
     n8nTitle: "Completing your request...",
     n8nDesc: "Please wait a moment, this will only take a few seconds.",
     n8nTip: "Keep your request code above — use it later in the \"Track Request\" tab to follow the review, payment, and certificate stages.",
@@ -281,42 +302,42 @@ const DECREE_LAW_TEXT = {
     {
       id: "what-is-it",
       title: "ما هو حق المؤلف؟",
-      content: `حماية حق المؤلف هي خدمة تتيح لك توثيق وحفظ ملكية أعمالك الفكرية (مثل كتبك، برامجك، أغانيك، أو لوحاتك) بشكل رسمي لدى وزارة الثقافة.
+      content: `خدمة حماية حق المؤلف تتيح للمبتكرين تسجيل وإيداع مصنفاتهم الفكرية والأدبية والفنية والبرمجية وتوثيق ملكيتها رسمياً لدى وزارة الثقافة.
       
-الهدف من هذا الإيداع هو إثبات أنك المبتكر الأول للعمل، وحمايته قانونياً من أي سرقة، أو نسخ، أو استخدام غير مصرح به من قبل الآخرين.`
+الهدف من هذا الإيداع هو إثبات حق السبق والابتكار، وحماية المصنفات قانونياً من أي تعدٍّ أو نسخ أو استخدام غير مصرح به.`
     },
     {
       id: "what-we-protect",
       title: "ما الذي يمكن حمايته؟",
-      content: `يمكنك حماية مجموعة واسعة من الأعمال المبتكرة، مثل:
-• الكتب والمقالات، الروايات، والدواوين الشعرية.
-• البرمجيات، مواقع الويب، تطبيقات الجوال، وقواعد البيانات.
-• الأغاني والموسيقى والمسرحيات والأفلام والمقاطع المرئية.
-• اللوحات الفنية، المنحوتات، التصاميم الهندسية والمعمارية.
+      content: `تشمل الحماية طيفاً واسعاً من الأعمال المبتكرة، مثل:
+• الكتب، والمقالات، والروايات، والدواوين الشعرية والمخطوطات.
+• البرمجيات، والمواقع الإلكترونية، وتطبيقات الأجهزة الذكية، وقواعد البيانات.
+• المصنفات الموسيقية والغنائية والمسرحية والسينمائية والتسجيلات الصوتية والمرئية.
+• اللوحات الفنية، والمنحوتات، والتصاميم الهندسية والمعمارية.
 • التراث الشعبي السوري الأصيل.`
     },
     {
       id: "what-is-excluded",
       title: "ما الأشياء التي لا تحمى؟",
-      content: `حماية الملكية الفكرية لا تشمل الأمور التالية:
-• مجرد فكرة في رأسك (الأفكار لا تحمى إلا إذا تمت كتابتها أو برمجتها أو تجسيدها في ملف عمل فعلي).
-• القوانين والأنظمة الحكومية والوثائق الرسمية والأخبار الصحفية اليومية.
-• العمليات الحسابية أو أساليب العمل المجردة.`
+      content: `لا تشمل الحماية القانونية للملكية الفكرية ما يلي:
+• الأفكار المجردة (لا تخضع الأفكار للحماية إلا إذا تم تدوينها أو برمجتها أو تجسيدها في مصنف مادي ملموس).
+• القوانين، والأنظمة، والقرارات الحكومية، والوثائق الرسمية، والأخبار الصحفية اليومية.
+• العمليات الحسابية والطرق والمناهج التشغيلية المجردة.`
     },
     {
       id: "who-applies",
       title: "من يحق له تقديم الطلب؟",
-      content: `يمكن لأي شخص تقديم طلب الحماية في الحالات التالية:
-• المبتكر نفسه (صاحب العمل الأصلي).
-• الوكيل الرسمي المفوض عن المبتكر بموجب وكالة قانونية.
-• الورثة الشرعيون في حال كان المبتكر متوفى.
-• الممثل القانوني للشركة أو المنشأة الفنية التي تمتلك العمل.`
+      content: `يجوز تقديم طلب الإيداع والحماية من قِبل الفئات التالية:
+• المبتكر أو المؤلف أو المبرمج الأصلي (صاحب المصنف).
+• الوكيل القانوني بموجب وكالة رسمية موثقة أصولاً.
+• الورثة الشرعيون بموجب وثيقة حصر إرث في حال وفاة صاحب المصنف.
+• الممثل القانوني للشركات، أو دور النشر، أو المؤسسات الفنية التي تعود إليها ملكية المصنف.`
     },
     {
       id: "how-long",
       title: "ما هي مدة الحماية؟",
-      content: `تستمر حماية حقوقك المالية والمعنوية مدى حياتك بالكامل.
-وبعد الوفاة، تنتقل هذه الحماية تلقائياً لعائلتك وورثتك الشرعيين لمدة 50 سنة إضافية لحفظ حقوقهم والاستفادة من العمل.`
+      content: `تستمر حماية الحقوق المالية والأدبية للمؤلف طيلة حياته.
+وبعد وفاته، تنتقل هذه الحقوق أصولاً إلى ورثته الشرعيين لمدة 50 عاماً إضافياً وفقاً لأحكام القانون.`
     }
   ],
   en: [
@@ -409,27 +430,10 @@ function getUnderlyingRoleGroup(role) {
   return "author";
 }
 
+// الرسوم نفسها تُقرأ من مصدر واحد يشترك فيه هذا الملف وقوالب البريد وإيصال
+// الـ PDF — انظر src/lib/copyright-fees.mjs.
 function getFeesForRole(role) {
-  const isCompany = getUnderlyingRoleGroup(role) === "representative";
-  if (isCompany) {
-    return {
-      initialBase: 51000,
-      initialStamps: 300,
-      initialTotal: 51300,
-      finalBase: 47000,
-      finalStamps: 300,
-      finalTotal: 47300
-    };
-  } else {
-    return {
-      initialBase: 31000,
-      initialStamps: 300,
-      initialTotal: 31300,
-      finalBase: 47000,
-      finalStamps: 300,
-      finalTotal: 47300
-    };
-  }
+  return feesForRole(role);
 }
 
 const INITIAL_FORM = {
@@ -504,9 +508,55 @@ function FieldErrorText({ id, message }) {
   );
 }
 
-function ChamPaymentCard({ isRtl, showToast, copyText = "f6be4f104cf141af079e7c2af693dd41" }) {
+
+function PaymentCard({ gatewayId, isRtl, showToast }) {
   const [copied, setCopied] = useState(false);
   const [showModal, setShowModal] = useState(false);
+
+  const config = PAYMENT_GATEWAYS[gatewayId] || PAYMENT_GATEWAYS.cham_cash;
+  const name = isRtl ? config.nameAr : config.nameEn;
+  const copyText = config.accountCode;
+  const accent = config.theme.accent;
+  const [gA, gB, gC] = config.theme.gradient;
+  const surface = {
+    backgroundImage: `linear-gradient(to bottom right, ${gA}, ${gB}, ${gC})`,
+    borderColor: `${accent}4d`,
+  };
+
+  // A gateway that is not live yet must never show an account code: the code
+  // is a placeholder, and a citizen who transfers money to it loses it.
+  if (config.status !== "active") {
+    return (
+      <div className="relative overflow-hidden text-white border rounded-3xl p-6 sm:p-8 shadow-2xl text-start" style={surface}>
+        <div className="absolute top-0 right-0 w-48 h-48 rounded-full blur-3xl pointer-events-none" style={{ backgroundColor: `${accent}1a` }} />
+        <div className="relative z-10 flex flex-col items-center text-center gap-4 py-4">
+          {/* شعارات البوابات مختلفة النِسب: شام كاش مربّع تقريباً بينما شعار
+              سيريتل كاش شريط عريض (٣:١). object-cover كان يقصّ العريض منها
+              فيظهر نصف الشعار فقط، لذا object-contain مع حشوة بسيطة. */}
+          <div className="w-16 h-16 rounded-2xl p-0.5 shadow-lg flex items-center justify-center overflow-hidden" style={{ backgroundImage: `linear-gradient(to top right, ${accent}, ${accent}80)` }}>
+            <div className="w-full h-full bg-white rounded-[14px] flex items-center justify-center overflow-hidden p-1.5">
+              <img src={config.logo} alt={`${name} Logo`} className="max-w-full max-h-full object-contain" />
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] font-bold tracking-wider uppercase font-inter" style={{ color: accent }}>{config.brandText}</div>
+            <div className="text-xl font-bold text-white font-qomra mt-1">{name}</div>
+          </div>
+          <span
+            className="text-sm font-black px-5 py-2 rounded-full border"
+            style={{ color: accent, borderColor: `${accent}59`, backgroundColor: `${accent}1a` }}
+          >
+            {isRtl ? "قريباً" : "Coming soon"}
+          </span>
+          <p className="text-xs leading-relaxed text-white/75 max-w-md">
+            {isRtl
+              ? "هذه الوسيلة قيد التجهيز ولم تُفعّل بعد، ولا يوجد لها رمز حساب. الدفع الإلكتروني متاح حالياً عبر بوابة شام كاش المعتمدة فقط."
+              : "This gateway is being prepared and is not active yet, and it has no account code. Electronic payment is currently available only through the approved Cham Cash gateway."}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   const handleCopy = () => {
     navigator.clipboard.writeText(copyText);
@@ -519,7 +569,7 @@ function ChamPaymentCard({ isRtl, showToast, copyText = "f6be4f104cf141af079e7c2
   };
 
   return (
-    <div className="relative overflow-hidden bg-gradient-to-br from-[#054239] via-[#030705] to-[#011411] text-white border border-[#b9a779]/30 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6 text-start">
+    <div className="relative overflow-hidden text-white border rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6 text-start" style={surface}>
       {/* Container-based responsive scanner animation */}
       <style dangerouslySetInnerHTML={{__html: `
         @keyframes scan-responsive {
@@ -531,23 +581,25 @@ function ChamPaymentCard({ isRtl, showToast, copyText = "f6be4f104cf141af079e7c2
         }
       `}} />
 
-      {/* Decorative glowing background elements */}
-      <div className="absolute top-0 right-0 w-48 h-48 bg-[#b9a779]/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute bottom-0 left-0 w-48 h-48 bg-[#054239]/30 rounded-full blur-3xl pointer-events-none" />
-      
+      {/* Decorative glowing background elements — tinted with the gateway's own brand colour */}
+      <div className="absolute top-0 right-0 w-48 h-48 rounded-full blur-3xl pointer-events-none" style={{ backgroundColor: `${accent}1a` }} />
+      <div className="absolute bottom-0 left-0 w-48 h-48 rounded-full blur-3xl pointer-events-none" style={{ backgroundColor: `${gA}4d` }} />
+
       {/* Header: Brand identities */}
       <div className="relative z-10 flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-5">
         <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-[#b9a779] to-[#988561] p-0.5 shadow-lg flex items-center justify-center">
-            <div className="w-full h-full bg-[#030705] rounded-[14px] flex items-center justify-center">
-              <svg className="w-6 h-6 text-[#b9a779]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
-              </svg>
+          <div className="w-12 h-12 rounded-2xl p-0.5 shadow-lg flex items-center justify-center overflow-hidden" style={{ backgroundImage: `linear-gradient(to top right, ${accent}, ${accent}80)` }}>
+            <div className="w-full h-full bg-white rounded-[14px] flex items-center justify-center overflow-hidden p-1">
+              <img
+                src={config.logo}
+                alt={`${name} Logo`}
+                className="max-w-full max-h-full object-contain"
+              />
             </div>
           </div>
           <div>
-            <div className="text-[10px] font-bold text-[#b9a779] tracking-wider uppercase font-inter">CHAM CASH DIGITAL PAY</div>
-            <div className="text-lg font-bold text-white font-qomra">{isRtl ? "شام كاش" : "Cham Cash"}</div>
+            <div className="text-[10px] font-bold tracking-wider uppercase font-inter" style={{ color: accent }}>{config.brandText}</div>
+            <div className="text-lg font-bold text-white font-qomra">{name}</div>
           </div>
         </div>
       </div>
@@ -555,7 +607,7 @@ function ChamPaymentCard({ isRtl, showToast, copyText = "f6be4f104cf141af079e7c2
       {/* Main Details Area */}
       <div className="relative z-10 grid grid-cols-1 md:grid-cols-5 gap-6 items-center">
         {/* Account Details Block */}
-        <div className="md:col-span-3 space-y-4">
+        <div className={config.qr ? "md:col-span-3 space-y-4" : "md:col-span-5 space-y-4"}>
           <div className="space-y-1.5">
             <span className="text-xs text-[#EDE5D6]/80 font-medium flex items-center gap-1.5">
               <svg className="w-4 h-4 text-[#b9a779]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -596,66 +648,58 @@ function ChamPaymentCard({ isRtl, showToast, copyText = "f6be4f104cf141af079e7c2
                 <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               <div className="text-[11px] leading-relaxed text-[#EDE5D6]/90">
-                <span className="font-bold text-white block mb-0.5">{isRtl ? "طريقة التحويل عبر تطبيق شام كاش:" : "How to transfer via Cham Cash app:"}</span>
-                {isRtl ? (
-                  <ol className="list-decimal list-inside space-y-1">
-                    <li>افتح تطبيق شام كاش واختر <span className="text-[#b9a779] font-medium">ارسال</span>.</li>
-                    <li>ألصق <span className="text-[#b9a779] font-medium">رمز الحساب</span> المنسوخ أعلاه في الخانة المتاحة.</li>
-                    <li>أدخل مبلغ الرسم المطلوب بدقة، ثم أكّد العملية.</li>
-                    <li>قم بتصوير شاشة الإيصال ورفعها في الحقل المخصص أدناه.</li>
-                  </ol>
-                ) : (
-                  <ol className="list-decimal list-inside space-y-1">
-                    <li>Open Cham Cash app and select <span className="text-[#b9a779] font-medium">Send</span>.</li>
-                    <li>Paste the <span className="text-[#b9a779] font-medium">Account Code</span> copied above in the available field.</li>
-                    <li>Enter the required fee amount, then confirm.</li>
-                    <li>Take a screenshot of the receipt and upload below.</li>
-                  </ol>
-                )}
+                <span className="font-bold text-white block mb-0.5">{isRtl ? config.howToPayAr : config.howToPayEn}</span>
+                <ol className="list-decimal list-inside space-y-1">
+                  {(isRtl ? config.instructionsAr : config.instructionsEn).map((inst, index) => (
+                    <li key={index}>{inst}</li>
+                  ))}
+                </ol>
               </div>
             </div>
           </div>
         </div>
 
         {/* QR Code Scan Section */}
-        <div className="md:col-span-2 flex flex-col items-center justify-center text-center space-y-2">
-          <span className="text-xs text-[#EDE5D6]/85 font-medium">
-            {isRtl ? "أو امسح الرمز للدفع الفوري" : "Or Scan QR to Pay Instantly"}
-          </span>
-          <div
-            onClick={() => setShowModal(true)}
-            className="group relative cursor-pointer overflow-hidden p-3 bg-white rounded-2xl border-2 border-[#b9a779]/20 hover:border-[#b9a779]/60 transition-all duration-500 shadow-lg hover:shadow-[#b9a779]/10"
-          >
-            {/* Holographic scanning overlay */}
-            <div className="absolute inset-0 bg-[#030705]/20 group-hover:bg-transparent transition-colors duration-500 z-10" />
-            
-            {/* Laser scanning line */}
-            <div className="absolute top-3 left-3 right-3 h-[2px] bg-gradient-to-r from-transparent via-[#b9a779] to-transparent shadow-[0_0_8px_#b9a779] animate-scan-responsive z-20 pointer-events-none" />
-            
-            <img
-              src="/images/cham_cash_qr.jpeg"
-              alt="Cham Cash QR Code"
-              className="w-36 h-36 sm:w-40 sm:h-40 object-cover rounded-xl border border-slate-100 relative z-0 transition-transform duration-500 group-hover:scale-105"
-            />
-            
-            {/* Enlarge Hint */}
-            <div className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20 rounded-xl">
-              <span className="text-[11px] font-bold text-white px-2.5 py-1.5 rounded-lg bg-[#030705]/90 border border-white/20 flex items-center gap-1.5">
-                <svg className="w-3.5 h-3.5 text-[#b9a779]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m3-3H7" />
-                </svg>
-                {isRtl ? "تكبير الرمز" : "Zoom QR Code"}
-              </span>
+        {config.qr && (
+          <div className="md:col-span-2 flex flex-col items-center justify-center text-center space-y-2">
+            <span className="text-xs text-[#EDE5D6]/85 font-medium">
+              {isRtl ? "أو امسح الرمز للدفع الفوري" : "Or Scan QR to Pay Instantly"}
+            </span>
+            <div
+              onClick={() => setShowModal(true)}
+              className="group relative cursor-pointer overflow-hidden p-3 bg-white rounded-2xl border-2 border-[#b9a779]/20 hover:border-[#b9a779]/60 transition-all duration-500 shadow-lg hover:shadow-[#b9a779]/10"
+            >
+              {/* Holographic scanning overlay */}
+              <div className="absolute inset-0 bg-[#030705]/20 group-hover:bg-transparent transition-colors duration-500 z-10" />
+              
+              {/* Laser scanning line */}
+              <div className="absolute top-3 left-3 right-3 h-[2px] bg-gradient-to-r from-transparent via-[#b9a779] to-transparent shadow-[0_0_8px_#b9a779] animate-scan-responsive z-20 pointer-events-none" />
+              
+              <img
+                src={config.qr}
+                alt={`${name} QR Code`}
+                className="w-36 h-36 sm:w-40 sm:h-40 object-contain rounded-xl border border-slate-100 relative z-0 transition-transform duration-500 group-hover:scale-105"
+              />
+              
+              {/* Enlarge Hint */}
+              <div className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20 rounded-xl">
+                <span className="text-[11px] font-bold text-white px-2.5 py-1.5 rounded-lg bg-[#030705]/90 border border-white/20 flex items-center gap-1.5">
+                  <svg className="w-3.5 h-3.5 text-[#b9a779]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m3-3H7" />
+                  </svg>
+                  {isRtl ? "تكبير الرمز" : "Zoom QR Code"}
+                </span>
+              </div>
             </div>
+            <span className="text-[10px] text-[#b9a779]/70">
+              {isRtl ? "اضغط على الباركود لتكبيره" : "Click to view full size"}
+            </span>
           </div>
-          <span className="text-[10px] text-[#b9a779]/70">
-            {isRtl ? "اضغط على الباركود لتكبيره" : "Click to view full size"}
-          </span>
-        </div>
+        )}
       </div>
 
       {/* QR Code Fullscreen Modal */}
-      {showModal && (
+      {config.qr && showModal && (
         <div
           className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex items-center justify-center p-4 transition-all duration-300"
           onClick={() => setShowModal(false)}
@@ -675,28 +719,90 @@ function ChamPaymentCard({ isRtl, showToast, copyText = "f6be4f104cf141af079e7c2
             </button>
             
             <div className="mt-4 flex flex-col items-center gap-1">
-              <span className="text-xs font-bold text-[#b9a779] tracking-wider uppercase font-inter">CHAM CASH QR</span>
-              <h4 className="text-lg font-bold text-white font-qomra">{isRtl ? "امسح الباركود للدفع السريع" : "Scan to Pay Instantly"}</h4>
+              <span className="text-xs font-bold text-[#b9a779] tracking-wider uppercase font-inter">{config.nameEn} QR</span>
+              <h4 className="text-lg font-bold text-white font-qomra">{isRtl ? config.qrTitleAr : config.qrTitleEn}</h4>
             </div>
 
             <div className="relative w-72 h-72 sm:w-80 sm:h-80 bg-white p-4 rounded-2xl border border-white/10 shadow-lg flex items-center justify-center overflow-hidden">
               {/* Laser scanning line for modal */}
               <div className="absolute top-4 left-4 right-4 h-[3px] bg-gradient-to-r from-transparent via-[#b9a779] to-transparent shadow-[0_0_12px_#b9a779] animate-scan-responsive z-20 pointer-events-none" />
               <img
-                src="/images/cham_cash_qr.jpeg"
-                alt="Cham Cash QR Code Large"
-                className="w-full h-full object-cover rounded-lg"
+                src={config.qr}
+                alt={`${name} QR Code Large`}
+                className="w-full h-full object-contain rounded-lg"
               />
             </div>
             
             <p className="text-xs text-[#EDE5D6]/90 leading-relaxed px-4">
-              {isRtl
-                ? "وجه كاميرا هاتفك المحمول أو قارئ الرمز في تطبيق شام كاش نحو الباركود لإتمام عملية الدفع بسرعة."
-                : "Point your phone camera or the QR scanner in Cham Cash app at the barcode to complete the payment."}
+              {isRtl ? config.qrDescAr : config.qrDescEn}
             </p>
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function PaymentGatewaySelector({ isRtl, selectedGateway, onSelect, t }) {
+  const gateways = Object.entries(PAYMENT_GATEWAYS).map(([id, gateway]) => ({ id, ...gateway }));
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      {gateways.map((g) => {
+        const isSelected = selectedGateway === g.id;
+        const name = isRtl ? g.nameAr : g.nameEn;
+        const desc = isRtl ? g.descAr : g.descEn;
+        const accent = g.theme.accent;
+
+        return (
+          <button
+            key={g.id}
+            type="button"
+            onClick={() => onSelect(g.id)}
+            className={`group relative flex items-start gap-4 p-5 rounded-3xl border text-start transition-all duration-350 active:scale-[0.98] cursor-pointer overflow-hidden ${
+              isSelected ? "shadow-lg" : "border-slate-200 bg-white hover:shadow-md"
+            }`}
+            style={isSelected ? { borderColor: accent, backgroundColor: `${accent}0f` } : undefined}
+          >
+            {/* Background decorative glow on selected, in the gateway's own colour */}
+            {isSelected && (
+              <div className="absolute inset-0 pointer-events-none" style={{ backgroundColor: `${accent}0a` }} />
+            )}
+
+            {/* Logo Image Wrapper */}
+            <div
+              className="w-12 h-12 rounded-2xl bg-white border p-1 shadow-md flex items-center justify-center shrink-0 transition-transform duration-300 group-hover:scale-105 overflow-hidden"
+              style={{ borderColor: isSelected ? `${accent}66` : "rgba(203,213,225,0.8)" }}
+            >
+              <img
+                src={g.logo}
+                alt={name}
+                className="w-full h-full object-contain rounded-xl"
+              />
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 min-w-0 pr-1 select-none">
+              <div className="flex items-center justify-between gap-2">
+                <h4 className="text-sm font-extrabold text-slate-800 leading-snug transition-colors">{name}</h4>
+                {g.status === "soon" ? (
+                  <span
+                    className="text-[10px] font-black border px-2 py-0.5 rounded-full shrink-0"
+                    style={{ color: accent, borderColor: `${accent}59`, backgroundColor: `${accent}1a` }}
+                  >
+                    {isRtl ? "قريباً" : "Soon"}
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-black bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 px-2 py-0.5 rounded-full shrink-0">
+                    {isRtl ? "نشط" : "Active"}
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-slate-500 mt-1 leading-relaxed line-clamp-2">{desc}</p>
+            </div>
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -713,6 +819,9 @@ export default function CopyrightPage(props) {
 
   // Applicant Portal Wizard step: 1=terms, 2=form, 3=payment, 4=processing, 5=certificate
   const [step, setStep] = useState(1);
+  // كل انتقال بين خطوات المعالج يعيد الصفحة إلى أعلاها — الأزرار في الأسفل
+  // والخطوات طويلة، فبدونه يبدو أن الضغط لم يفعل شيئاً.
+  useStepScrollReset(step);
   const [form, setForm] = useState(INITIAL_FORM);
   const fees = getFeesForRole(form.applicantRole);
   const [touched, setTouched] = useState({});
@@ -846,13 +955,16 @@ export default function CopyrightPage(props) {
   const handleWorkFileChange = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!["application/zip", "application/x-zip-compressed"].includes(file.type) && !file.name.toLowerCase().endsWith(".zip")) {
-      showToast(isRtl ? "يُسمح برفع ملفات ZIP فقط" : "Only ZIP files are allowed", "error");
+    const allowedMimeTypes = ["application/pdf", "application/zip", "application/x-zip-compressed"];
+    const lowerName = file.name.toLowerCase();
+    const hasAllowedExtension = lowerName.endsWith(".pdf") || lowerName.endsWith(".zip");
+    if (!allowedMimeTypes.includes(file.type) && !hasAllowedExtension) {
+      showToast(isRtl ? "يُسمح برفع ملفات PDF أو ZIP فقط" : "Only PDF or ZIP files are allowed", "error");
       e.target.value = "";
       return;
     }
     if (file.size > 100 * 1024 * 1024) {
-      showToast(isRtl ? "يتجاوز ملف ZIP حجم 100 ميغابايت؛ استخدم غوغل درايف" : "ZIP exceeds 100 MiB; use Google Drive", "error");
+      showToast(isRtl ? "يتجاوز ملف العمل حجم 100 ميغابايت؛ استخدم غوغل درايف" : "The work file exceeds 100 MiB; use Google Drive", "error");
       e.target.value = "";
       return;
     }
@@ -1120,17 +1232,19 @@ export default function CopyrightPage(props) {
       showToast(t.toastPaySelect, "error");
       return;
     }
+    if (!isPaymentGatewayActive(selectedGateway)) {
+      showToast(t.toastGatewayInactive, "error");
+      return;
+    }
 
-    if (selectedGateway === "cham_cash") {
-      if (!paymentRef.trim() || paymentRef.trim().length < 4) {
-        handleBlur("paymentRef");
-        showToast(isRtl ? "يرجى إدخال رقم مرجع العملية/الحوالة للاستمرار" : "Please enter the transaction reference number", "error");
-        return;
-      }
-      if (!paymentReceipt) {
-        showToast(isRtl ? "يرجى رفع صورة إيصال الدفع الإلكتروني للاستمرار" : "Please upload the payment receipt screenshot", "error");
-        return;
-      }
+    if (!paymentRef.trim() || paymentRef.trim().length < 4) {
+      handleBlur("paymentRef");
+      showToast(isRtl ? "يرجى إدخال رقم مرجع العملية/الحوالة للاستمرار" : "Please enter the transaction reference number", "error");
+      return;
+    }
+    if (!paymentReceipt) {
+      showToast(isRtl ? "يرجى رفع صورة إيصال الدفع الإلكتروني للاستمرار" : "Please upload the payment receipt screenshot", "error");
+      return;
     }
 
     showToast(t.toastPayProgress, "info");
@@ -1191,6 +1305,12 @@ export default function CopyrightPage(props) {
   const handleTrackPay = async (stage) => {
     if (!trackedSub) return;
 
+    if (!isPaymentGatewayActive(selectedGateway)) {
+      showToast(t.toastGatewayInactive, "error");
+      return;
+    }
+
+
     if (!trackPaymentRef.trim() || trackPaymentRef.trim().length < 4) {
       setTrackPaymentRefTouched(true);
       showToast(isRtl ? "يرجى إدخال رقم مرجع العملية/الحوالة للاستمرار" : "Please enter the transaction reference number", "error");
@@ -1211,7 +1331,7 @@ export default function CopyrightPage(props) {
         body: JSON.stringify({
           id: trackedSub.id,
           action: action,
-          paymentGateway: "cham_cash",
+          paymentGateway: selectedGateway,
           paymentRef: trackPaymentRef.trim(),
           paymentReceipt: trackPaymentReceipt
         }),
@@ -1368,22 +1488,22 @@ export default function CopyrightPage(props) {
 
         {/* Official receipts — always downloadable from here once the matching
             fee is paid, in case the email attachment was blocked (#2). */}
-        {(sub.paymentStatus === "initial_paid" || sub.paymentStatus === "final_paid" || sub.paymentStatus === "fully_paid") && (
+        {(isCopyrightReceiptAvailable(sub, "initial") || isCopyrightReceiptAvailable(sub, "final")) && (
           <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-2.5">
             <h5 className="text-xs font-black text-[#054239] flex items-center gap-2">
               <FileText className="w-4 h-4 text-[#b9a779]" />
               {isRtl ? "إيصالات الدفع الرسمية" : "Official Payment Receipts"}
             </h5>
             <div className="flex flex-wrap gap-2">
-              <a
+              {isCopyrightReceiptAvailable(sub, "initial") && <a
                 href={`/api/copyright/receipt?code=${sub.id}&stage=initial`}
                 target="_blank" rel="noopener noreferrer"
                 className="inline-flex items-center gap-1.5 bg-white border border-slate-250 hover:border-[#b9a779] text-[#054239] text-xs font-bold px-4 py-2 rounded-xl transition shadow-sm cursor-pointer"
               >
                 <i className="fa-solid fa-file-arrow-down text-[#b9a779]" />
                 {isRtl ? "تحميل إيصال الرسم الأولي (PDF)" : "Download initial receipt (PDF)"}
-              </a>
-              {sub.paymentStatus === "fully_paid" && (
+              </a>}
+              {isCopyrightReceiptAvailable(sub, "final") && (
                 <a
                   href={`/api/copyright/receipt?code=${sub.id}&stage=final`}
                   target="_blank" rel="noopener noreferrer"
@@ -1443,55 +1563,65 @@ export default function CopyrightPage(props) {
               <span className="text-emerald-700 font-black text-sm">{fees.initialBase.toLocaleString()} ل.س (+ {fees.initialStamps.toLocaleString()} ل.س خدمات)</span>
             </div>
 
-            {/* Cham Cash Details */}
-            <ChamPaymentCard isRtl={isRtl} showToast={showToast} copyText="f6be4f104cf141af079e7c2af693dd41" />
+            {/* Payment Method Selector in Tracker */}
+            <PaymentGatewaySelector
+              isRtl={isRtl}
+              selectedGateway={selectedGateway}
+              onSelect={setSelectedGateway}
+              t={t}
+            />
 
-            {/* Inputs */}
-            <div className="space-y-4 border-t border-slate-100 pt-4 bg-white p-4 rounded-xl border border-slate-150">
-              <div>
-                <label htmlFor="trackPaymentRef" className="block text-sm font-semibold text-slate-700 mb-2">{t.payRefLabel}</label>
-                <input id="trackPaymentRef" type="text" value={trackPaymentRef}
-                  onChange={(e) => setTrackPaymentRef(e.target.value)}
-                  placeholder={t.payRefPlaceholder} dir={trackPaymentRef ? "ltr" : (isRtl ? "rtl" : "ltr")}
-                  className={`w-full border rounded-xl px-4 py-3 text-sm outline-none transition bg-white placeholder:text-slate-400 font-mono focus:ring-2 ${
-                    trackPaymentRefTouched && (!trackPaymentRef.trim() || trackPaymentRef.trim().length < 4)
-                      ? "border-rose-400 focus:border-rose-500 focus:ring-rose-100"
-                      : "border-slate-200 focus:border-[#b9a779] focus:ring-[#b9a779]/15"
-                  }`} />
-                <p className="mt-1.5 text-xs text-slate-400">{t.payRefHint}</p>
-              </div>
+            <>
+              {/* Payment Details */}
+              <PaymentCard gatewayId={selectedGateway} isRtl={isRtl} showToast={showToast} />
 
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">{t.payReceiptLabel}</label>
-                <FileUploadCard icon="fa-file-invoice" label={isRtl ? "رفع إيصال الدفع" : "Upload Receipt"}
-                  desc={t.payReceiptDesc} fileLabel={trackReceiptFileLabel}
-                  onChange={handleTrackReceiptFileChange} />
-                {trackPaymentReceipt && (
-                  <div className="mt-3 flex items-start gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
-                    {trackPaymentReceipt.startsWith("data:application/pdf") ? (
-                      <div className="w-16 h-16 rounded-lg border border-slate-200 bg-white flex flex-col items-center justify-center shrink-0 text-rose-600 gap-1 shadow-sm">
-                        <FileText className="w-8 h-8" />
-                        <span className="text-[9px] font-black uppercase">PDF</span>
+              {/* Inputs */}
+              <div className="space-y-4 border-t border-slate-100 pt-4 bg-white p-4 rounded-xl border border-slate-150">
+                <div>
+                  <label htmlFor="trackPaymentRef" className="block text-sm font-semibold text-slate-700 mb-2">{t.payRefLabel}</label>
+                  <input id="trackPaymentRef" type="text" value={trackPaymentRef}
+                    onChange={(e) => setTrackPaymentRef(e.target.value)}
+                    placeholder={t.payRefPlaceholder} dir={trackPaymentRef ? "ltr" : (isRtl ? "rtl" : "ltr")}
+                    className={`w-full border rounded-xl px-4 py-3 text-sm outline-none transition bg-white placeholder:text-slate-400 font-mono focus:ring-2 ${
+                      trackPaymentRefTouched && (!trackPaymentRef.trim() || trackPaymentRef.trim().length < 4)
+                        ? "border-rose-400 focus:border-rose-500 focus:ring-rose-100"
+                        : "border-slate-200 focus:border-[#b9a779] focus:ring-[#b9a779]/15"
+                    }`} />
+                  <p className="mt-1.5 text-xs text-slate-400">{t.payRefHint}</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">{t.payReceiptLabel}</label>
+                  <FileUploadCard icon="fa-file-invoice" label={isRtl ? "رفع إيصال الدفع" : "Upload Receipt"}
+                    desc={t.payReceiptDesc} fileLabel={trackReceiptFileLabel}
+                    onChange={handleTrackReceiptFileChange} />
+                  {trackPaymentReceipt && (
+                    <div className="mt-3 flex items-start gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                      {trackPaymentReceipt.startsWith("data:application/pdf") ? (
+                        <div className="w-16 h-16 rounded-lg border border-slate-200 bg-white flex flex-col items-center justify-center shrink-0 text-rose-600 gap-1 shadow-sm">
+                          <FileText className="w-8 h-8" />
+                          <span className="text-[9px] font-black uppercase">PDF</span>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setImagePreview({ src: trackPaymentReceipt, title: isRtl ? "إيصال الدفع" : "Payment receipt", downloadName: `receipt_${trackCode || "copyright"}.jpg` })}
+                          className="w-16 h-16 rounded-lg border border-slate-200 bg-white overflow-hidden shrink-0 cursor-zoom-in"
+                          title={isRtl ? "عرض الإيصال بالحجم الكامل" : "Preview receipt full size"}
+                        >
+                          <img src={trackPaymentReceipt} alt="Receipt" className="w-full h-full object-contain" />
+                        </button>
+                      )}
+                      <div className="flex-1">
+                        <p className="text-xs text-emerald-700 font-bold">{isRtl ? "✓ تم رفع الإيصال" : "✓ Receipt uploaded"}</p>
+                        <button type="button" onClick={() => { setTrackPaymentReceipt(null); setTrackReceiptFileLabel(t.fileSelect); }}
+                          className="text-xs text-rose-500 hover:text-rose-700 mt-1 cursor-pointer font-medium">{isRtl ? "حذف" : "Remove"}</button>
                       </div>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => setImagePreview({ src: trackPaymentReceipt, title: isRtl ? "إيصال الدفع" : "Payment receipt", downloadName: `receipt_${trackCode || "copyright"}.jpg` })}
-                        className="w-16 h-16 rounded-lg border border-slate-200 bg-white overflow-hidden shrink-0 cursor-zoom-in"
-                        title={isRtl ? "عرض الإيصال بالحجم الكامل" : "Preview receipt full size"}
-                      >
-                        <img src={trackPaymentReceipt} alt="Receipt" className="w-full h-full object-contain" />
-                      </button>
-                    )}
-                    <div className="flex-1">
-                      <p className="text-xs text-emerald-700 font-bold">{isRtl ? "✓ تم رفع الإيصال" : "✓ Receipt uploaded"}</p>
-                      <button type="button" onClick={() => { setTrackPaymentReceipt(null); setTrackReceiptFileLabel(t.fileSelect); }}
-                        className="text-xs text-rose-500 hover:text-rose-700 mt-1 cursor-pointer font-medium">{isRtl ? "حذف" : "Remove"}</button>
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
-            </div>
+            </>
 
             <button onClick={() => handleTrackPay("initial")}
               className="w-full bg-[#054239] hover:bg-[#04332b] text-white font-bold py-3 rounded-xl transition shadow active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
@@ -1598,55 +1728,65 @@ export default function CopyrightPage(props) {
               <span className="text-emerald-700 font-black text-sm">{fees.finalBase.toLocaleString()} ل.س (+ {fees.finalStamps.toLocaleString()} ل.س طوابع إلكترونية)</span>
             </div>
 
-            {/* Cham Cash Details */}
-            <ChamPaymentCard isRtl={isRtl} showToast={showToast} copyText="f6be4f104cf141af079e7c2af693dd41" />
+            {/* Payment Method Selector in Tracker */}
+            <PaymentGatewaySelector
+              isRtl={isRtl}
+              selectedGateway={selectedGateway}
+              onSelect={setSelectedGateway}
+              t={t}
+            />
 
-            {/* Inputs */}
-            <div className="space-y-4 border-t border-slate-100 pt-4 bg-white p-4 rounded-xl border border-slate-150">
-              <div>
-                <label htmlFor="trackPaymentRef" className="block text-sm font-semibold text-slate-700 mb-2">{t.payRefLabel}</label>
-                <input id="trackPaymentRef" type="text" value={trackPaymentRef}
-                  onChange={(e) => setTrackPaymentRef(e.target.value)}
-                  placeholder={t.payRefPlaceholder} dir={trackPaymentRef ? "ltr" : (isRtl ? "rtl" : "ltr")}
-                  className={`w-full border rounded-xl px-4 py-3 text-sm outline-none transition bg-white placeholder:text-slate-400 font-mono focus:ring-2 ${
-                    trackPaymentRefTouched && (!trackPaymentRef.trim() || trackPaymentRef.trim().length < 4)
-                      ? "border-rose-400 focus:border-rose-500 focus:ring-rose-100"
-                      : "border-slate-200 focus:border-[#b9a779] focus:ring-[#b9a779]/15"
-                  }`} />
-                <p className="mt-1.5 text-xs text-slate-400">{t.payRefHint}</p>
-              </div>
+            <>
+              {/* Payment Details */}
+              <PaymentCard gatewayId={selectedGateway} isRtl={isRtl} showToast={showToast} />
 
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">{t.payReceiptLabel}</label>
-                <FileUploadCard icon="fa-file-invoice" label={isRtl ? "رفع إيصال الدفع" : "Upload Receipt"}
-                  desc={t.payReceiptDesc} fileLabel={trackReceiptFileLabel}
-                  onChange={handleTrackReceiptFileChange} />
-                {trackPaymentReceipt && (
-                  <div className="mt-3 flex items-start gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
-                    {trackPaymentReceipt.startsWith("data:application/pdf") ? (
-                      <div className="w-16 h-16 rounded-lg border border-slate-200 bg-white flex flex-col items-center justify-center shrink-0 text-rose-600 gap-1 shadow-sm">
-                        <FileText className="w-8 h-8" />
-                        <span className="text-[9px] font-black uppercase">PDF</span>
+              {/* Inputs */}
+              <div className="space-y-4 border-t border-slate-100 pt-4 bg-white p-4 rounded-xl border border-slate-150">
+                <div>
+                  <label htmlFor="trackPaymentRef" className="block text-sm font-semibold text-slate-700 mb-2">{t.payRefLabel}</label>
+                  <input id="trackPaymentRef" type="text" value={trackPaymentRef}
+                    onChange={(e) => setTrackPaymentRef(e.target.value)}
+                    placeholder={t.payRefPlaceholder} dir={trackPaymentRef ? "ltr" : (isRtl ? "rtl" : "ltr")}
+                    className={`w-full border rounded-xl px-4 py-3 text-sm outline-none transition bg-white placeholder:text-slate-400 font-mono focus:ring-2 ${
+                      trackPaymentRefTouched && (!trackPaymentRef.trim() || trackPaymentRef.trim().length < 4)
+                        ? "border-rose-400 focus:border-rose-500 focus:ring-rose-100"
+                        : "border-slate-200 focus:border-[#b9a779] focus:ring-[#b9a779]/15"
+                    }`} />
+                  <p className="mt-1.5 text-xs text-slate-400">{t.payRefHint}</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">{t.payReceiptLabel}</label>
+                  <FileUploadCard icon="fa-file-invoice" label={isRtl ? "رفع إيصال الدفع" : "Upload Receipt"}
+                    desc={t.payReceiptDesc} fileLabel={trackReceiptFileLabel}
+                    onChange={handleTrackReceiptFileChange} />
+                  {trackPaymentReceipt && (
+                    <div className="mt-3 flex items-start gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                      {trackPaymentReceipt.startsWith("data:application/pdf") ? (
+                        <div className="w-16 h-16 rounded-lg border border-slate-200 bg-white flex flex-col items-center justify-center shrink-0 text-rose-600 gap-1 shadow-sm">
+                          <FileText className="w-8 h-8" />
+                          <span className="text-[9px] font-black uppercase">PDF</span>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setImagePreview({ src: trackPaymentReceipt, title: isRtl ? "إيصال الدفع النهائي" : "Final payment receipt", downloadName: `final_receipt_${trackCode || "copyright"}.jpg` })}
+                          className="w-16 h-16 rounded-lg border border-slate-200 bg-white overflow-hidden shrink-0 cursor-zoom-in"
+                          title={isRtl ? "عرض الإيصال بالحجم الكامل" : "Preview receipt full size"}
+                        >
+                          <img src={trackPaymentReceipt} alt="Receipt" className="w-full h-full object-contain" />
+                        </button>
+                      )}
+                      <div className="flex-1">
+                        <p className="text-xs text-emerald-700 font-bold">{isRtl ? "✓ تم رفع الإيصال" : "✓ Receipt uploaded"}</p>
+                        <button type="button" onClick={() => { setTrackPaymentReceipt(null); setTrackReceiptFileLabel(t.fileSelect); }}
+                          className="text-xs text-rose-500 hover:text-rose-700 mt-1 cursor-pointer font-medium">{isRtl ? "حذف" : "Remove"}</button>
                       </div>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => setImagePreview({ src: trackPaymentReceipt, title: isRtl ? "إيصال الدفع النهائي" : "Final payment receipt", downloadName: `final_receipt_${trackCode || "copyright"}.jpg` })}
-                        className="w-16 h-16 rounded-lg border border-slate-200 bg-white overflow-hidden shrink-0 cursor-zoom-in"
-                        title={isRtl ? "عرض الإيصال بالحجم الكامل" : "Preview receipt full size"}
-                      >
-                        <img src={trackPaymentReceipt} alt="Receipt" className="w-full h-full object-contain" />
-                      </button>
-                    )}
-                    <div className="flex-1">
-                      <p className="text-xs text-emerald-700 font-bold">{isRtl ? "✓ تم رفع الإيصال" : "✓ Receipt uploaded"}</p>
-                      <button type="button" onClick={() => { setTrackPaymentReceipt(null); setTrackReceiptFileLabel(t.fileSelect); }}
-                        className="text-xs text-rose-500 hover:text-rose-700 mt-1 cursor-pointer font-medium">{isRtl ? "حذف" : "Remove"}</button>
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
-            </div>
+            </>
 
             <button onClick={() => handleTrackPay("final")}
               className="w-full bg-[#054239] hover:bg-[#04332b] text-white font-bold py-3 rounded-xl transition shadow active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
@@ -2201,7 +2341,7 @@ export default function CopyrightPage(props) {
 
                     <div className="space-y-3">
                       <FileUploadCard icon="fa-file-arrow-up" label={t.fileWorkLabel} desc={t.fileWorkDesc}
-                        fileLabel={workFileLabel} required accept=".zip,application/zip,application/x-zip-compressed" onChange={handleWorkFileChange} />
+                        fileLabel={workFileLabel} required accept=".pdf,application/pdf,.zip,application/zip,application/x-zip-compressed" onChange={handleWorkFileChange} />
                       <label className="block text-xs font-bold text-slate-700">
                         {isRtl ? "رابط غوغل درايف للمصنفات التي يتجاوز حجمها 100 ميغابايت" : "Google Drive URL for works larger than 100 MiB"}
                         <input
@@ -2262,7 +2402,7 @@ export default function CopyrightPage(props) {
                         </div>
                       </div>
 
-                      {getUnderlyingRoleGroup(form.applicantRole) === "author" ? (
+                      {form.idDocType === "passport" ? (
                         <FileUploadCard icon="fa-passport"
                           label={isRtl ? "صورة جواز السفر *" : "Passport *"}
                           desc={isRtl ? "صورة واضحة لصفحة البيانات في جواز السفر." : "Clear photo of the passport data page."}
@@ -2439,10 +2579,17 @@ export default function CopyrightPage(props) {
                 <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
                   <h3 className="text-sm font-bold text-slate-900">{t.payMethodTitle}</h3>
                   
-                  {/* Single Payment Method: Cham Cash */}
-                  <ChamPaymentCard isRtl={isRtl} showToast={showToast} copyText="f6be4f104cf141af079e7c2af693dd41" />
+                  {/* Grid Payment Method Selector */}
+                  <PaymentGatewaySelector
+                    isRtl={isRtl}
+                    selectedGateway={selectedGateway}
+                    onSelect={setSelectedGateway}
+                    t={t}
+                  />
 
-                  {selectedGateway && (
+                  <>
+                    <PaymentCard gatewayId={selectedGateway} isRtl={isRtl} showToast={showToast} />
+
                     <div className="space-y-4 border-t border-slate-100 pt-4">
                       <div>
                         <label htmlFor="paymentRef" className="block text-sm font-semibold text-slate-700 mb-2">{t.payRefLabel}</label>
@@ -2492,7 +2639,7 @@ export default function CopyrightPage(props) {
                         )}
                       </div>
                     </div>
-                  )}
+                  </>
                 </div>
 
                 <button onClick={handlePaymentSubmit}

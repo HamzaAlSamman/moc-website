@@ -55,18 +55,18 @@ export default function MonthlyAchievementsSection({ locale }) {
         }
 
         const monthNames = [
-          { ar: "يناير",  en: "January"   },
-          { ar: "فبراير", en: "February"  },
-          { ar: "مارس",   en: "March"     },
-          { ar: "أبريل",  en: "April"     },
-          { ar: "مايو",   en: "May"       },
-          { ar: "يونيو",  en: "June"      },
-          { ar: "يوليو",  en: "July"      },
-          { ar: "أغسطس",  en: "August"    },
-          { ar: "سبتمبر", en: "September" },
-          { ar: "أكتوبر", en: "October"   },
-          { ar: "نوفمبر", en: "November"  },
-          { ar: "ديسمبر", en: "December"  },
+          { ar: "كانون الثاني",  en: "January"   },
+          { ar: "شباط",          en: "February"  },
+          { ar: "آذار",          en: "March"     },
+          { ar: "نيسان",         en: "April"     },
+          { ar: "أيار",          en: "May"       },
+          { ar: "حزيران",        en: "June"      },
+          { ar: "تموز",          en: "July"      },
+          { ar: "آب",            en: "August"    },
+          { ar: "أيلول",         en: "September" },
+          { ar: "تشرين الأول",   en: "October"   },
+          { ar: "تشرين الثاني",  en: "November"  },
+          { ar: "كانون الأول",   en: "December"  },
         ];
 
         const grouped = {};

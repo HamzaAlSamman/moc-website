@@ -10,6 +10,10 @@ const ACTION_LABELS = {
   USER_PASSWORD_RESET_BY_ADMIN: "إعادة تعيين كلمة مرور من قبل مدير",
   USER_PASSWORD_CHANGED_FORCED: "تغيير إجباري لكلمة المرور (بعد إعادة تعيين)",
   USER_PASSWORD_CHANGED_SELF: "تغيير ذاتي لكلمة المرور",
+  CITIZEN_ACCOUNT_DELETED: "حذف نهائي لحساب مواطن",
+  CITIZEN_LOGIN_SUCCESS: "دخول مواطن ناجح",
+  CITIZEN_LOGIN_FAILED: "محاولة دخول مواطن فاشلة",
+  CITIZEN_LOGIN_THROTTLED: "دخول مواطن موقوف (محاولات كثيرة)",
 };
 
 // Actions that represent one account acting on another's credentials/access —
@@ -18,6 +22,10 @@ const ACTION_LABELS = {
 const SENSITIVE_ACTIONS = new Set([
   "USER_PASSWORD_RESET_BY_ADMIN",
   "USER_ROLE_CHANGED",
+  // The account is gone; this row is the only remaining record that it existed.
+  "CITIZEN_ACCOUNT_DELETED",
+  "CITIZEN_LOGIN_FAILED",
+  "CITIZEN_LOGIN_THROTTLED",
 ]);
 
 function actionLabel(action) {

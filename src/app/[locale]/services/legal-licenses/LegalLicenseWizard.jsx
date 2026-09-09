@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronLeft, ChevronRight, Copy, FileText, RotateCcw, Search, ShieldAlert } from "lucide-react";
 import DecorativeCorners from "@/components/DecorativeCorners";
 import SubpageHero from "@/components/SubpageHero";
+import { useStepScrollReset } from "@/lib/use-step-scroll-reset";
 import { GENERAL_LEGAL_LICENSE_DOCUMENTS, LEGAL_LICENSE_DOCUMENT_RULES } from "@/lib/legal-license.mjs";
 import { LEGAL_LICENSE_SOURCE_DOCUMENTS, getLegalLicenseRequirementProfile } from "@/lib/legal-license-requirements.mjs";
 import {
@@ -29,6 +30,7 @@ import {
   wizardFailureMessage,
   wizardIncompleteMessage,
   wizardStepStatus,
+  getWizardStepValidationError,
 } from "@/lib/legal-license-wizard-state.mjs";
 import ApplicantFoundersStep from "./steps/ApplicantFoundersStep";
 import BylawsStep from "./steps/BylawsStep";
@@ -118,6 +120,7 @@ export default function LegalLicenseWizard({ locale = "ar" }) {
   const [token, setToken] = useState("");
   const [busy, setBusy] = useState(false);
   const [busyDocument, setBusyDocument] = useState("");
+  const [busyPdf, setBusyPdf] = useState(false);
   const [error, setError] = useState("");
   const [sent, setSent] = useState(false);
   const [track, setTrack] = useState({ referenceNo: "", accessToken: "" });
@@ -127,6 +130,8 @@ export default function LegalLicenseWizard({ locale = "ar" }) {
   const mutationLockRef = useRef(createWizardMutationLock());
   const [mutationCount, setMutationCount] = useState(0);
   const mutationBusy = mutationCount > 0;
+  const stepHeadingRef = useRef(null);
+  useStepScrollReset(step, { focusRef: stepHeadingRef });
 
   const profile = useMemo(() => getLegalLicenseRequirementProfile(form.licenseType), [form.licenseType]);
   const sourceDocuments = useMemo(() => (profile?.sourceDocuments || [])
@@ -278,8 +283,8 @@ export default function LegalLicenseWizard({ locale = "ar" }) {
   function resetNewApplication() {
     if (mutationLockRef.current.locked()) return;
     const confirmed = window.confirm(isRtl
-      ? "سيتم نسيان المسودة والبيانات المحفوظة مؤقتاً على هذا الجهاز. هل تريد بدء طلب جديد؟"
-      : "This will forget the draft and data temporarily saved on this device. Start a new application?");
+      ? "سيؤدي هذا الإجراء إلى حذف مسودة الطلب والبيانات المدخلة بالكامل. هل ترغب بالاستمرار وبدء طلب جديد؟"
+      : "This will permanently delete the draft and data saved on this device. Start a new application?");
     if (!confirmed) return;
     hydrationGuardRef.current.cancel();
     setHydrating(false);
@@ -330,8 +335,10 @@ export default function LegalLicenseWizard({ locale = "ar" }) {
   }
   async function nextStep() {
     const context = { profile, form, application };
-    if (!wizardStepStatus(LEGAL_LICENSE_WIZARD_STEPS[step].id, context).completed) {
-      setError(wizardIncompleteMessage(step, language));
+    const stepId = LEGAL_LICENSE_WIZARD_STEPS[step].id;
+    const validationError = getWizardStepValidationError(stepId, context, language);
+    if (validationError) {
+      setError(validationError);
       return;
     }
     const saved = await createOrSave();
@@ -411,10 +418,14 @@ export default function LegalLicenseWizard({ locale = "ar" }) {
   }
   async function previewApplicationPdf() {
     if (!application || mutationLockRef.current.locked()) return;
+    setBusyPdf(true);
+    setError("");
     try {
       await downloadProtectedBlob(`/api/legal-licenses/${application.id}/pdf`, token, `${application.referenceNo || "legal-license"}.pdf`);
     } catch (previewError) {
       reportWizardFailure(previewError, "preview", language, setError);
+    } finally {
+      setBusyPdf(false);
     }
   }
   async function submit() {
@@ -490,6 +501,8 @@ export default function LegalLicenseWizard({ locale = "ar" }) {
   const canEditAttachment = (kind, subjectRef) => !mutationBusy && isWizardAttachmentEditable(kind, subjectRef, deficiencyContext);
   const estimatedEvidenceCount = applicationKinds.length + founderKinds.length * Math.max(form.founders.length, 1);
 
+  const sourceBylawsUrl = profile?.generatesBylaws ? "/documents/legal-licenses/model-cultural-bylaws.pdf" : null;
+  const sourceChecklistUrl = profile ? LEGAL_LICENSE_SOURCE_DOCUMENTS[profile.licenseType]?.publicUrl : null;
 
   const stepContent = [
     <LicenseGuideStep key="guide" form={form} update={update} profile={profile} sourceDocuments={sourceDocuments}
@@ -513,7 +526,9 @@ export default function LegalLicenseWizard({ locale = "ar" }) {
       onAnswer={(key, value) => updateAnswer("bylawAnswers", key, value)} isRtl={isRtl} disabled={!currentEditable || mutationBusy}
       onReturnToEntity={() => navigateToStep(3)} />,
     <ReviewStep key="review" form={form} profile={profile} application={application}
-      isRtl={isRtl} onPreviewApplication={previewApplicationPdf} />,
+      isRtl={isRtl} onPreviewApplication={previewApplicationPdf}
+      sourceBylawsUrl={sourceBylawsUrl} sourceChecklistUrl={sourceChecklistUrl}
+      busyPdf={busyPdf} />,
     <DeclarationStep key="declaration" form={form} update={update}
       postLicenseRequirements={profile?.postLicenseDeclarations || []}
       onPostLicenseAnswer={(key, value) => updateAnswer("postLicenseDeclarations", key, value)}
@@ -522,11 +537,11 @@ export default function LegalLicenseWizard({ locale = "ar" }) {
 
   return (
     <div className="min-h-screen bg-[#F8F3EC] pt-[84px] md:pt-[88px] lg:pt-[104px]" dir={isRtl ? "rtl" : "ltr"}>
-      <SubpageHero title={isRtl ? "طلبات التراخيص القانونية" : "Legal License Applications"}
+      <SubpageHero title={isRtl ? "بوابة التراخيص والاعتمادات الثقافية" : "Cultural Licensing & Accreditation Portal"}
         subtitle={isRtl ? "مديرية الشؤون القانونية" : "Legal Affairs Directorate"}
         description={isRtl
-          ? "أجب عن أسئلة واضحة، ارفع الوثائق، واحصل على ملف طلب منظم دون تحرير Word."
-          : "Answer clear questions, upload evidence, and receive a structured application dossier without editing Word."}
+          ? "بوابة إلكترونية تتيح للجهات والأفراد تقديم طلبات التراخيص الثقافية، واستكمال الوثائق الثبوتية المطلوبة، ومتابعة سير المعاملات إلكترونياً حتى صدور القرار النهائي."
+          : "An electronic portal that allows entities and individuals to submit cultural license applications, complete the required supporting documents, and track application progress electronically until a final decision is issued."}
         isRtl={isRtl} />
       <main className="mx-auto w-full max-w-[1200px] px-4 py-10 sm:px-6 lg:px-8">
         <div className="mb-4 grid grid-cols-2 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-sm">
@@ -540,13 +555,13 @@ export default function LegalLicenseWizard({ locale = "ar" }) {
         <div className="mb-8 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#b9a779]/30 bg-white/70 px-4 py-3">
           <p className="max-w-3xl text-xs leading-6 text-slate-600">
             {isRtl
-              ? "يُحفظ الاستكمال مؤقتاً على هذا الجهاز لمدة 7 أيام. لا يُحفظ التوقيع المرسوم محلياً، ويمكنك نسيان المسودة في أي وقت."
-              : "Resume data is temporarily saved on this device for 7 days. The drawn signature is not stored locally, and you can forget the draft at any time."}
+              ? "يتم حفظ مسودة الطلب تلقائياً على هذا الجهاز لمدة 7 أيام لتمكينكم من استكمالها، مع الحفاظ على سرية وخصوصية بياناتكم المرفقة كافة."
+              : "Your draft application is saved automatically on this device for 7 days so you can resume it, while maintaining the confidentiality and privacy of your attached data."}
           </p>
           <button type="button" onClick={resetNewApplication} disabled={mutationBusy}
-            aria-label={isRtl ? "نسيان المسودة وبدء طلب جديد" : "Forget draft and start a new application"}
+            aria-label={isRtl ? "حذف المسودة الحالية وبدء طلب جديد" : "Clear the current draft and start a new application"}
             className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-white px-4 py-2.5 text-xs font-black text-rose-700 outline-none focus-visible:ring-4 focus-visible:ring-rose-100 disabled:opacity-40">
-            <RotateCcw className="h-4 w-4" />{isRtl ? "نسيان المسودة / طلب جديد" : "Forget draft / start new"}
+            <RotateCcw className="h-4 w-4" />{isRtl ? "حذف المسودة وبدء طلب جديد" : "Clear draft / start new"}
           </button>
         </div>
         {error ? <div role="alert" className="mb-5 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700">{error}</div> : null}
@@ -557,10 +572,10 @@ export default function LegalLicenseWizard({ locale = "ar" }) {
             <DecorativeCorners />
             <div className="mx-auto mt-14 h-10 w-10 animate-spin rounded-full border-4 border-[#b9a779]/30 border-t-[#054239]" aria-hidden="true" />
             <h2 className="mt-5 font-qomra text-xl font-black text-[#054239]">
-              {isRtl ? "جارٍ استعادة الطلب المحفوظ…" : "Restoring saved application…"}
+              {isRtl ? "جارٍ استعادة بيانات الطلب…" : "Restoring saved application…"}
             </h2>
             <p className="mt-2 text-sm text-slate-500">
-              {isRtl ? "يرجى الانتظار حتى نتحقق من النسخة الآمنة على الخادم." : "Please wait while the secure server copy is verified."}
+              {isRtl ? "يرجى الانتظار حتى يتم التحقق من بيانات الطلب المخزنة." : "Please wait while the secure server copy is verified."}
             </p>
           </section>
         ) : mode === "track" ? (
@@ -572,41 +587,55 @@ export default function LegalLicenseWizard({ locale = "ar" }) {
           <SubmissionSuccess application={application} token={token} isRtl={isRtl} onReset={resetNewApplication} />
         ) : (
           <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
-            <DossierRail steps={LEGAL_LICENSE_WIZARD_STEPS} currentStep={step} profile={profile}
-              form={form} application={application} isRtl={isRtl} mutationBusy={mutationBusy} onNavigate={navigateToStep} />
-            <section aria-busy={mutationBusy} className="relative min-h-[560px] rounded-3xl border border-slate-100 bg-white p-5 shadow-sm md:p-8">
-              <DecorativeCorners />
-              <header className="mb-7 border-b border-slate-100 pb-5">
-                <p className="text-xs font-black uppercase tracking-widest text-[#b9a779]">
-                  {isRtl ? `الخطوة ${step + 1} من 8` : `Step ${step + 1} of 8`}
-                </p>
-                <h2 className="mt-1 font-qomra text-2xl font-black text-[#054239]">{currentStep.label[language]}</h2>
-                {application?.referenceNo ? <p className="mt-2 font-mono text-xs text-slate-500" dir="ltr">{application.referenceNo}</p> : null}
-              </header>
-              {application?.status === "SUSPENDED" ? (
-                <div className="mb-6 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs font-bold leading-6 text-amber-900">
-                  <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0" />
-                  <p>{currentEditable
-                    ? (isRtl ? "يمكن تعديل البنود المحددة كنواقص في هذه الخطوة فقط." : "Only the items marked deficient in this step can be edited.")
-                    : (isRtl ? "هذه الخطوة للقراءة فقط؛ انتقل إلى خطوة النقص المحددة." : "This step is read-only; go to the identified deficiency step.")}</p>
+              <DossierRail steps={LEGAL_LICENSE_WIZARD_STEPS} currentStep={step} profile={profile}
+                form={form} application={application} isRtl={isRtl} mutationBusy={mutationBusy} onNavigate={navigateToStep} />
+              <section aria-busy={mutationBusy} className="relative min-h-[560px] rounded-3xl border border-slate-100 bg-white p-5 shadow-sm md:p-8">
+                <DecorativeCorners />
+                <header className="mb-7 scroll-mt-28 border-b border-slate-100 pb-5">
+                  <p className="text-xs font-black uppercase tracking-widest text-[#b9a779]">
+                    {isRtl ? `الخطوة ${step + 1} من 8` : `Step ${step + 1} of 8`}
+                  </p>
+                  <h2 ref={stepHeadingRef} tabIndex={-1}
+                    className="mt-1 font-qomra text-2xl font-black text-[#054239] outline-none">
+                    {currentStep.label[language]}
+                  </h2>
+                </header>
+
+                <ApplicationCredentials application={application} token={token} isRtl={isRtl} />
+                {application?.status === "SUSPENDED" ? (
+                  <div className="mb-6 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs font-bold leading-6 text-amber-900">
+                    <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0" />
+                    <p>{currentEditable
+                      ? (isRtl ? "يمكن تعديل البنود المحددة كنواقص في هذه الخطوة فقط." : "Only the items marked deficient in this step can be edited.")
+                      : (isRtl ? "هذه الخطوة للقراءة فقط؛ انتقل إلى خطوة النقص المحددة." : "This step is read-only; go to the identified deficiency step.")}</p>
+                  </div>
+                ) : null}
+                <div key={step} className="animate-fade-in">
+                  {stepContent}
                 </div>
-              ) : null}
-              {stepContent}
-              <footer className="mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-5">
+                <footer className="mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-5">
                 <button type="button" disabled={step === 0 || busy || mutationBusy} onClick={() => navigateToStep(step - 1)}
-                  className="flex items-center gap-2 rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-bold text-slate-600 outline-none focus-visible:ring-4 focus-visible:ring-[#b9a779]/25 disabled:opacity-30">
-                  {isRtl ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+                  className="group flex items-center gap-2 rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-bold text-slate-600 outline-none focus-visible:ring-4 focus-visible:ring-[#b9a779]/25 transition-all duration-200 active:scale-95 disabled:opacity-30">
+                  {isRtl ? (
+                    <ChevronRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
+                  ) : (
+                    <ChevronLeft className="h-4 w-4 transition-transform duration-200 group-hover:-translate-x-1" />
+                  )}
                   {isRtl ? "السابق" : "Back"}
                 </button>
                 {step < 7 ? (
                   <button type="button" disabled={busy || mutationBusy} onClick={nextStep}
-                    className="flex items-center gap-2 rounded-xl bg-[#054239] px-6 py-3 text-sm font-black text-[#b9a779] outline-none focus-visible:ring-4 focus-visible:ring-[#b9a779]/25 disabled:cursor-not-allowed disabled:opacity-50">
+                    className="group flex items-center gap-2 rounded-xl bg-[#054239] px-6 py-3 text-sm font-black text-[#b9a779] outline-none focus-visible:ring-4 focus-visible:ring-[#b9a779]/25 transition-all duration-200 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50">
                     {busy ? (isRtl ? "جارٍ الحفظ…" : "Saving…") : (isRtl ? "حفظ ومتابعة" : "Save & continue")}
-                    {isRtl ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                    {isRtl ? (
+                      <ChevronLeft className="h-4 w-4 transition-transform duration-200 group-hover:-translate-x-1" />
+                    ) : (
+                      <ChevronRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
+                    )}
                   </button>
                 ) : (
                   <button type="button" disabled={busy || mutationBusy} onClick={submit}
-                    className="rounded-xl bg-[#054239] px-7 py-3 text-sm font-black text-[#b9a779] outline-none focus-visible:ring-4 focus-visible:ring-[#b9a779]/25 disabled:opacity-50">
+                    className="rounded-xl bg-[#054239] px-7 py-3 text-sm font-black text-[#b9a779] outline-none focus-visible:ring-4 focus-visible:ring-[#b9a779]/25 transition-all duration-200 active:scale-95 disabled:opacity-50">
                     {busy ? (isRtl ? "جارٍ الإرسال…" : "Submitting…") : (isRtl ? "إرسال الطلب نهائياً" : "Submit application")}
                   </button>
                 )}
@@ -651,7 +680,9 @@ function DossierRail({ steps, currentStep, profile, form, application, isRtl, mu
           ].filter(Boolean).join(isRtl ? "، " : ", ");
           return (
             <li key={item.id} className="relative">
-              {index < steps.length - 1 ? <span className="absolute bottom-0 top-9 w-px bg-slate-200 ltr:left-[18px] rtl:right-[18px]" aria-hidden="true" /> : null}
+              {index < steps.length - 1 ? (
+                <span className={`absolute bottom-0 top-9 w-px ltr:left-[18px] rtl:right-[18px] ${index < currentStep ? "bg-emerald-500" : "bg-slate-200"}`} aria-hidden="true" />
+              ) : null}
               <button type="button" onClick={() => available && onNavigate(index)} disabled={!available}
                 aria-current={active ? "step" : undefined}
                 aria-label={`${item.label[language]} — ${stateText}`}
@@ -704,7 +735,7 @@ function TrackingCard({ trackedResult, isRtl, onResume, onError }) {
         <span className="rounded-full bg-[#054239]/10 px-4 py-2 text-xs font-black text-[#054239]">{STATUS[application.status]?.[language] || application.status}</span>
       </div>
       {application.deficiencyNote ? <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-        <strong>{isRtl ? "النواقص المطلوبة:" : "Required updates:"}</strong> {application.deficiencyNote}
+        <strong>{isRtl ? "الملاحظات والنواقص المطلوب استكمالها:" : "Required updates:"}</strong> {application.deficiencyNote}
       </div> : null}
       {["DRAFT", "SUSPENDED"].includes(application.status) ? <button type="button" onClick={onResume}
         className="mt-5 rounded-xl bg-[#054239] px-5 py-3 text-sm font-black text-[#b9a779] outline-none focus-visible:ring-4 focus-visible:ring-[#b9a779]/25">
@@ -734,24 +765,104 @@ function TrackingCard({ trackedResult, isRtl, onResume, onError }) {
   );
 }
 
+// بيانات متابعة الطلب داخل المعالج نفسه.
+//
+// الرقم المرجعي ورمز الوصول السري يُولَّدان على الخادم عند أول حفظ للمسودة،
+// لكنهما كانا يظهران في تبويب "متابعة طلب سابق" فقط — أي أن على مقدّم الطلب
+// مغادرة المعالج ليقرأ البيانات التي بدونها لا يستطيع العودة إلى طلبه أصلاً.
+// نعرضهما هنا فور توليدهما، ورمز الوصول مخفي افتراضياً لأنه سرّ يفتح الطلب
+// لمن يراه، والشاشة قد تكون في مكان عام.
+function ApplicationCredentials({ application, token, isRtl }) {
+  const [revealed, setRevealed] = useState(false);
+  const [copied, setCopied] = useState("");
+
+  if (!application?.referenceNo || !token) return null;
+
+  async function copy(value, which) {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(which);
+      setTimeout(() => setCopied(""), 2000);
+    } catch {
+      // نسخ الحافظة يفشل بلا إذن أو خارج سياق آمن؛ القيمة معروضة للنسخ اليدوي.
+    }
+  }
+
+  const masked = "•".repeat(Math.min(token.length, 32));
+
+  return (
+    <section className="mb-7 rounded-2xl border border-[#b9a779]/40 bg-[#faf7f1] p-4 sm:p-5">
+      <h3 className="flex items-center gap-2 text-xs font-black text-[#054239]">
+        <ShieldAlert className="h-4 w-4 text-[#b9a779]" />
+        {isRtl ? "بيانات متابعة طلبك — احتفظ بها" : "Your tracking credentials — keep them safe"}
+      </h3>
+      <p className="mt-1.5 text-[11px] leading-5 text-slate-500">
+        {isRtl
+          ? "بهذين العنصرين وحدهما يمكنك العودة إلى طلبك من أي جهاز. لن نتمكن من استرجاع رمز الوصول إذا فُقد."
+          : "These two together are the only way back into your application from any device. A lost access code cannot be recovered."}
+      </p>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <div className="rounded-xl border border-slate-200 bg-white p-3">
+          <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+            {isRtl ? "الرقم المرجعي" : "Reference number"}
+          </p>
+          <div className="mt-1.5 flex items-center justify-between gap-2">
+            <p className="font-mono text-sm font-black text-[#054239]" dir="ltr">{application.referenceNo}</p>
+            <button type="button" onClick={() => copy(application.referenceNo, "ref")}
+              className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-[10px] font-bold text-slate-600 outline-none focus-visible:ring-4 focus-visible:ring-[#b9a779]/25">
+              <Copy className="h-3 w-3" />{copied === "ref" ? (isRtl ? "تم النسخ" : "Copied") : (isRtl ? "نسخ" : "Copy")}
+            </button>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-white p-3">
+          <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+            {isRtl ? "رمز الوصول السري" : "Secret access code"}
+          </p>
+          <div className="mt-1.5 flex items-center justify-between gap-2">
+            <p className="min-w-0 break-all font-mono text-xs font-bold text-slate-700" dir="ltr">
+              {revealed ? token : masked}
+            </p>
+            <div className="flex shrink-0 items-center gap-1">
+              <button type="button" onClick={() => setRevealed((value) => !value)}
+                aria-pressed={revealed}
+                className="rounded-lg border border-slate-200 px-2 py-1 text-[10px] font-bold text-slate-600 outline-none focus-visible:ring-4 focus-visible:ring-[#b9a779]/25">
+                {revealed ? (isRtl ? "إخفاء" : "Hide") : (isRtl ? "إظهار" : "Show")}
+              </button>
+              <button type="button" onClick={() => copy(token, "token")}
+                className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-[10px] font-bold text-slate-600 outline-none focus-visible:ring-4 focus-visible:ring-[#b9a779]/25">
+                <Copy className="h-3 w-3" />{copied === "token" ? (isRtl ? "تم" : "Done") : (isRtl ? "نسخ" : "Copy")}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p aria-live="polite" className="sr-only">
+        {copied ? (isRtl ? "تم النسخ إلى الحافظة" : "Copied to clipboard") : ""}
+      </p>
+    </section>
+  );
+}
+
 function SubmissionSuccess({ application, token, isRtl, onReset }) {
   return (
     <section className="relative rounded-3xl border border-emerald-200 bg-white p-8 text-center shadow-sm md:p-10">
       <DecorativeCorners />
       <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-50 text-emerald-700"><Check className="h-8 w-8" /></div>
-      <h2 className="font-qomra text-2xl font-black text-[#054239]">{isRtl ? "تم إرسال الطلب بنجاح" : "Application submitted"}</h2>
-      <p className="mt-3 text-slate-500">{isRtl ? "احتفظ بالرقم المرجعي ورمز الوصول السري للمتابعة." : "Keep the reference number and secret access code for tracking."}</p>
+      <h2 className="font-qomra text-2xl font-black text-[#054239]">{isRtl ? "تم تقديم طلب الترخيص بنجاح" : "Application submitted"}</h2>
+      <p className="mt-3 text-slate-500">{isRtl ? "يرجى الاحتفاظ بالرقم المرجعي ورمز الوصول السري لمتابعة حالة الطلب لاحقاً." : "Keep the reference number and secret access code for tracking."}</p>
       <div className="mx-auto mt-5 max-w-xl space-y-3 rounded-2xl bg-slate-50 p-4" dir="ltr">
         <p className="font-mono text-xl font-black text-[#054239]">{application?.referenceNo}</p>
         <p className="break-all font-mono text-sm font-bold text-slate-600">{token}</p>
         <button type="button" onClick={() => navigator.clipboard.writeText(token)}
           className="inline-flex items-center gap-2 rounded-lg border border-[#054239] px-4 py-2 text-xs font-bold text-[#054239]">
-          <Copy className="h-4 w-4" />{isRtl ? "نسخ رمز الوصول" : "Copy access code"}
+          <Copy className="h-4 w-4" />{isRtl ? "نسخ رمز الوصول السري" : "Copy access code"}
         </button>
       </div>
       <button type="button" onClick={onReset}
         className="mt-6 inline-flex items-center gap-2 rounded-xl border border-slate-200 px-5 py-3 text-sm font-bold text-slate-600 outline-none focus-visible:ring-4 focus-visible:ring-[#b9a779]/20">
-        <RotateCcw className="h-4 w-4" />{isRtl ? "بدء طلب جديد" : "Start a new application"}
+        <RotateCcw className="h-4 w-4" />{isRtl ? "تقديم طلب ترخيص جديد" : "Start a new application"}
       </button>
     </section>
   );

@@ -7,6 +7,7 @@ import { sanitizeRichText } from "@/lib/sanitize";
 import { parseDateAsUTC } from "@/lib/dates";
 import { notifyByPermission } from "@/lib/notify";
 import { assertValidEvent } from "@/lib/business-rules.mjs";
+import { englishChanged } from "@/lib/event-language-review.mjs";
 
 export async function PUT(request, { params }) {
   const session = await verifySession();
@@ -14,7 +15,10 @@ export async function PUT(request, { params }) {
 
   const existing = await prisma.event.findUnique({
     where: { id },
-    select: { createdById: true, reviewStatus: true, status: true },
+    select: {
+      createdById: true, reviewStatus: true, status: true,
+      titleEn: true, descriptionEn: true, locationEn: true, languageReviewedAt: true,
+    },
   });
   if (!existing) return NextResponse.json({ error: "غير موجود" }, { status: 404 });
 
@@ -53,15 +57,26 @@ export async function PUT(request, { params }) {
   // rejected event resubmits it into the queue.
   const resubmitting = !canEditAny && !ownerDirect && existing.reviewStatus === "REJECTED";
 
+  // A language sign-off vouches for specific English text. If this save changes
+  // any of it, the tick is dropped and the event goes back into the reviewer's
+  // queue — otherwise a tick from last week would cover wording written today.
+  const nextEnglish = {
+    titleEn: data.titleEn || null,
+    descriptionEn: sanitizeRichText(data.descriptionEn) || null,
+    locationEn: data.locationEn || null,
+  };
+  const clearsLanguageReview = existing.languageReviewedAt && englishChanged(existing, nextEnglish);
+
   const event = await prisma.event.update({
     where: { id },
     data: {
       titleAr: data.titleAr,
-      titleEn: data.titleEn || null,
+      titleEn: nextEnglish.titleEn,
       descriptionAr: sanitizeRichText(data.descriptionAr) || null,
-      descriptionEn: sanitizeRichText(data.descriptionEn) || null,
+      descriptionEn: nextEnglish.descriptionEn,
       location: data.location || null,
-      locationEn: data.locationEn || null,
+      locationEn: nextEnglish.locationEn,
+      ...(clearsLanguageReview ? { languageReviewedAt: null, languageReviewedById: null } : {}),
       governorate: data.governorate || null,
       governorateEn: data.governorateEn || null,
       startDate: parseDateAsUTC(dates.startDate),

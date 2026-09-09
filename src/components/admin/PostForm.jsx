@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import RichTextEditor from "./RichTextEditor";
 import PageBuilder from "./PageBuilder";
 import ApexDateTimePicker from "@/components/ApexDateTimePicker";
+import PostArtwork from "@/components/PostArtwork";
 import { compressImage } from "@/lib/imageCompression";
 import {
   Save,
@@ -826,11 +827,10 @@ export default function PostForm({ post, categories, canPublish, isNew, defaultT
             >
               {form.featuredImage ? (
                 <div className="relative group">
-                  <img
+                  <PostArtwork
                     src={form.featuredImage}
                     alt="preview"
-                    className="h-36 w-full rounded-lg object-cover"
-                    onError={(e) => (e.target.style.display = "none")}
+                    className="rounded-lg"
                   />
                   <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
                     <span className="text-white text-xs font-bold flex items-center gap-1">
@@ -859,6 +859,9 @@ export default function PostForm({ post, categories, canPublish, isNew, defaultT
                 onChange={(e) => uploadImage(e.target.files?.[0])}
               />
             </div>
+            <p className="text-[10px] leading-relaxed text-gray-400">
+              الأنسب صورة أفقية (16:9)، لكن الصور المربّعة أو الطولانية (مثل صور انستغرام) بتنعرض كاملة بدون قص.
+            </p>
 
             {/* Remove image */}
             {form.featuredImage && (

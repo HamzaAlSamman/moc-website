@@ -1,26 +1,26 @@
-export const MAX_COPYRIGHT_ZIP_BYTES = 100 * 1024 * 1024;
+export const MAX_COPYRIGHT_WORK_BYTES = 100 * 1024 * 1024;
 
 const COPYRIGHT_TRANSITIONS = {
-  FINANCE: new Set(["finance_review:under_review", "final_review:completed"]),
+  FINANCE: new Set(["finance_review:under_review", "final_review:completed", "finance_review:submitted", "final_review:pending_fees", "finance_review:rejected", "final_review:rejected"]),
   LEGAL_DIRECTOR: new Set(["under_review:pending_final_approval", "under_review:suspended", "under_review:rejected"]),
   STUDIES_ASSESSOR: new Set(["under_review:under_review", "under_review:suspended", "under_review:rejected"]),
   STUDIES_HEAD: new Set(["under_review:under_review", "under_review:suspended", "under_review:rejected"]),
-  DEPUTY_MINISTER: new Set(["pending_final_approval:pending_fees"]),
+  DEPUTY_MINISTER: new Set(["pending_final_approval:pending_fees", "pending_final_approval:suspended", "pending_final_approval:rejected"]),
 };
 
 const COPYRIGHT_STATUS_GRAPH = {
   submitted: new Set(["finance_review"]),
-  finance_review: new Set(["under_review"]),
+  finance_review: new Set(["under_review", "submitted", "rejected"]),
   under_review: new Set(["suspended", "rejected", "pending_final_approval"]),
   suspended: new Set(["under_review"]),
-  pending_final_approval: new Set(["pending_fees"]),
+  pending_final_approval: new Set(["pending_fees", "suspended", "rejected"]),
   pending_fees: new Set(["final_review"]),
-  final_review: new Set(["completed"]),
+  final_review: new Set(["completed", "pending_fees", "rejected"]),
 };
 
 const PUBLIC_COPYRIGHT_FIELDS = [
   "id", "referenceNo", "applicantName", "applicantRole", "workTitle", "workCategory",
-  "workDescription", "province", "culturalCenter", "completionDate",
+  "workDesc", "province", "center", "completionDate", "idDocType",
   "hasTelecomDoc", "applicationStatus", "paymentStatus", "paymentGateway",
   "deficiencyNote", "createdAt", "updatedAt",
 ];
@@ -124,11 +124,15 @@ export function validateEventSubmissionInput(data) {
 }
 
 export function toPublicCopyrightSubmission(submission) {
-  return Object.fromEntries(
+  const publicData = Object.fromEntries(
     PUBLIC_COPYRIGHT_FIELDS
       .filter((field) => submission[field] !== undefined)
       .map((field) => [field, submission[field]]),
   );
+  publicData.authors = Array.isArray(submission.authors)
+    ? submission.authors.filter((author) => typeof author?.name === "string").map(({ name }) => ({ name }))
+    : [];
+  return publicData;
 }
 
 function decodedBase64Size(base64) {
@@ -139,7 +143,7 @@ function decodedBase64Size(base64) {
 export function validateCopyrightWorkSource({ workFile, workDriveUrl }) {
   const hasFile = typeof workFile === "string" && workFile.length > 0;
   const hasUrl = typeof workDriveUrl === "string" && workDriveUrl.trim().length > 0;
-  if (hasFile === hasUrl) throw new Error("Provide exactly one ZIP file or Google Drive URL");
+  if (hasFile === hasUrl) throw new Error("Provide exactly one PDF or ZIP file, or a Google Drive URL");
   if (hasUrl) {
     let url;
     try { url = new URL(workDriveUrl); } catch { throw new Error("A valid Google Drive URL is required"); }
@@ -148,15 +152,17 @@ export function validateCopyrightWorkSource({ workFile, workDriveUrl }) {
     }
     return { workFile: null, workDriveUrl: url.toString() };
   }
-  const match = workFile.match(/^data:application\/(?:zip|x-zip-compressed);base64,([A-Za-z0-9+/]+={0,2})$/);
-  if (!match) throw new Error("The work file must be a Base64 ZIP file");
-  if (decodedBase64Size(match[1]) > MAX_COPYRIGHT_ZIP_BYTES) {
-    throw new Error("The ZIP file exceeds the 100 MiB limit; use Google Drive");
+  const match = workFile.match(/^data:(application\/(?:pdf|zip|x-zip-compressed));base64,([A-Za-z0-9+/]+={0,2})$/);
+  if (!match) throw new Error("The work file must be a Base64 PDF or ZIP file");
+  if (decodedBase64Size(match[2]) > MAX_COPYRIGHT_WORK_BYTES) {
+    throw new Error("The work file exceeds the 100 MiB limit; use Google Drive");
   }
-  const signature = Buffer.from(match[1].slice(0, 8), "base64");
-  const validSignature = signature[0] === 0x50 && signature[1] === 0x4b
+  const signature = Buffer.from(match[2].slice(0, 12), "base64");
+  const validSignature = match[1] === "application/pdf"
+    ? signature.subarray(0, 5).toString("ascii") === "%PDF-"
+    : signature[0] === 0x50 && signature[1] === 0x4b
     && [[0x03, 0x04], [0x05, 0x06], [0x07, 0x08]].some(([a, b]) => signature[2] === a && signature[3] === b);
-  if (!validSignature) throw new Error("The uploaded content is not a valid ZIP file");
+  if (!validSignature) throw new Error(match[1] === "application/pdf" ? "The uploaded content is not a valid PDF file" : "The uploaded content is not a valid ZIP file");
   return { workFile, workDriveUrl: null };
 }
 

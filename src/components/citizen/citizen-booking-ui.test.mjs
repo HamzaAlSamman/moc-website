@@ -38,11 +38,36 @@ test("OTP UI supports six digits, paste, resend countdown, and accessible status
 
 test("event detail exposes internal booking states and login recovery", async () => {
   const text = await source("components/citizen/EventBookingPanel.jsx");
-  for (const token of ["NOT_OPEN", "CLOSED", "FULL", "AUTH_REQUIRED", "IDENTITY_UNVERIFIED"]) {
+  for (const token of ["NOT_OPEN_YET", "CLOSED", "FULL", "AUTH_REQUIRED", "IDENTITY_UNVERIFIED"]) {
     assert.match(text, new RegExp(token));
   }
   assert.match(text, /\/account\/login/);
   assert.match(text, /\/api\/citizen\/events\//);
+});
+
+// الاختبار السابق كان يطابق السلسلة "NOT_OPEN" فقط، وهي تُطابَق أيضاً داخل
+// "NOT_OPEN_YET" — فبقي ناجحاً بينما اللوحة تقارن بمفتاح لا تعيده القاعدة
+// أبداً. هنا نقارن المفردات الفعلية بين الملفين بدل التحقق من وجود نص.
+test("the panel compares against window states the rules module actually returns", async () => {
+  const panel = await source("components/citizen/EventBookingPanel.jsx");
+  const rules = await source("lib/event-booking-rules.mjs");
+
+  // ما تعيده bookingWindowState فعلاً.
+  const produced = new Set(
+    [...rules.matchAll(/return\s+"([A-Z_]+)"/g)].map((match) => match[1]),
+  );
+  assert.ok(produced.has("NOT_OPEN_YET") && produced.has("OPEN"), "unexpected rules shape");
+
+  // ما تقارن به اللوحة عبر status?.windowState === "..."
+  const compared = [...panel.matchAll(/windowState\s*===\s*"([A-Z_]+)"/g)].map((match) => match[1]);
+  assert.ok(compared.length > 0, "panel no longer compares windowState");
+
+  const unreachable = compared.filter((state) => !produced.has(state));
+  assert.deepEqual(
+    unreachable,
+    [],
+    `panel compares windowState against values bookingWindowState never returns: ${unreachable.join(", ")}`,
+  );
 });
 
 test("admin surfaces cover citizen verification and event booking operations", async () => {

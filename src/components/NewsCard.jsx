@@ -4,7 +4,7 @@ import React from "react";
 import Link from "next/link";
 import { translations } from "../data/translations";
 import { toWesternNums } from "../lib/numbers";
-import ImageWithFallback from "./ImageWithFallback";
+import PostArtwork from "./PostArtwork";
 
 function formatNewsDate(dateStr, isRtl) {
   if (!dateStr) return "";
@@ -40,12 +40,12 @@ export default function NewsCard({ article, locale }) {
     >
       {/* Image Wrap */}
       <div className="relative h-56 min-w-[40%]">
-        <ImageWithFallback
+        <PostArtwork
           src={article.image || article.featuredImage}
           alt={title || ""}
           fill
           sizes="(max-width: 768px) 100vw, 40vw"
-          className="object-cover transition-transform duration-700 ease-out group-hover:scale-105"
+          imageClassName="transition-transform duration-700 ease-out group-hover:scale-105"
         />
         {/* Shadow Overlay */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent"></div>

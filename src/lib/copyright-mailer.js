@@ -1,21 +1,16 @@
 import "server-only";
-import nodemailer from "nodemailer";
+import { sendMailQueued } from "@/lib/queued-mail";
 import { generateReceiptPdf } from "@/lib/receipt-pdf";
+import { formatFee, getFeesForRole } from "@/lib/copyright-fees.mjs";
 
 // ── Fee mapping helpers ──────────────────────────────────────────────────────
+// المبالغ تأتي من مصدر الرسوم الموحّد، وتُنسّق هنا فقط للعرض داخل البريد.
 function getFeesForMailer(role) {
-  const isCompany = ["الشريك", "المدير العام", "المستثمر", "رئيس مجلس إدارة", "صاحب الشركة"].includes(role);
-  if (isCompany) {
-    return {
-      initialTotal: "51,300 ل.س",
-      finalTotal: "47,300 ل.س"
-    };
-  } else {
-    return {
-      initialTotal: "31,300 ل.س",
-      finalTotal: "47,300 ل.س"
-    };
-  }
+  const fees = getFeesForRole(role);
+  return {
+    initialTotal: formatFee(fees.initialTotal),
+    finalTotal: formatFee(fees.finalTotal),
+  };
 }
 
 // ── Label helpers ─────────────────────────────────────────────────────────────
@@ -28,52 +23,6 @@ const WORK_CATEGORY_LABELS_AR = {
 };
 function categoryLabelAr(cat) {
   return WORK_CATEGORY_LABELS_AR[cat] || cat;
-}
-
-// ── SMTP transport ────────────────────────────────────────────────────────────
-function buildTransport() {
-  const host = process.env.SMTP_HOST;
-  const port = process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT) : 587;
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
-  if (host && user && pass) {
-    return nodemailer.createTransport({
-      host,
-      port,
-      secure: port === 465,
-      auth: { user, pass },
-      // Ministry-owned mail relay whose TLS cert is sometimes expired/self-signed.
-      // Set SMTP_TLS_INSECURE="true" in .env to accept it (otherwise nodemailer
-      // rejects the connection with "certificate has expired" and no mail sends).
-      tls: { rejectUnauthorized: process.env.SMTP_TLS_INSECURE !== "true" },
-    });
-  }
-  return null;
-}
-
-async function getTransport() {
-  const transporter = buildTransport();
-  if (transporter) return { transporter, isDev: false };
-  // In production we must NEVER silently route a citizen's confirmation/receipt
-  // to a throwaway ethereal.email inbox — it would vanish and the applicant
-  // would think their submission never went through (exactly this bug). Fail
-  // loudly so the SMTP misconfiguration is caught instead of hidden.
-  if (process.env.NODE_ENV === "production") {
-    throw new Error(
-      "SMTP_HOST/SMTP_USER/SMTP_PASS are not configured — copyright email not sent.",
-    );
-  }
-  // Development only: throwaway ethereal.email account, preview URL in the log.
-  const testAccount = await nodemailer.createTestAccount();
-  return {
-    transporter: nodemailer.createTransport({
-      host: "smtp.ethereal.email",
-      port: 587,
-      secure: false,
-      auth: { user: testAccount.user, pass: testAccount.pass },
-    }),
-    isDev: true,
-  };
 }
 
 // ── Shared layout ─────────────────────────────────────────────────────────────
@@ -134,28 +83,24 @@ async function buildReceiptAttachment(submission, stage) {
   }
 }
 
+// Every copyright email funnels through here, which is what makes it the one
+// place that had to change for this whole service to become auditable. It used
+// to drive a private nodemailer transport — a second copy of the SMTP config
+// that bypassed even the shared `sendMail`, so a failed receipt left no trace
+// anywhere. Now it queues like everything else; `sendMailQueued` does not
+// throw, so the caller still cannot be broken by mail.
 async function dispatchEmail(submission, { subject, titleAr, contentHtml, attachments = [] }) {
   if (!submission.applicantEmail) return;
-  try {
-    const from = process.env.SMTP_FROM || "no-reply@moc.gov.sy";
-    const { transporter, isDev } = await getTransport();
-    const info = await transporter.sendMail({
-      from: `"مديرية الشؤون القانونية" <${from}>`,
-      to: submission.applicantEmail,
-      subject,
-      attachments,
-      html: wrapEmailBody(titleAr, contentHtml),
-    });
-    if (isDev) {
-      console.log("-----------------------------------------");
-      console.log(`📧 Ethereal Email Sent (${subject})`);
-      console.log(`Recipient: ${submission.applicantEmail}`);
-      console.log(`Preview URL: ${nodemailer.getTestMessageUrl(info)}`);
-      console.log("-----------------------------------------");
-    }
-  } catch (error) {
-    console.error(`Error sending copyright email (${subject}):`, error);
-  }
+  const from = process.env.SMTP_FROM || "no-reply@moc.gov.sy";
+  await sendMailQueued({
+    from: `"مديرية الشؤون القانونية" <${from}>`,
+    to: submission.applicantEmail,
+    subject,
+    attachments,
+    html: wrapEmailBody(titleAr, contentHtml),
+    kindAr: "حقوق المؤلف",
+    contextAr: submission.referenceNo || submission.workTitle || undefined,
+  });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -169,9 +114,9 @@ export async function sendCopyrightEmail(submission) {
     titleAr: "تم استلام طلبك بنجاح — حماية حقوق المؤلف",
     contentHtml: `
       <p style="font-size: 14px;">
-        عزيزنا المودع <strong>${submission.applicantName}</strong>،<br/>
-        تم استلام طلبك لحماية العمل الفكري <strong>«${submission.workTitle}»</strong>
-        (${categoryLabelAr(submission.workCategory)}) وتسجيله في سجلات وزارة الثقافة.
+        عزيزنا المودع <strong>${esc(submission.applicantName)}</strong>،<br/>
+        تم استلام طلبك لحماية العمل الفكري <strong>«${esc(submission.workTitle)}»</strong>
+        (${esc(categoryLabelAr(submission.workCategory))}) وتسجيله في سجلات وزارة الثقافة.
         سيتولى الدارس المختص مراجعته فنياً وقانونياً وستصلك إشعارات عبر بريدك عند تحديث حالة طلبك.
       </p>
 
@@ -179,7 +124,7 @@ export async function sendCopyrightEmail(submission) {
         ${submission.referenceNo ? `
         <tr style="background:#f9f9f9;border-bottom:1px solid #eee;">
           <td style="padding:11px 12px;font-weight:bold;color:#002723;width:45%;">الرقم المتسلسل / Reference No.:</td>
-          <td style="padding:11px 12px;font-family:monospace;font-weight:bold;color:#428177;letter-spacing:1px;">${submission.referenceNo}</td>
+          <td style="padding:11px 12px;font-family:monospace;font-weight:bold;color:#428177;letter-spacing:1px;">${esc(submission.referenceNo)}</td>
         </tr>` : ""}
         <tr style="background:#f9f9f9;border-bottom:1px solid #eee;">
           <td style="padding:11px 12px;font-weight:bold;color:#002723;width:45%;">رمز المعاملة / Request ID:</td>
@@ -187,15 +132,15 @@ export async function sendCopyrightEmail(submission) {
         </tr>
         <tr style="border-bottom:1px solid #eee;">
           <td style="padding:11px 12px;font-weight:bold;color:#002723;">عنوان المصنف / Work Title:</td>
-          <td style="padding:11px 12px;">${submission.workTitle}</td>
+          <td style="padding:11px 12px;">${esc(submission.workTitle)}</td>
         </tr>
         <tr style="background:#f9f9f9;border-bottom:1px solid #eee;">
           <td style="padding:11px 12px;font-weight:bold;color:#002723;">التصنيف / Category:</td>
-          <td style="padding:11px 12px;">${categoryLabelAr(submission.workCategory)}</td>
+          <td style="padding:11px 12px;">${esc(categoryLabelAr(submission.workCategory))}</td>
         </tr>
         <tr style="border-bottom:1px solid #eee;">
           <td style="padding:11px 12px;font-weight:bold;color:#002723;">مركز الإيداع / Center:</td>
-          <td style="padding:11px 12px;">${submission.province} - ${submission.center}</td>
+          <td style="padding:11px 12px;">${esc(submission.province)} - ${esc(submission.center)}</td>
         </tr>
       </table>
 
@@ -208,7 +153,7 @@ export async function sendCopyrightEmail(submission) {
             <td style="text-align:left;font-weight:bold;color:#002723;">${fees.initialTotal}</td>
           </tr>
           <tr>
-            <td style="color:#888;font-size:12px;padding-right:16px;">يُسدَّد عبر شام كاش فور استلام هذا الإشعار</td>
+            <td style="color:#888;font-size:12px;padding-right:16px;">يُسدَّد عبر إحدى بوابات الدفع الإلكتروني المعتمدة فور استلام هذا الإشعار</td>
             <td></td>
           </tr>
           <tr style="border-top:1px dashed #e4d7be;">
@@ -246,9 +191,9 @@ export async function sendPaymentUnderReviewEmail(submission, stage = "initial")
     titleAr: "تم استلام دفعتك — قيد التدقيق لدى مديرية الشؤون المالية",
     contentHtml: `
       <p style="font-size:14px;">
-        عزيزنا المودع <strong>${submission.applicantName}</strong>،<br/>
+        عزيزنا المودع <strong>${esc(submission.applicantName)}</strong>،<br/>
         تم استلام إشعار دفعك لـ<strong>${feeLabel}</strong> (${feeValue}) الخاص بطلبك للعمل
-        <strong>«${submission.workTitle}»</strong>، وهو الآن <strong>قيد التدقيق</strong>
+        <strong>«${esc(submission.workTitle)}»</strong>، وهو الآن <strong>قيد التدقيق</strong>
         لدى مديرية الشؤون المالية.
       </p>
       <div style="margin-top:18px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:14px;font-size:13px;color:#1e3a8a;line-height:1.7;">
@@ -271,9 +216,9 @@ export async function sendUnderReviewEmail(submission) {
     attachments,
     contentHtml: `
       <p style="font-size:14px;">
-        عزيزنا المودع <strong>${submission.applicantName}</strong>،<br/>
+        عزيزنا المودع <strong>${esc(submission.applicantName)}</strong>،<br/>
         تم تدقيق واعتماد الرسم الأولي (${fees.initialTotal}) الخاص بطلبك للعمل
-        <strong>«${submission.workTitle}»</strong> من قِبل مديرية الشؤون المالية.
+        <strong>«${esc(submission.workTitle)}»</strong> من قِبل مديرية الشؤون المالية.
         بدأت مديرية الدراسات بمراجعة طلبك فنياً وقانونياً.
       </p>
       ${receiptNotice(attachments)}
@@ -297,9 +242,9 @@ export async function sendApprovalEmail(submission) {
     titleAr: "🎉 تمت الموافقة القانونية على طلبك — استكمل الرسم النهائي",
     contentHtml: `
       <p style="font-size:14px;">
-        عزيزنا المودع <strong>${submission.applicantName}</strong>،<br/>
+        عزيزنا المودع <strong>${esc(submission.applicantName)}</strong>،<br/>
         بناءً على مراجعة مديرية الشؤون القانونية بوزارة الثقافة، فقد تم اعتماد
-        طلب حماية العمل الفكري <strong>«${submission.workTitle}»</strong>
+        طلب حماية العمل الفكري <strong>«${esc(submission.workTitle)}»</strong>
         بشكل نهائي من الناحيتين القانونية والفنية.
       </p>
 
@@ -313,7 +258,7 @@ export async function sendApprovalEmail(submission) {
 
       <p style="font-size:13px;color:#444;line-height:1.7;">
         لإصدار الشهادة الرسمية وحفظها في المستودع الإلكتروني للوزارة، يرجى سداد الرسم النهائي البالغ
-        <strong>${fees.finalTotal}</strong> عبر شام كاش من صفحة تتبع الطلب (الزر أدناه),
+        <strong>${fees.finalTotal}</strong> عبر إحدى بوابات الدفع الإلكتروني المعتمدة من صفحة تتبع الطلب (الزر أدناه)،
         ثم رفع صورة إيصال الدفع في الحقل المخصص.
       </p>
 
@@ -346,10 +291,10 @@ export async function sendCompletedEmail(submission) {
     attachments,
     contentHtml: `
       <p style="font-size:14px;">
-        عزيزنا المودع <strong>${submission.applicantName}</strong>،<br/>
+        عزيزنا المودع <strong>${esc(submission.applicantName)}</strong>،<br/>
         تم تدقيق واعتماد الرسم النهائي (${fees.finalTotal}) وإصدار
         <strong>شهادة حماية حقوق المؤلف الرسمية</strong>
-        للعمل <strong>«${submission.workTitle}»</strong> بصيغة قابلة للتحميل.
+        للعمل <strong>«${esc(submission.workTitle)}»</strong> بصيغة قابلة للتحميل.
       </p>
 
       ${receiptNotice(attachments)}
@@ -386,6 +331,16 @@ export async function sendPendingFinalApprovalEmail(_submission) {
   // الإشعار الداخلي يُرسل عبر notify.js في admin route.
 }
 
+export async function sendPaymentCorrectionEmail(submission) {
+  const origin = process.env.APP_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || "https://moc.gov.sy";
+  const link = `${origin}/ar/services/copyright?code=${encodeURIComponent(submission.id)}`;
+  await dispatchEmail(submission, {
+    subject: `يرجى تصحيح بيانات الدفع - المعاملة #${submission.id}`,
+    titleAr: "إعادة الدفع للتصحيح",
+    contentHtml: `<p>عزيزنا ${esc(submission.applicantName)}، يرجى تصحيح بيانات الحوالة الخاصة بالمصنف «${esc(submission.workTitle)}» وإرسالها مجدداً للتدقيق.</p>${applicantNoteBox(submission.deficiencyNote, { heading: "سبب الإرجاع:" })}<p><a href="${esc(link)}">فتح المعاملة وتصحيح الدفع</a></p>`,
+  });
+}
+
 // Escape applicant/reviewer-supplied text before interpolating into email HTML.
 function esc(value) {
   return String(value ?? "")
@@ -418,8 +373,8 @@ export async function sendSuspendedEmail(submission) {
     titleAr: "⚠️ طلبك متوقف مؤقتاً — يرجى استكمال المستندات الناقصة",
     contentHtml: `
       <p style="font-size:14px;">
-        عزيزنا المودع <strong>${submission.applicantName}</strong>،<br/>
-        تم إيقاف طلبك الخاص بالعمل <strong>«${submission.workTitle}»</strong>
+        عزيزنا المودع <strong>${esc(submission.applicantName)}</strong>،<br/>
+        تم إيقاف طلبك الخاص بالعمل <strong>«${esc(submission.workTitle)}»</strong>
         مؤقتاً لوجود النواقص التالية:
       </p>
       ${applicantNoteBox(submission.deficiencyNote, { heading: "📋 النواقص المطلوب استكمالها:", tone: "warn" })}
@@ -438,9 +393,9 @@ export async function sendRejectedEmail(submission) {
     titleAr: "إشعار: تم رفض طلب حماية حقوق المؤلف",
     contentHtml: `
       <p style="font-size:14px;">
-        عزيزنا المودع <strong>${submission.applicantName}</strong>،<br/>
+        عزيزنا المودع <strong>${esc(submission.applicantName)}</strong>،<br/>
         نأسف لإعلامك بأنه تم رفض طلبك الخاص بالعمل
-        <strong>«${submission.workTitle}»</strong> بشكل نهائي بعد المراجعة.
+        <strong>«${esc(submission.workTitle)}»</strong> بشكل نهائي بعد المراجعة.
       </p>
       ${applicantNoteBox(submission.deficiencyNote, { heading: "سبب الرفض:", tone: "reject" })}
       <p style="font-size:13px;color:#444;line-height:1.7;">

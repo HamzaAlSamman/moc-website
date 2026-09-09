@@ -5,6 +5,9 @@ import { notifyByRole } from "@/lib/notify";
 import { sendCopyrightEmail, sendPaymentUnderReviewEmail } from "@/lib/copyright-mailer";
 import { fullSubmissionSchema } from "@/lib/copyright-validation";
 import { nextReferenceNumberSafe, REFERENCE_SCOPES } from "@/lib/reference-number";
+import { readCopyrightJson } from "@/lib/copyright-request.mjs";
+import { copyrightReceiptAvailability } from "@/lib/copyright-payments";
+import { isPaymentGatewayActive } from "@/lib/payment-gateways.mjs";
 import {
   toPublicCopyrightSubmission,
   validateCopyrightWorkSource,
@@ -29,6 +32,15 @@ const ROLE_GROUPS = {
   heir: new Set(["الابن", "الوالد", "الورثة"]),
 };
 
+function copyrightRequestErrorResponse(error) {
+  return NextResponse.json(
+    { error: error.message, code: error.code },
+    { status: error.status },
+  );
+}
+async function publicSubmission(submission) {
+  return { ...toPublicCopyrightSubmission(submission), receipts: await copyrightReceiptAvailability(submission) };
+}
 function validateCopyrightDocuments(data, { requireCore = false } = {}) {
   for (const field of COPYRIGHT_DOCUMENT_FIELDS) {
     if (data[field] != null) validateUploadedDocument(data[field], field);
@@ -67,7 +79,7 @@ export async function POST(request) {
       return NextResponse.json({ error: "محاولات كثيرة جداً، يرجى المحاولة لاحقاً" }, { status: 429 });
     }
 
-    const data = await request.json();
+    let data = await readCopyrightJson(request);
 
     const parsed = fullSubmissionSchema.safeParse(data);
     if (!parsed.success) {
@@ -79,6 +91,7 @@ export async function POST(request) {
       }
       return NextResponse.json({ error: "بيانات الطلب غير صحيحة أو ناقصة", fieldErrors }, { status: 400 });
     }
+    data = { ...data, ...parsed.data };
 
     let workSource;
     try {
@@ -108,7 +121,10 @@ export async function POST(request) {
         applicantSignature:     null,
         reviewerSignature:      null,
         authors:                data.authors || null,
-        paymentGateway:         data.paymentGateway || "cham_cash",
+        // Recorded at creation as the applicant's stated preference. Anything
+        // not live is normalised to the default rather than stored, so the row
+        // never carries a gateway the payment step would later refuse.
+        paymentGateway:         isPaymentGatewayActive(data.paymentGateway) ? data.paymentGateway : "cham_cash",
         paymentRef:             null,
         paymentReceipt:         null,
         commercialRegisterFile: data.commercialRegisterFile || null,
@@ -163,6 +179,9 @@ export async function POST(request) {
       { status: 201 },
     );
   } catch (err) {
+    if (["COPYRIGHT_REQUEST_TOO_LARGE", "COPYRIGHT_INVALID_REQUEST"].includes(err?.code)) {
+      return copyrightRequestErrorResponse(err);
+    }
     console.error("Copyright submission POST error:", err);
     return NextResponse.json({ error: "حدث خطأ أثناء حفظ طلب حماية حقوق المؤلف" }, { status: 500 });
   }
@@ -186,7 +205,7 @@ export async function GET(request) {
       return NextResponse.json({ error: "لم يتم العثور على معاملة بهذا الرمز" }, { status: 404 });
     }
 
-    return NextResponse.json({ submission: toPublicCopyrightSubmission(submission) });
+    return NextResponse.json({ submission: await publicSubmission(submission) });
   } catch (err) {
     console.error("Copyright GET error:", err);
     return NextResponse.json({ error: "حدث خطأ أثناء جلب الطلب" }, { status: 500 });
@@ -207,10 +226,10 @@ export async function PUT(request) {
       return NextResponse.json({ error: "محاولات كثيرة جداً، يرجى المحاولة لاحقاً" }, { status: 429 });
     }
 
-    const data = await request.json();
+    const data = await readCopyrightJson(request);
     const { id, action } = data;
 
-    if (!id) {
+    if (typeof id !== "string" || !id.trim()) {
       return NextResponse.json({ error: "معرّف الطلب مطلوب" }, { status: 400 });
     }
 
@@ -226,6 +245,33 @@ export async function PUT(request) {
     }
 
     let updateData;
+
+    // A payment may only ever be recorded against a gateway that is actually
+    // live. The client already hides the account code for the others, but the
+    // gate has to exist here too: without it a crafted request can file a
+    // payment claiming a wallet the ministry does not operate, and Finance
+    // would have no transaction to verify it against.
+    if (action === "pay_initial" || action === "pay_final") {
+      if (!isPaymentGatewayActive(data.paymentGateway)) {
+        return NextResponse.json(
+          { error: "وسيلة الدفع المختارة غير مفعّلة" },
+          { status: 400 },
+        );
+      }
+      if (typeof data.paymentRef !== "string" || data.paymentRef.trim().length < 4 || data.paymentRef.trim().length > 200) {
+        return NextResponse.json({ error: "مرجع الدفع مطلوب ويجب أن يكون بين 4 و200 حرف" }, { status: 400 });
+      }
+      try { validateUploadedDocument(data.paymentReceipt, "paymentReceipt", 5 * 1024 * 1024); }
+      catch (error) { return NextResponse.json({ error: error.message }, { status: 400 }); }
+      if (existing.paymentRef === data.paymentRef.trim()) {
+        const previous = await prisma.copyrightPayment.findUnique({
+          where: { submissionId_stage: { submissionId: id, stage: action === "pay_initial" ? "initial" : "final" } },
+        });
+        if (!previous?.rejectedAt || previous.verifiedAt) {
+        return NextResponse.json({ error: "مرجع الحوالة مستخدم سابقاً" }, { status: 409 });
+        }
+      }
+    }
 
     if (action === "pay_initial") {
       if (existing.applicationStatus !== "submitted" || existing.paymentStatus !== "pending") {
@@ -258,7 +304,7 @@ export async function PUT(request) {
       if (existing.applicationStatus !== "suspended") {
         return NextResponse.json({ error: "لا يمكن إعادة إرسال الطلب في هذه المرحلة" }, { status: 409 });
       }
-      updateData = { applicationStatus: "under_review" };
+      updateData = { applicationStatus: "under_review", assessorReportFile: null, studiesRecommendationsFile: null };
       if (data.workFile !== undefined || data.workDriveUrl !== undefined) {
         try {
           Object.assign(updateData, validateCopyrightWorkSource(data));
@@ -268,6 +314,9 @@ export async function PUT(request) {
       }
       // Thread the citizen's written reply into the shared review notes so the
       // reviewers see how they responded to the flagged deficiencies.
+      if (data.applicantReply !== undefined && typeof data.applicantReply !== "string") {
+        return NextResponse.json({ error: "نص الرد غير صالح" }, { status: 400 });
+      }
       if (data.applicantReply?.trim()) {
         const thread = Array.isArray(existing.reviewNotes) ? existing.reviewNotes : [];
         updateData.reviewNotes = [
@@ -283,6 +332,8 @@ export async function PUT(request) {
       if (data.delegationFile !== undefined) updateData.delegationFile = data.delegationFile;
       if (data.representativeIdFile !== undefined) updateData.representativeIdFile = data.representativeIdFile;
       if (data.originalOwnerIdFile !== undefined) updateData.originalOwnerIdFile = data.originalOwnerIdFile;
+      try { validateCopyrightDocuments({ ...existing, ...updateData }, { requireCore: true }); }
+      catch (error) { return NextResponse.json({ error: error.message }, { status: 400 }); }
     } else {
       return NextResponse.json({ error: "إجراء غير صالح" }, { status: 400 });
     }
@@ -292,9 +343,24 @@ export async function PUT(request) {
       : action === "pay_final"
         ? { applicationStatus: "pending_fees" }
         : { applicationStatus: "suspended" };
-    const result = await prisma.copyrightSubmission.updateMany({
-      where: { id, ...expectedWhere },
-      data: updateData,
+    const result = await prisma.$transaction(async (tx) => {
+      const changed = await tx.copyrightSubmission.updateMany({
+        where: { id, ...expectedWhere, updatedAt: existing.updatedAt }, data: updateData,
+      });
+      if (changed.count === 1 && ["pay_initial", "pay_final"].includes(action)) {
+        const stage = action === "pay_initial" ? "initial" : "final";
+        const previous = await tx.copyrightPayment.findUnique({ where: { submissionId_stage: { submissionId: id, stage } } });
+        const paymentData = {
+          submissionId: id, stage: action === "pay_initial" ? "initial" : "final",
+          reference: updateData.paymentRef, gateway: updateData.paymentGateway, receipt: updateData.paymentReceipt,
+          rejectedAt: null,
+        };
+        if (previous) {
+          if (!previous.rejectedAt || previous.verifiedAt) throw Object.assign(new Error("Payment stage already recorded"), { code: "P2002" });
+          await tx.copyrightPayment.update({ where: { id: previous.id }, data: paymentData });
+        } else await tx.copyrightPayment.create({ data: paymentData });
+      }
+      return changed;
     });
     if (result.count !== 1) {
       return NextResponse.json({ error: "Concurrent update detected" }, { status: 409 });
@@ -333,8 +399,11 @@ export async function PUT(request) {
       });
     }
 
-    return NextResponse.json({ success: true, submission: toPublicCopyrightSubmission(updated) });
+    return NextResponse.json({ success: true, submission: await publicSubmission(updated) });
   } catch (err) {
+    if (["COPYRIGHT_REQUEST_TOO_LARGE", "COPYRIGHT_INVALID_REQUEST"].includes(err?.code)) {
+      return copyrightRequestErrorResponse(err);
+    }
     if (err.code === "P2002") {
       return NextResponse.json({ error: "paymentRef must be unique" }, { status: 409 });
     }

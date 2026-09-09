@@ -6,6 +6,7 @@ import {
   backoffDelayMs,
   createNotificationOutboxProcessor,
   isOutboxCronAuthorized,
+  notificationCarriesTicket,
   renderOutboxNotification,
 } from "./notification-outbox-core.mjs";
 
@@ -60,6 +61,70 @@ test("notification renderer escapes payload and covers booking and identity type
     assert.ok(message.text);
     assert.doesNotMatch(message.html, /<script>|<b>reason<\/b>/);
   }
+});
+
+test("only seat-bearing notifications carry a ticket", () => {
+  assert.equal(notificationCarriesTicket("BOOKING_CONFIRMED"), true);
+  assert.equal(notificationCarriesTicket("BOOKING_PROMOTED"), true);
+  // A waitlisted or cancelled booking has no admissible ticket; attaching one
+  // would hand the citizen a document that gets turned away at the door.
+  for (const type of ["BOOKING_WAITLISTED", "BOOKING_CANCELLED", "EVENT_CANCELLED", "CITIZEN_IDENTITY_VERIFIED"]) {
+    assert.equal(notificationCarriesTicket(type), false, type);
+  }
+});
+
+test("a confirmed booking email offers the ticket as both an attachment and a link", () => {
+  const message = renderOutboxNotification("BOOKING_CONFIRMED", {
+    fullName: "محمد الأحمد",
+    referenceNo: "BKG-2026-0001",
+    ticketUrl: "https://moc.gov.sy/ar/account/bookings/BKG-2026-0001/ticket",
+    ticketAttached: true,
+  });
+  assert.match(message.html, /مرفقة بهذه الرسالة/);
+  assert.match(message.html, /href="https:\/\/moc\.gov\.sy\/ar\/account\/bookings\/BKG-2026-0001\/ticket"/);
+  assert.match(message.text, /https:\/\/moc\.gov\.sy\/ar\/account\/bookings\/BKG-2026-0001\/ticket/);
+});
+
+test("the email never claims an attachment the render failed to produce", () => {
+  // Chromium missing on the server: the mail still goes out, with the link
+  // only — the citizen can download the ticket from their account.
+  const message = renderOutboxNotification("BOOKING_CONFIRMED", {
+    fullName: "محمد الأحمد",
+    ticketUrl: "https://moc.gov.sy/ar/account/bookings/BKG-2026-0001/ticket",
+    ticketAttached: false,
+  });
+  assert.doesNotMatch(message.html, /مرفقة بهذه الرسالة/);
+  assert.doesNotMatch(message.text, /مرفقة بهذه الرسالة/);
+  assert.match(message.html, /تحميل التذكرة من حسابك/);
+});
+
+test("non-ticket notifications ignore ticket payload entirely", () => {
+  const message = renderOutboxNotification("BOOKING_WAITLISTED", {
+    fullName: "محمد الأحمد",
+    ticketUrl: "https://moc.gov.sy/ar/account/bookings/BKG-2026-0001/ticket",
+    ticketAttached: true,
+  });
+  assert.doesNotMatch(message.html, /تذكرة الحضور|مرفقة بهذه الرسالة/);
+  assert.doesNotMatch(message.html, /account\/bookings/);
+});
+
+test("a ticket URL in the payload is escaped like every other value", () => {
+  const message = renderOutboxNotification("BOOKING_CONFIRMED", {
+    fullName: "x",
+    ticketUrl: 'https://moc.gov.sy/"><script>alert(1)</script>',
+  });
+  assert.doesNotMatch(message.html, /<script>/);
+});
+
+test("a Chromium failure must not fail the outbox row", async () => {
+  const worker = await readFile(new URL("./notification-outbox.js", import.meta.url), "utf8");
+  // Rendering happens inside a try/catch that degrades to a link-only email.
+  // Letting it throw would retry the row eight times and then mark it FAILED,
+  // so a missing Chromium would swallow every booking confirmation.
+  assert.match(worker, /generateBookingTicketPdf/);
+  assert.match(worker, /PDF_ENGINE_UNAVAILABLE/);
+  assert.match(worker, /ticketAttached: false/);
+  assert.match(worker, /ticketSig: true/, "the PDF cannot be rendered without the signature column");
 });
 
 test("database worker uses skip-locked claiming and the internal route is bearer protected", async () => {

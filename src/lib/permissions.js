@@ -19,6 +19,8 @@ export const ROLES = {
   LICENSING_COMMITTEE: "LICENSING_COMMITTEE",
   FINANCE:             "FINANCE",
   DIRECTORATE:         "DIRECTORATE",
+  TICKET_OFFICER:      "TICKET_OFFICER",
+  LANGUAGE_IDENTITY_REVIEWER: "LANGUAGE_IDENTITY_REVIEWER",
 };
 
 export const ROLE_LABELS = {
@@ -43,6 +45,8 @@ export const ROLE_LABELS = {
     LICENSING_COMMITTEE: "\u0644\u062c\u0646\u0629 \u0627\u0644\u062a\u0631\u0627\u062e\u064a\u0635",
     FINANCE:             "المالية",
     DIRECTORATE:         "مديرية",
+    TICKET_OFFICER:      "موظف تدقيق التذاكر",
+    LANGUAGE_IDENTITY_REVIEWER: "مدقق لغوي وهويات",
   },
   en: {
     SUPER_ADMIN:         "Super Admin",
@@ -65,6 +69,8 @@ export const ROLE_LABELS = {
     LICENSING_COMMITTEE: "Licensing Committee",
     FINANCE:             "Finance",
     DIRECTORATE:         "Directorate",
+    TICKET_OFFICER:      "Ticket Officer",
+    LANGUAGE_IDENTITY_REVIEWER: "Language & Identity Reviewer",
   },
 };
 
@@ -85,6 +91,7 @@ const ROLE_HIERARCHY = {
   LICENSING_COMMITTEE: 4,
   FINANCE:             3,
   DIRECTORATE:         2, // event contributor — same level as Contributor
+  LANGUAGE_IDENTITY_REVIEWER: 3,
 };
 
 export function hasRole(userRole, requiredRole) {
@@ -106,7 +113,12 @@ export const PERMISSIONS = {
   CREATE_ACHIEVEMENT: [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.EDITOR, ROLES.AUTHOR, ROLES.CONTRIBUTOR, ROLES.MEDIA_OFFICE],
 
   // Events
-  // CREATE_EVENT also gates access to the Events list/new pages.
+  // VIEW_EVENTS gates the Events screen itself (list + sidebar link). It used to
+  // be CREATE_EVENT, which conflated "may open the calendar" with "may add to
+  // it" — LANGUAGE_IDENTITY_REVIEWER proofreads existing events and must never
+  // create one. Whether the list shows every event or only one's own is still
+  // decided by VIEW_ANY_EVENT.
+  VIEW_EVENTS: [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.EDITOR, ROLES.EVENT_MANAGER, ROLES.DIRECTORATE, ROLES.LANGUAGE_IDENTITY_REVIEWER],
   CREATE_EVENT: [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.EDITOR, ROLES.EVENT_MANAGER, ROLES.DIRECTORATE],
   // PUBLISH_EVENT: a creator's own events go live (APPROVED) immediately instead
   // of entering the review queue. The DIRECTORATE role now self-publishes to the
@@ -114,13 +126,13 @@ export const PERMISSIONS = {
   PUBLISH_EVENT: [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.EVENT_MANAGER, ROLES.DIRECTORATE],
   // VIEW_ANY_EVENT: see the full events list (not just one's own). DIRECTORATE
   // can browse every event but may only act on (edit/delete) its own.
-  VIEW_ANY_EVENT: [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.EDITOR, ROLES.EVENT_MANAGER, ROLES.DIRECTORATE],
+  VIEW_ANY_EVENT: [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.EDITOR, ROLES.EVENT_MANAGER, ROLES.DIRECTORATE, ROLES.LANGUAGE_IDENTITY_REVIEWER],
   // EDIT_ANY_EVENT: authority roles may edit every event. EDIT_OWN_EVENT: the
   // DIRECTORATE role may edit only its own events. EDIT_EVENT is the union used
   // for table/menu gating (does this role edit events at all).
-  EDIT_ANY_EVENT: [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.EDITOR, ROLES.EVENT_MANAGER],
+  EDIT_ANY_EVENT: [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.EDITOR, ROLES.EVENT_MANAGER, ROLES.LANGUAGE_IDENTITY_REVIEWER],
   EDIT_OWN_EVENT: [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.EDITOR, ROLES.EVENT_MANAGER, ROLES.DIRECTORATE],
-  EDIT_EVENT:   [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.EDITOR, ROLES.EVENT_MANAGER, ROLES.DIRECTORATE],
+  EDIT_EVENT:   [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.EDITOR, ROLES.EVENT_MANAGER, ROLES.DIRECTORATE, ROLES.LANGUAGE_IDENTITY_REVIEWER],
   // DELETE_ANY_EVENT: delete any event. DELETE_OWN_EVENT: the DIRECTORATE role
   // may delete only the events it created.
   DELETE_ANY_EVENT: [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.EVENT_MANAGER],
@@ -128,23 +140,40 @@ export const PERMISSIONS = {
   // REVIEW_EVENT: the festivals & events directorate (+ admins) approve/reject
   // events that still route through review (e.g. EDITOR-created submissions).
   REVIEW_EVENT: [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.EVENT_MANAGER],
+  // Signing off that an event's English text has been proofread. Separate from
+  // REVIEW_EVENT: this decides nothing about whether the event is published,
+  // only that somebody read its English.
+  REVIEW_EVENT_LANGUAGE: [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.LANGUAGE_IDENTITY_REVIEWER],
   MANAGE_EVENT_TAXONOMIES: [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.EDITOR, ROLES.EVENT_MANAGER],
   VIEW_EVENT_BOOKINGS: [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.EVENT_MANAGER, ROLES.DIRECTORATE],
   MANAGE_EVENT_BOOKINGS: [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.EVENT_MANAGER, ROLES.DIRECTORATE],
   EXPORT_EVENT_BOOKINGS: [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.EVENT_MANAGER],
+  // Scanning a ticket QR at the venue door and recording attendance. Kept
+  // separate from MANAGE_EVENT_BOOKINGS: a door phone must be able to check
+  // people in without also being able to cancel bookings or read the whole
+  // attendee list of every event.
+  SCAN_EVENT_TICKETS: [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.EVENT_MANAGER, ROLES.TICKET_OFFICER, ROLES.DIRECTORATE],
   MANAGE_CITIZEN_ACCOUNTS: [ROLES.SUPER_ADMIN, ROLES.ADMIN],
-  REVIEW_CITIZEN_IDENTITY: [ROLES.SUPER_ADMIN, ROLES.ADMIN],
-  VIEW_CITIZEN_IDENTITY_FILES: [ROLES.SUPER_ADMIN, ROLES.ADMIN],
+  // Permanent deletion is the only irreversible action on a citizen account —
+  // blocking is not — so it sits a tier above MANAGE_CITIZEN_ACCOUNTS, next to
+  // DELETE_USER and CHANGE_ROLE. An ADMIN can still block an account outright;
+  // erasing one is a SUPER_ADMIN decision.
+  DELETE_CITIZEN_ACCOUNTS: [ROLES.SUPER_ADMIN],
+  // Approving/rejecting a submitted ID and opening its photos. Deliberately
+  // separate from MANAGE_CITIZEN_ACCOUNTS: LANGUAGE_IDENTITY_REVIEWER decides on
+  // identity documents but can neither block nor erase an account.
+  REVIEW_CITIZEN_IDENTITY: [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.LANGUAGE_IDENTITY_REVIEWER],
+  VIEW_CITIZEN_IDENTITY_FILES: [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.LANGUAGE_IDENTITY_REVIEWER],
 
   // Media
-  UPLOAD_MEDIA: [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.EDITOR, ROLES.AUTHOR, ROLES.EVENT_MANAGER, ROLES.MEDIA_OFFICE, ROLES.DIRECTORATE],
+  UPLOAD_MEDIA: [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.EDITOR, ROLES.AUTHOR, ROLES.EVENT_MANAGER, ROLES.MEDIA_OFFICE, ROLES.DIRECTORATE, ROLES.LANGUAGE_IDENTITY_REVIEWER],
   DELETE_MEDIA: [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.EDITOR],
 
   // Users
-  VIEW_USERS: [ROLES.SUPER_ADMIN, ROLES.ADMIN],
-  CREATE_USER: [ROLES.SUPER_ADMIN, ROLES.ADMIN],
-  EDIT_USER: [ROLES.SUPER_ADMIN, ROLES.ADMIN],
-  DELETE_USER: [ROLES.SUPER_ADMIN],
+  VIEW_USERS: [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.DIRECTORATE],
+  CREATE_USER: [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.DIRECTORATE],
+  EDIT_USER: [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.DIRECTORATE],
+  DELETE_USER: [ROLES.SUPER_ADMIN, ROLES.DIRECTORATE],
   CHANGE_ROLE: [ROLES.SUPER_ADMIN],
   // Forcing another user's password is as sensitive as changing their role —
   // restricted to SUPER_ADMIN by default, same tier as CHANGE_ROLE/DELETE_USER.
@@ -156,6 +185,13 @@ export const PERMISSIONS = {
   // Settings
   VIEW_SETTINGS: [ROLES.SUPER_ADMIN, ROLES.ADMIN],
   EDIT_SETTINGS: [ROLES.SUPER_ADMIN],
+
+  // Outgoing email audit. Every row names a citizen and what they applied for,
+  // so it sits at the same tier as the audit log — and resending is an action
+  // that puts mail in a citizen's inbox, so it is not handed out more widely
+  // than viewing.
+  VIEW_EMAIL_OUTBOX: [ROLES.SUPER_ADMIN, ROLES.ADMIN],
+  MANAGE_EMAIL_OUTBOX: [ROLES.SUPER_ADMIN, ROLES.ADMIN],
 
   // Security — viewing the append-only audit trail (privilege/role changes,
   // forced password resets, etc.) is as sensitive as performing those actions,
@@ -175,8 +211,14 @@ export const PERMISSIONS = {
 
   DELETE_COPYRIGHT_SUBMISSION: [ROLES.SUPER_ADMIN],
 
+  // Internal Oversight complaints and International Cooperation messages —
+  // same sensitivity tier as citizen identity review (potentially sensitive
+  // personal/complaint data), so scoped to SUPER_ADMIN/ADMIN only.
+  REVIEW_OVERSIGHT_COMPLAINTS: [ROLES.SUPER_ADMIN, ROLES.ADMIN],
+  REVIEW_COOPERATION_MESSAGES: [ROLES.SUPER_ADMIN, ROLES.ADMIN],
+
   // Dashboard
-  VIEW_DASHBOARD: [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.EDITOR, ROLES.AUTHOR, ROLES.CONTRIBUTOR, ROLES.VIEWER, ROLES.EVENT_MANAGER, ROLES.MEDIA_OFFICE, ROLES.STUDIES_ASSESSOR, ROLES.STUDIES_HEAD, ROLES.LEGAL_DIRECTOR, ROLES.DEPUTY_MINISTER, ROLES.LICENSING_OFFICER, ROLES.LICENSING_COMMITTEE, ROLES.FINANCE, ROLES.DIRECTORATE],
+  VIEW_DASHBOARD: [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.EDITOR, ROLES.AUTHOR, ROLES.CONTRIBUTOR, ROLES.VIEWER, ROLES.EVENT_MANAGER, ROLES.MEDIA_OFFICE, ROLES.STUDIES_ASSESSOR, ROLES.STUDIES_HEAD, ROLES.LEGAL_DIRECTOR, ROLES.DEPUTY_MINISTER, ROLES.LICENSING_OFFICER, ROLES.LICENSING_COMMITTEE, ROLES.FINANCE, ROLES.DIRECTORATE, ROLES.LANGUAGE_IDENTITY_REVIEWER],
 };
 
 export function can(userRole, permission) {

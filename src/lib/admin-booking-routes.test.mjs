@@ -10,8 +10,11 @@ test("booking and citizen permissions match the approved role matrix and exclude
   assert.match(source, /VIEW_EVENT_BOOKINGS:\s*\[ROLES\.SUPER_ADMIN, ROLES\.ADMIN, ROLES\.EVENT_MANAGER, ROLES\.DIRECTORATE\]/);
   assert.match(source, /MANAGE_EVENT_BOOKINGS:\s*\[ROLES\.SUPER_ADMIN, ROLES\.ADMIN, ROLES\.EVENT_MANAGER, ROLES\.DIRECTORATE\]/);
   assert.match(source, /EXPORT_EVENT_BOOKINGS:\s*\[ROLES\.SUPER_ADMIN, ROLES\.ADMIN, ROLES\.EVENT_MANAGER\]/);
-  assert.match(source, /REVIEW_CITIZEN_IDENTITY:\s*\[ROLES\.SUPER_ADMIN, ROLES\.ADMIN\]/);
-  assert.match(source, /VIEW_CITIZEN_IDENTITY_FILES:\s*\[ROLES\.SUPER_ADMIN, ROLES\.ADMIN\]/);
+  // LANGUAGE_IDENTITY_REVIEWER holds the identity pair and nothing else on this
+  // matrix — it reviews IDs without touching bookings or account administration.
+  assert.match(source, /REVIEW_CITIZEN_IDENTITY:\s*\[ROLES\.SUPER_ADMIN, ROLES\.ADMIN, ROLES\.LANGUAGE_IDENTITY_REVIEWER\]/);
+  assert.match(source, /VIEW_CITIZEN_IDENTITY_FILES:\s*\[ROLES\.SUPER_ADMIN, ROLES\.ADMIN, ROLES\.LANGUAGE_IDENTITY_REVIEWER\]/);
+  assert.match(source, /MANAGE_CITIZEN_ACCOUNTS:\s*\[ROLES\.SUPER_ADMIN, ROLES\.ADMIN\]/);
 });
 
 test("identity administration includes list/detail, atomic review, protected file download, and audit", async () => {

@@ -189,7 +189,7 @@ export default function SubmissionDetail({ submission: initial, canManage }) {
           <Section title="بيانات مقدم الطلب" icon={<IcoUser />}>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4">
               <Row label="الاسم الكامل"       value={submission.applicantName} />
-              <Row label="رقم الهاتف"         value={submission.phone} />
+              <Row label="رقم الهاتف"         value={submission.phone ? <bdi dir="ltr">{submission.phone}</bdi> : null} />
               <Row label="البريد الإلكتروني"  value={submission.email} />
             </div>
           </Section>

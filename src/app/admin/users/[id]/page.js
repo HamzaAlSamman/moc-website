@@ -12,10 +12,16 @@ export default async function EditUserPage({ params }) {
   const { id } = await params;
   const targetUser = await prisma.user.findUnique({
     where: { id },
-    select: { id: true, email: true, nameAr: true, nameEn: true, role: true, isActive: true },
+    select: { id: true, email: true, nameAr: true, nameEn: true, role: true, isActive: true, createdById: true },
   });
 
   if (!targetUser) notFound();
+
+  if (user.role === "DIRECTORATE") {
+    if (targetUser.role !== "TICKET_OFFICER" || targetUser.createdById !== user.id) {
+      redirect("/admin/users");
+    }
+  }
 
   return (
     <AdminShell user={user}>

@@ -51,6 +51,10 @@ export const getCurrentCitizen = cache(async (locale = "ar") => {
       emailVerifiedAt: true,
       identityStatus: true,
       identityRejectedReason: true,
+      // تاريخ الاستلام: الدليل الوحيد الذي يراه المواطن على أن صوره وصلت
+      // فعلاً. بدونه تبدو شاشة "قيد المراجعة" كأنها لم تستقبل شيئاً.
+      identitySubmittedAt: true,
+      identityVerifiedAt: true,
       nationalIdLast4: true,
       isActive: true,
       isBlocked: true,

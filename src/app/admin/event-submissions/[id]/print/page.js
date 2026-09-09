@@ -103,7 +103,7 @@ export default async function SubmissionPrintPage({ params }) {
           <Field label="نوع الجهة" value={ENTITY_LABELS[submission.entityType]} />
           <Field label="اسم الجهة" value={submission.entityName} />
           <Field label="المديرية" value={submission.directorate} />
-          <Field label="رقم الهاتف" value={submission.phone} />
+          <Field label="رقم الهاتف" value={submission.phone ? <bdi dir="ltr">{submission.phone}</bdi> : null} />
           <Field label="البريد الإلكتروني" value={submission.email} />
         </Block>
 

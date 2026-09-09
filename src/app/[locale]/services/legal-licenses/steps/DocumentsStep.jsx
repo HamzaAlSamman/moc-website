@@ -33,21 +33,25 @@ function DocumentRow({
           <p className="mt-1 truncate text-[11px] text-slate-500">
             {latest
               ? `${latest.originalName} · v${latest.version} · ${Math.ceil(latest.size / 1024)} KB`
-              : (isRtl ? "ناقص · PDF أو JPEG أو PNG أو WebP، حتى 5MB" : "Missing · PDF, JPEG, PNG or WebP, up to 5MB")}
+              : (isRtl ? "مطلوب · PDF أو JPEG أو PNG أو WebP، حتى 5MB" : "Missing · PDF, JPEG, PNG or WebP, up to 5MB")}
           </p>
           {latest?.version > 1 ? (
             <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-white px-2 py-1 text-[10px] font-bold text-[#054239]">
-              <RotateCcw className="h-3 w-3" />{isRtl ? "نسخة بديلة" : "Replacement version"}
+              <RotateCcw className="h-3 w-3" />{isRtl ? "نسخة محدثة" : "Replacement version"}
             </span>
           ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-1">
           <label
             htmlFor={inputId}
-            className={`rounded-lg p-2 outline-none focus-within:ring-4 focus-within:ring-[#b9a779]/25 ${editable ? "cursor-pointer bg-[#054239] text-[#b9a779]" : "cursor-not-allowed bg-slate-200 text-slate-400"}`}
+            className={`rounded-lg p-2 outline-none focus-within:ring-4 focus-within:ring-[#b9a779]/25 ${editable && !busy ? "cursor-pointer bg-[#054239] text-[#b9a779]" : "cursor-not-allowed bg-slate-200 text-slate-400"}`}
             title={latest ? (isRtl ? "رفع نسخة بديلة" : "Upload replacement") : (isRtl ? "رفع الوثيقة" : "Upload document")}
           >
-            <Upload className="h-4 w-4" />
+            {busy ? (
+              <span className="block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+            ) : (
+              <Upload className="h-4 w-4" />
+            )}
             <span className="sr-only">{latest ? (isRtl ? "رفع نسخة بديلة" : "Upload replacement") : (isRtl ? "رفع الوثيقة" : "Upload document")}</span>
             <input
               id={inputId}
@@ -92,7 +96,7 @@ export default function DocumentsStep({
   onDelete,
 }) {
   if (!application) {
-    return <p className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm font-bold text-amber-900">{isRtl ? "احفظ المسودة أولاً لتفعيل رفع الوثائق." : "Save the draft first to enable document uploads."}</p>;
+    return <p className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm font-bold text-amber-900">{isRtl ? "يرجى حفظ مسودة الطلب أولاً لتفعيل خاصية رفع الوثائق." : "Save the draft first to enable document uploads."}</p>;
   }
 
   const rowProps = { application, isRtl, busyKey, mutationBusy, onUpload, onDelete };
@@ -118,7 +122,7 @@ export default function DocumentsStep({
             {isRtl ? `وثائق المؤسس: ${founder.fullName || index + 1}` : `Founder evidence: ${founder.fullName || index + 1}`}
           </h3>
           {!founder.id ? (
-            <p className="rounded-xl bg-amber-50 p-3 text-xs font-bold text-amber-800">{isRtl ? "احفظ بيانات المؤسس قبل رفع وثائقه." : "Save the founder before uploading their evidence."}</p>
+            <p className="rounded-xl bg-amber-50 p-3 text-xs font-bold text-amber-800">{isRtl ? "يرجى حفظ بيانات المؤسس أولاً لتمكين رفع الوثائق الخاصة به." : "Save the founder before uploading their evidence."}</p>
           ) : (
             <div className="grid gap-3 md:grid-cols-2">
               {founderKinds.map((kind) => (

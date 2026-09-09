@@ -121,10 +121,14 @@ export default function EventForm({ event, isNew, userRole, canReview = false })
   const [showRejectBox, setShowRejectBox] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
 
-  // Creators who can't self-publish (e.g. EDITOR) submit into the review queue
-  // rather than publishing directly, so the save action is worded accordingly.
-  // The DIRECTORATE role now self-publishes, so it saves like an event manager.
-  const submitsForReview = !can(userRole, "PUBLISH_EVENT");
+  // Creators who can't self-publish submit into the review queue rather than
+  // publishing directly, so the save action is worded accordingly. The
+  // DIRECTORATE role now self-publishes, so it saves like an event manager.
+  // Mirrors the server's `resubmitting` condition in PUT /api/admin/events/[id]:
+  // holding EDIT_ANY_EVENT means a save never re-enters the review queue, so
+  // roles that only correct other people's events (LANGUAGE_IDENTITY_REVIEWER)
+  // must not be told they are submitting one.
+  const submitsForReview = !can(userRole, "PUBLISH_EVENT") && !can(userRole, "EDIT_ANY_EVENT");
   const reviewStatus = event?.reviewStatus;
 
   async function submitReview(action, reason = "") {
@@ -156,6 +160,7 @@ export default function EventForm({ event, isNew, userRole, canReview = false })
   }
   const [activeTab, setActiveTab] = useState("ar");
   const [imageUploading, setImageUploading] = useState(false);
+  const [imagePreviewFailed, setImagePreviewFailed] = useState(false);
   const [translating, setTranslating] = useState(false);
   const imageInputRef = useRef(null);
 
@@ -203,6 +208,10 @@ export default function EventForm({ event, isNew, userRole, canReview = false })
     eventKindId:   event?.eventKindId     ?? "",
   });
 
+  useEffect(() => {
+    setImagePreviewFailed(false);
+  }, [form.featuredImage]);
+
   async function uploadImage(file) {
     if (!file) return;
     setImageUploading(true);
@@ -210,7 +219,10 @@ export default function EventForm({ event, isNew, userRole, canReview = false })
     fd.append("file", file);
     const res = await fetch("/api/admin/media", { method: "POST", body: fd });
     const data = await res.json();
-    if (res.ok) setForm((f) => ({ ...f, featuredImage: data.url }));
+    if (res.ok) {
+      setImagePreviewFailed(false);
+      setForm((f) => ({ ...f, featuredImage: data.url }));
+    }
     else setError(data.error ?? "فشل رفع الصورة");
     setImageUploading(false);
   }
@@ -441,16 +453,26 @@ export default function EventForm({ event, isNew, userRole, canReview = false })
 
           <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm space-y-2">
             <h3 className="font-semibold text-gray-800">الصورة</h3>
-            <div
+            <button
+              type="button"
               onClick={() => imageInputRef.current?.click()}
-              className={`relative rounded-xl border-2 border-dashed cursor-pointer overflow-hidden transition-all duration-300 ${
+              aria-label={form.featuredImage ? "تغيير صورة الفعالية" : "رفع صورة الفعالية"}
+              aria-busy={imageUploading}
+              disabled={imageUploading}
+              className={`group relative block w-full cursor-pointer overflow-hidden rounded-xl border-2 border-dashed transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#A48E68] focus-visible:ring-offset-2 disabled:cursor-wait ${
                 form.featuredImage ? "border-transparent" : "border-slate-200 hover:border-[#A48E68] hover:bg-slate-50/50 p-6 text-center"
               }`}
             >
               {form.featuredImage ? (
-                <div className="relative group">
-                  <img src={form.featuredImage} alt="preview" className="h-32 w-full rounded-lg object-cover" onError={(e) => (e.target.style.display = "none")} />
-                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
+                <div className="relative mx-auto aspect-[4/5] w-full max-w-xs overflow-hidden rounded-xl bg-[#003D33]">
+                  {imagePreviewFailed ? (
+                    <p role="status" className="flex h-full items-center justify-center px-6 text-center text-sm leading-relaxed text-white">
+                      تعذّر عرض الصورة. يمكنك اختيار صورة أخرى.
+                    </p>
+                  ) : (
+                    <img src={form.featuredImage} alt="معاينة صورة الفعالية" className="h-full w-full object-contain" onError={() => setImagePreviewFailed(true)} />
+                  )}
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
                     <span className="text-white text-xs font-bold flex items-center gap-1">
                       <RefreshCw className="w-3.5 h-3.5 animate-spin-hover" />
                       تغيير الصورة
@@ -469,8 +491,9 @@ export default function EventForm({ event, isNew, userRole, canReview = false })
                   <p className="text-[10px] text-gray-400">يدعم صيغ JPG، PNG، WebP</p>
                 </div>
               )}
-              <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => uploadImage(e.target.files?.[0])} />
-            </div>
+            </button>
+            <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => uploadImage(e.target.files?.[0])} />
+            <p className="text-xs leading-relaxed text-gray-500">المقاس الموصى به: 1080 × 1350 بكسل (4:5)</p>
             {form.featuredImage && (
               <button type="button" onClick={() => setForm((f) => ({ ...f, featuredImage: "" }))}
                 className="w-full rounded-lg bg-red-50 py-1.5 text-xs font-medium text-red-500 hover:bg-red-100 transition">

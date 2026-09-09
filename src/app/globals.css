@@ -657,24 +657,21 @@ input[type="month"]::-webkit-datetime-edit {
 html::-webkit-scrollbar,
 body::-webkit-scrollbar,
 ::-webkit-scrollbar {
-  width: 10px !important;
-  height: 10px !important;
+  width: 8px !important;
+  height: 8px !important;
 }
 
 html::-webkit-scrollbar-track,
 body::-webkit-scrollbar-track,
 ::-webkit-scrollbar-track {
-  background: #F8F3EC !important; /* Cream color */
-  border-left: 1px solid rgba(164, 142, 104, 0.15) !important; /* Light gold border */
+  background: transparent !important;
 }
 
 html::-webkit-scrollbar-thumb,
 body::-webkit-scrollbar-thumb,
 ::-webkit-scrollbar-thumb {
   background-color: #A48E68 !important; /* Gold color */
-  border: 2px solid #F8F3EC !important; /* Padding effect */
   border-radius: 9999px !important;
-  background-clip: padding-box !important;
 }
 
 html::-webkit-scrollbar-thumb:hover,
@@ -686,12 +683,21 @@ body::-webkit-scrollbar-thumb:hover,
 /* Firefox support */
 * {
   scrollbar-width: thin !important;
-  scrollbar-color: #A48E68 #F8F3EC !important;
+  scrollbar-color: #A48E68 transparent !important;
 }
 
 /* Scan laser animation for payment QR codes */
 @keyframes scan {
   0%, 100% { transform: translateY(0); opacity: 0.3; }
   50% { transform: translateY(176px); opacity: 0.9; }
+}
+
+/* Fade-in step transition animation */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in {
+  animation: fadeIn 0.35s ease-out forwards;
 }
 

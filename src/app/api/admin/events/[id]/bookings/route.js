@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/dal";
 import { prisma } from "@/lib/prisma";
 import { verifyTrustedOrigin } from "@/lib/csrf";
 import { getAdminEventBookingAccess } from "@/lib/admin-event-booking-access";
+import { getEventBookingStats } from "@/lib/event-booking-stats-query";
 import { createBooking, EventBookingError } from "@/lib/event-booking-service";
 import { citizenBookingPayload } from "@/lib/event-booking-route.mjs";
 import {
@@ -23,22 +24,28 @@ export async function GET(request, { params }) {
   const url = new URL(request.url);
   const status = url.searchParams.get("status");
   const attendanceStatus = url.searchParams.get("attendanceStatus");
-  const bookings = await prisma.eventBooking.findMany({
-    where: {
-      eventId: id,
-      ...(status ? { status } : {}),
-      ...(attendanceStatus ? { attendanceStatus } : {}),
-    },
-    select: {
-      id: true, referenceNo: true, fullName: true, nationalIdLast4: true,
-      email: true, phone: true, status: true, attendanceStatus: true, source: true,
-      cancelledAt: true, cancellationReason: true, promotedAt: true,
-      checkedInAt: true, checkedInById: true, createdAt: true,
-    },
-    orderBy: [{ status: "asc" }, { createdAt: "asc" }, { id: "asc" }],
-    take: 5000,
-  });
-  return NextResponse.json({ event: access.event, bookings }, { headers: { "Cache-Control": "no-store" } });
+  // Statistics are counted in the database, not over `bookings` below: that
+  // list is capped at 5000 rows and may be narrowed by the filters above, so
+  // deriving figures from it would silently under-report a large event.
+  const [bookings, stats] = await Promise.all([
+    prisma.eventBooking.findMany({
+      where: {
+        eventId: id,
+        ...(status ? { status } : {}),
+        ...(attendanceStatus ? { attendanceStatus } : {}),
+      },
+      select: {
+        id: true, referenceNo: true, fullName: true, nationalIdLast4: true,
+        email: true, phone: true, status: true, attendanceStatus: true, source: true,
+        cancelledAt: true, cancellationReason: true, promotedAt: true,
+        checkedInAt: true, checkedInById: true, createdAt: true,
+      },
+      orderBy: [{ status: "asc" }, { createdAt: "asc" }, { id: "asc" }],
+      take: 5000,
+    }),
+    getEventBookingStats(id, access.event),
+  ]);
+  return NextResponse.json({ event: access.event, bookings, stats }, { headers: { "Cache-Control": "no-store" } });
 }
 
 export async function POST(request, { params }) {

@@ -13,8 +13,11 @@ export async function POST(request) {
     if (rateLimit(`citizen-forgot:ip:${ip}`, 50, 60 * 60 * 1000)) {
       await forgotCitizenPassword(body);
     }
-  } catch {
-    // Deliberately indistinguishable for missing accounts, invalid input, and SMTP failures.
+  } catch (error) {
+    // The response stays deliberately indistinguishable for missing accounts,
+    // invalid input, and SMTP failures — but the server still logs, otherwise a
+    // misconfiguration (missing base URL, dead SMTP) is completely invisible.
+    console.error("Citizen forgot-password error:", error);
   }
   return citizenJson({ accepted: true });
 }

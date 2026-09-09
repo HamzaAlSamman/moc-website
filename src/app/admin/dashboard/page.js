@@ -1,3 +1,8 @@
+import { redirect } from "next/navigation";
+import LanguageReviewQueue from "@/components/admin/LanguageReviewQueue";
+import DirectorateActivityPanel from "@/components/admin/DirectorateActivityPanel";
+import { MISSING_ENGLISH_WHERE, missingEnglishFields, pendingLanguageReviewWhere } from "@/lib/event-language-review.mjs";
+import { buildMonthOptions, monthLabel, monthRange, parseMonthParam } from "@/lib/directorate-activity.mjs";
 import { getCurrentUser } from "@/lib/dal";
 import { prisma } from "@/lib/prisma";
 import { ROLES } from "@/lib/permissions";
@@ -42,9 +47,20 @@ function copyrightAwaitingWhere(role) {
 // secondary "total active" figure shown to copyright staff.
 const COPYRIGHT_ACTIVE_STATUSES = ["finance_review", "under_review", "suspended", "pending_final_approval", "pending_fees", "final_review"];
 
-export default async function DashboardPage() {
+
+export default async function DashboardPage({ searchParams }) {
   const user = await getCurrentUser();
+  // Door staff have no business on the overview: sign-in lands everyone on
+  // /admin/dashboard, so this is where their single screen is handed to them.
+  if (user.role === ROLES.TICKET_OFFICER) redirect("/admin/scan");
   const role = user.role;
+
+  // Directorate-activity month filter — "" means all-time (the original
+  // behaviour). An unparseable value (typed URL, stale link) is treated the
+  // same as unset rather than erroring the whole dashboard.
+  const params = await searchParams;
+  const dirMonth = parseMonthParam(params?.dirMonth) ? params.dirMonth : "";
+  const dirMonthRange = dirMonth ? monthRange(dirMonth) : null;
 
   // Each role gets a curated dashboard with ONLY what matters for its job —
   // not a generic permission-filtered list. Grouping by job, not by raw permission:
@@ -57,6 +73,9 @@ export default async function DashboardPage() {
   // Directorate contributor — creates calendar events that go through review.
   // Its dashboard is scoped to its OWN events and their review state.
   const isDirectorate = role === ROLES.DIRECTORATE;
+  // Proofreads event English and rules on citizen ID submissions — its two
+  // queues are the only numbers it can act on.
+  const isLanguageReviewer = role === ROLES.LANGUAGE_IDENTITY_REVIEWER;
   // Copyright-protection workflow staff — each acts on one stage of the pipeline.
   const isCopyrightStaff = Boolean(copyrightAwaitingWhere(role));
 
@@ -64,7 +83,7 @@ export default async function DashboardPage() {
   // Achievements (PostType.ACHIEVEMENT) get their own management section + their
   // own dashboard number — they shouldn't be buried inside the generic "posts" count.
   const needAchievementSplit = isAdmin || isEditor;
-  const needEventOverview = isAdmin || isEditor || isEventManager || isViewer;
+  const needEventOverview = isAdmin || isEditor || isEventManager || isViewer || isLanguageReviewer;
   const needSubmissions = isAdmin || isEditor || isEventManager;
   // Copyright is its own service (not event-related), so it gets its own
   // dashboard number scoped to the roles that actually staff it.
@@ -109,6 +128,13 @@ export default async function DashboardPage() {
     eventsAwaitingReviewList,
     totalCopyrightSubmissionsCount,
     totalEventSubmissionsCount,
+    untranslatedEventsCount,
+    pendingIdentityCount,
+    pendingLanguageReviewList,
+    pendingLanguageReviewCount,
+    directorateAccounts,
+    directorateEventGroups,
+    directorateDateBounds,
   ] = await Promise.all([
     needPostOverview ? prisma.post.count() : Promise.resolve(0),
     needPostOverview ? prisma.post.count({ where: { status: "PUBLISHED" } }) : Promise.resolve(0),
@@ -201,7 +227,77 @@ export default async function DashboardPage() {
     // (nothing persisted), so they're intentionally excluded from this breakdown.
     isAdmin ? prisma.copyrightSubmission.count() : Promise.resolve(0),
     isAdmin ? prisma.eventSubmission.count({ where: { deletedAt: null } }) : Promise.resolve(0),
+    // The language reviewer's actual worklist: events still missing English.
+    isLanguageReviewer ? prisma.event.count({ where: MISSING_ENGLISH_WHERE }) : Promise.resolve(0),
+    isLanguageReviewer
+      ? prisma.citizen.count({ where: { identityStatus: "PENDING" } })
+      : Promise.resolve(0),
+    // The reviewer's queue: upcoming events not yet signed off, soonest first —
+    // the ones about to face the public are the ones worth reading now.
+    isLanguageReviewer
+      ? prisma.event.findMany({
+          where: pendingLanguageReviewWhere(),
+          take: 12,
+          orderBy: { startDate: "asc" },
+          select: { id: true, titleAr: true, titleEn: true, descriptionEn: true, locationEn: true, startDate: true },
+        })
+      : Promise.resolve([]),
+    isLanguageReviewer
+      ? prisma.event.count({ where: pendingLanguageReviewWhere() })
+      : Promise.resolve(0),
+    // Which directorates have fed the calendar and which have not. Inactive
+    // accounts are left out — a disabled account is not a silent directorate.
+    isLanguageReviewer
+      ? prisma.user.findMany({
+          where: { role: ROLES.DIRECTORATE, isActive: true },
+          select: { id: true, nameAr: true, createdAt: true },
+        })
+      : Promise.resolve([]),
+    // Event.createdById is a denormalized plain id (no relation), so the counts
+    // come from a groupBy that is stitched to the accounts above in JS. A month
+    // filter narrows to events whose startDate falls in that month; unfiltered,
+    // this is every event the directorate ever added (the original behaviour).
+    isLanguageReviewer
+      ? prisma.event.groupBy({
+          by: ["createdById"],
+          where: {
+            createdById: { not: null },
+            ...(dirMonthRange ? { startDate: { gte: dirMonthRange.start, lt: dirMonthRange.end } } : {}),
+          },
+          _count: { _all: true },
+          _max: { createdAt: true, startDate: true },
+        })
+      : Promise.resolve([]),
+    // Powers the filter's month list: a directorate that only ever posted
+    // outside the current year must still be reachable, not silently excluded.
+    isLanguageReviewer
+      ? prisma.event.aggregate({ _min: { startDate: true }, _max: { startDate: true } })
+      : Promise.resolve(null),
   ]);
+
+  // Directorates ordered so the silent ones surface first, then the least active.
+  // "Last activity" means something different per mode: unfiltered it is when
+  // the directorate last touched the calendar at all (createdAt); inside a
+  // selected month there is no "last" worth distinguishing from the events
+  // themselves, so it reports the latest event date within that month instead.
+  const directorateActivity = directorateAccounts
+    .map((account) => {
+      const group = directorateEventGroups.find((row) => row.createdById === account.id);
+      return {
+        id: account.id,
+        nameAr: account.nameAr,
+        createdAt: account.createdAt,
+        eventCount: group?._count?._all ?? 0,
+        lastEventAt: (dirMonthRange ? group?._max?.startDate : group?._max?.createdAt) ?? null,
+      };
+    })
+    .sort((a, b) => a.eventCount - b.eventCount || a.nameAr.localeCompare(b.nameAr, "ar"));
+  const silentDirectorates = directorateActivity.filter((row) => row.eventCount === 0);
+
+  const dirMonthOptions = buildMonthOptions(new Date(), [
+    directorateDateBounds?._min?.startDate?.getUTCFullYear(),
+    directorateDateBounds?._max?.startDate?.getUTCFullYear(),
+  ].filter(Boolean));
 
   // `createdById` is a denormalized plain id (no relation), so resolve the
   // submitting directorate's display name for the event-manager's dashboard
@@ -267,6 +363,13 @@ export default async function DashboardPage() {
     stats.push(
       { labelAr: "بانتظار إجرائك", labelEn: "Awaiting You", value: copyrightAwaitingCount, icon: "Inbox", color: "amber", sub: COPYRIGHT_STAGE_LABEL[role] || "مرحلتك في المسار" },
       { labelAr: "معاملات قيد التنفيذ", labelEn: "Active Cases", value: copyrightActiveCount, icon: "FileText", color: "blue", sub: "إجمالي قيد المعالجة" },
+    );
+  } else if (isLanguageReviewer) {
+    stats.push(
+      { labelAr: "قادمة بانتظار التدقيق", labelEn: "Awaiting Language Review", value: pendingLanguageReviewCount, icon: "Inbox", color: "amber", sub: "فعالية لم تُدقَّق بعد" },
+      { labelAr: "فعاليات بلا ترجمة إنجليزية", labelEn: "Events Missing English", value: untranslatedEventsCount, icon: "FileText", color: "amber", sub: `من أصل ${eventsCount} فعالية` },
+      { labelAr: "هويات بانتظار التدقيق", labelEn: "Identities Awaiting Review", value: pendingIdentityCount, icon: "Clock", color: "purple", sub: "طلب توثيق مواطن" },
+      { labelAr: "مديريات لم تنزّل فعاليات", labelEn: "Directorates With No Events", value: silentDirectorates.length, icon: "Users", color: "amber", sub: dirMonth ? monthLabel(dirMonth) : `من أصل ${directorateActivity.length} مديرية` },
     );
   } else if (isDirectorate) {
     stats.push(
@@ -390,6 +493,29 @@ export default async function DashboardPage() {
             </div>
             <CopyrightStaffQueue items={copyrightAwaitingList} stageLabel={COPYRIGHT_STAGE_LABEL[role]} />
           </div>
+        )}
+
+        {isLanguageReviewer && (
+          <LanguageReviewQueue
+            events={pendingLanguageReviewList.map((ev) => ({
+              id: ev.id,
+              titleAr: ev.titleAr,
+              startDate: ev.startDate.toISOString(),
+              missing: missingEnglishFields(ev),
+            }))}
+          />
+        )}
+
+        {isLanguageReviewer && (
+          <DirectorateActivityPanel
+            directorates={directorateActivity.map((dir) => ({
+              ...dir,
+              createdAt: dir.createdAt.toISOString(),
+              lastEventAt: dir.lastEventAt ? new Date(dir.lastEventAt).toISOString() : null,
+            }))}
+            monthOptions={dirMonthOptions}
+            month={dirMonth}
+          />
         )}
 
         {isDirectorate && (

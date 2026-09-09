@@ -41,7 +41,7 @@ export default function ApplicantFoundersStep({
           <h3 className="font-qomra text-lg font-black text-[#054239]">{isRtl ? "مقدم الطلب" : "Applicant"}</h3>
           <p className="mt-1 text-xs leading-6 text-slate-500">
             {isRtl
-              ? "أدخل بيانات مقدم الطلب وصفته، سواء كان مؤسساً أو مديراً/مفوضاً بالتقديم."
+              ? "يرجى إدخال بيانات مقدم الطلب وصفته القانونية، سواء كان شريكاً مؤسساً أو مديراً/مفوضاً بتقديم الطلب."
               : "Enter the applicant details and capacity, whether a founder or an appointed manager/representative."}
           </p>
         </div>
@@ -52,7 +52,7 @@ export default function ApplicantFoundersStep({
           <StepField required type="email" label={isRtl ? "البريد الإلكتروني" : "Email"} value={form.email} onChange={(value) => update("email", value)} dir="ltr" disabled={!canEditField("email")} />
           <StepField
             required
-            label={isRtl ? "صفة مقدم الطلب أو المدير المفوض" : "Applicant or appointed manager capacity"}
+            label={isRtl ? "صفة مقدم الطلب أو المفوض بالتقديم" : "Applicant or appointed manager capacity"}
             value={form.capacity}
             onChange={(value) => update("capacity", value)}
             disabled={!canEditField("capacity")}
@@ -82,11 +82,11 @@ export default function ApplicantFoundersStep({
           />
           <span>
             <span className="block font-qomra text-lg font-black text-[#054239]">
-              {isRtl ? "يوجد مدير مختلف عن مقدم الطلب (اختياري)" : "A different manager will be appointed (optional)"}
+              {isRtl ? "تعيين مدير مسؤول مستقل عن مقدم الطلب (اختياري)" : "A different manager will be appointed (optional)"}
             </span>
             <span className="mt-1 block text-xs leading-6 text-slate-500">
               {isRtl
-                ? "فعّل هذا الخيار فقط عندما سيتولى شخص آخر إدارة الجهة."
+                ? "يفعّل هذا الخيار في حال كان المدير المسؤول شخصاً آخر غير مقدم الطلب."
                 : "Enable this only when another person will manage the entity."}
             </span>
           </span>
@@ -148,7 +148,10 @@ export default function ApplicantFoundersStep({
                     value={key === "birthDate" && founder[key] ? String(founder[key]).slice(0, 10) : founder[key]}
                     onChange={(value) => setFounder(index, key, value)}
                     dir={dir}
+                    isRtl={isRtl}
                     disabled={!canEditField(key, founder.id)}
+                    maxDate={key === "birthDate" ? new Date().toISOString().split("T")[0] : undefined}
+                    showPresets={key !== "birthDate"}
                   />
                 ))}
               </div>
