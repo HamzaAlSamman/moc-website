@@ -35,6 +35,10 @@ export async function POST(request) {
     userRole = "AUTHOR";
   }
 
+  if (userRole === "CULTURAL_CENTER_OFFICER" && !data.assignedCenterId) {
+    return NextResponse.json({ error: "يجب اختيار المركز الثقافي لهذا الحساب" }, { status: 400 });
+  }
+
   const hashedPassword = await bcrypt.hash(data.password, 12);
 
   try {

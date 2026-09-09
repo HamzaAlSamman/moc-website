@@ -21,7 +21,7 @@ export async function PUT(request, { params }) {
 
   const target = await prisma.user.findUnique({
     where: { id },
-    select: { id: true, email: true, role: true, createdById: true },
+    select: { id: true, email: true, role: true, createdById: true, assignedCenterId: true },
   });
   if (!target) return NextResponse.json({ error: "المستخدم غير موجود" }, { status: 404 });
 
@@ -62,10 +62,11 @@ export async function PUT(request, { params }) {
 
   const effectiveRole = updateData.role ?? target.role;
   if (effectiveRole === "CULTURAL_CENTER_OFFICER") {
-    if (!data.assignedCenterId) {
+    const effectiveCenterId = data.assignedCenterId || target.assignedCenterId;
+    if (!effectiveCenterId) {
       return NextResponse.json({ error: "يجب اختيار المركز الثقافي لهذا الحساب" }, { status: 400 });
     }
-    updateData.assignedCenterId = data.assignedCenterId;
+    updateData.assignedCenterId = effectiveCenterId;
   } else if (data.role && data.role !== "CULTURAL_CENTER_OFFICER") {
     // Role changed away from center officer — clear the stale assignment.
     updateData.assignedCenterId = null;

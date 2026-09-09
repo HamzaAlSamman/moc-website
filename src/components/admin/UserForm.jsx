@@ -48,7 +48,7 @@ export default function UserForm({ user, currentUserRole, isNew }) {
     fetch("/api/admin/cultural-centers")
       .then((r) => r.json())
       .then((data) => setCenters(Array.isArray(data) ? data : []))
-      .catch(() => setCenters([]));
+      .catch(() => setError("تعذر تحميل قائمة المراكز الثقافية"));
   }, [form.role]);
 
   async function handleSave() {
