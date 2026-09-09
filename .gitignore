@@ -52,3 +52,8 @@ next-env.d.ts
 
 # Citizen-submitted documents (PII) — never commit
 /private-uploads/
+
+# Deploy-package zips — build artifacts, not source; too large for git history
+/moc-update*.zip
+/moc-next-no-uploads.zip
+/public/uploads.zip
