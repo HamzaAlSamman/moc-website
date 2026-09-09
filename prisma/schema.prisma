@@ -664,6 +664,7 @@ model CopyrightSubmission {
 
   @@unique([paymentRef])
   @@unique([internalRefNumber])
+  @@index([assignedCenterId])
 }
 
 // Preserve both wallet transfers; a reference cannot pay two fees or cases.
@@ -957,7 +958,7 @@ model NotificationOutbox {
   updatedAt DateTime @updatedAt
 
   @@index([status, availableAt, createdAt])
-  @@index([createdAt])
+  @@index([createdAt(sort: Desc)])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
