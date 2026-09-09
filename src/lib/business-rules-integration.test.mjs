@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
@@ -41,8 +40,8 @@ test("directorate cannot manage event taxonomies", async () => {
   assert.doesNotMatch(permission, /DIRECTORATE/);
 });
 
-test("cultural center officers can view and act on copyright submissions", () => {
-  const source = readFileSync(new URL("./permissions.js", import.meta.url), "utf8");
+test("cultural center officers can view and act on copyright submissions", async () => {
+  const source = await read("./permissions.js");
   const view = source.match(/VIEW_SUBMISSIONS:\s*\[([^\]]+)\]/)?.[1] ?? "";
   const manage = source.match(/MANAGE_SUBMISSIONS:\s*\[([^\]]+)\]/)?.[1] ?? "";
   assert.match(view, /CULTURAL_CENTER_OFFICER/);
