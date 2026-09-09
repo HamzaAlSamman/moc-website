@@ -112,7 +112,7 @@ export default function AdminSidebar({ collapsed, onLinkClick }) {
         ? ["/admin/events", "/admin/bookings", "/admin/scan", "/admin/dashboard"]
       : role === "MEDIA_OFFICE"
         ? ["/admin/posts", "/admin/achievements", "/admin/categories", "/admin/dashboard"]
-        : ["FINANCE", "STUDIES_ASSESSOR", "STUDIES_HEAD"].includes(role)
+        : ["FINANCE", "STUDIES_ASSESSOR", "STUDIES_HEAD", "CULTURAL_CENTER_OFFICER"].includes(role)
           ? ["/admin/copyright", "/admin/dashboard"]
           : ["LEGAL_DIRECTOR", "DEPUTY_MINISTER"].includes(role)
             ? ["/admin/copyright", "/admin/legal-licenses", "/admin/dashboard"]
