@@ -34,6 +34,19 @@ test("copyright workflow is owned by the current stage role", () => {
   assert.equal(canTransitionCopyright("ADMIN", "submitted", "completed"), false);
 });
 
+test("final fee verification dispatches to a cultural center instead of completing directly", () => {
+  assert.equal(canTransitionCopyright("FINANCE", "final_review", "pending_center_delivery"), true);
+  assert.equal(canTransitionCopyright("FINANCE", "final_review", "completed"), false);
+  assert.equal(canTransitionCopyright("ADMIN", "final_review", "pending_center_delivery"), true);
+});
+
+test("only a cultural center officer completes a delivery, and only from pending_center_delivery", () => {
+  assert.equal(canTransitionCopyright("CULTURAL_CENTER_OFFICER", "pending_center_delivery", "completed"), true);
+  assert.equal(canTransitionCopyright("CULTURAL_CENTER_OFFICER", "final_review", "completed"), false);
+  assert.equal(canTransitionCopyright("FINANCE", "pending_center_delivery", "completed"), false);
+  assert.equal(canTransitionCopyright("ADMIN", "pending_center_delivery", "completed"), true);
+});
+
 test("public copyright DTO never exposes attachments or internal review data", () => {
   const dto = toPublicCopyrightSubmission({
     id: "case-1",

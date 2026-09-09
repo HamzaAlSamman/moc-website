@@ -1,11 +1,15 @@
 export const MAX_COPYRIGHT_WORK_BYTES = 100 * 1024 * 1024;
 
 const COPYRIGHT_TRANSITIONS = {
-  FINANCE: new Set(["finance_review:under_review", "final_review:completed", "finance_review:submitted", "final_review:pending_fees", "finance_review:rejected", "final_review:rejected"]),
+  FINANCE: new Set(["finance_review:under_review", "final_review:pending_center_delivery", "finance_review:submitted", "final_review:pending_fees", "finance_review:rejected", "final_review:rejected"]),
   LEGAL_DIRECTOR: new Set(["under_review:pending_final_approval", "under_review:suspended", "under_review:rejected"]),
   STUDIES_ASSESSOR: new Set(["under_review:under_review", "under_review:suspended", "under_review:rejected"]),
   STUDIES_HEAD: new Set(["under_review:under_review", "under_review:suspended", "under_review:rejected"]),
   DEPUTY_MINISTER: new Set(["pending_final_approval:pending_fees", "pending_final_approval:suspended", "pending_final_approval:rejected"]),
+  // Scoped to their own center by a DB lookup in the route handler (this graph
+  // only knows roles and statuses, not which center a submission or officer
+  // belongs to) — see PATCH /api/admin/copyright-submissions/[id].
+  CULTURAL_CENTER_OFFICER: new Set(["pending_center_delivery:completed"]),
 };
 
 const COPYRIGHT_STATUS_GRAPH = {
@@ -15,7 +19,8 @@ const COPYRIGHT_STATUS_GRAPH = {
   suspended: new Set(["under_review"]),
   pending_final_approval: new Set(["pending_fees", "suspended", "rejected"]),
   pending_fees: new Set(["final_review"]),
-  final_review: new Set(["completed", "pending_fees", "rejected"]),
+  final_review: new Set(["pending_center_delivery", "pending_fees", "rejected"]),
+  pending_center_delivery: new Set(["completed"]),
 };
 
 const PUBLIC_COPYRIGHT_FIELDS = [
