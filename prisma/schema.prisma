@@ -37,6 +37,10 @@ enum Role {
   // an event but never create, delete, publish or approve one, and it reviews
   // identity documents without being able to block or erase an account.
   LANGUAGE_IDENTITY_REVIEWER
+  // Scoped to exactly one CulturalCenter (User.assignedCenterId). Confirms a
+  // copyright deposit copy arrived at their center and releases the
+  // certificate — sees no other part of the panel.
+  CULTURAL_CENTER_OFFICER
 }
 
 enum LegalLicenseType {
@@ -296,21 +300,25 @@ model EventKind {
 }
 
 model User {
-  id                 String   @id @default(cuid())
-  email              String   @unique
+  id                 String          @id @default(cuid())
+  email              String          @unique
   password           String
   nameAr             String
   nameEn             String?
-  role               Role     @default(AUTHOR)
+  role               Role            @default(AUTHOR)
   avatar             String?
-  isActive           Boolean  @default(true)
+  // Set only for CULTURAL_CENTER_OFFICER accounts — scopes that account to
+  // exactly one cultural center's incoming copyright deliveries.
+  assignedCenterId   String?
+  assignedCenter     CulturalCenter? @relation(fields: [assignedCenterId], references: [id], onDelete: SetNull)
+  isActive           Boolean         @default(true)
   // Set when an admin force-resets this user's password; the user is locked
   // out of the rest of the CMS until they set their own new password.
-  mustChangePassword Boolean  @default(false)
+  mustChangePassword Boolean         @default(false)
   createdById        String?
   posts              Post[]
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
 }
 
 // Append-only security audit trail for sensitive admin actions
@@ -395,40 +403,40 @@ model PostTag {
 }
 
 model Event {
-  id                  String                   @id @default(cuid())
-  titleAr             String
-  titleEn             String?
-  descriptionAr       String?                  @db.Text
-  descriptionEn       String?                  @db.Text
-  location            String?
-  locationEn          String?
-  governorate         String?
-  governorateEn       String?
-  startDate           DateTime
-  endDate             DateTime?
-  featuredImage       String?
-  status              EventStatus              @default(UPCOMING)
-  eventCategoryId     String?
-  eventCategory       EventCategory?           @relation(fields: [eventCategoryId], references: [id], onDelete: SetNull)
-  eventKindId         String?
-  eventKind           EventKind?               @relation(fields: [eventKindId], references: [id], onDelete: SetNull)
+  id                   String                   @id @default(cuid())
+  titleAr              String
+  titleEn              String?
+  descriptionAr        String?                  @db.Text
+  descriptionEn        String?                  @db.Text
+  location             String?
+  locationEn           String?
+  governorate          String?
+  governorateEn        String?
+  startDate            DateTime
+  endDate              DateTime?
+  featuredImage        String?
+  status               EventStatus              @default(UPCOMING)
+  eventCategoryId      String?
+  eventCategory        EventCategory?           @relation(fields: [eventCategoryId], references: [id], onDelete: SetNull)
+  eventKindId          String?
+  eventKind            EventKind?               @relation(fields: [eventKindId], references: [id], onDelete: SetNull)
   // Moderation workflow (cultural-calendar review). Identity fields are
   // denormalized plain ids (no relation), mirroring AuditLog, so the trail
   // survives user edits/deletes and keeps migrations friction-free.
-  reviewStatus        EventReviewStatus        @default(APPROVED)
-  rejectionReason     String?                  @db.Text
-  createdById         String?
-  reviewedById        String?
-  reviewedAt          DateTime?
+  reviewStatus         EventReviewStatus        @default(APPROVED)
+  rejectionReason      String?                  @db.Text
+  createdById          String?
+  reviewedById         String?
+  reviewedAt           DateTime?
   // External-sync provenance. Events mirrored from partner sites (currently the
   // Damascus Opera House) carry source="OPERA" plus the partner's own event id,
   // a booking deep-link back to the partner, and the last sync timestamp. The
   // (source, externalId) pair is unique so re-pushes upsert instead of dup.
   // Internal ministry events keep source="MOC" and leave externalId null.
-  source              String                   @default("MOC")
-  externalId          String?
-  bookingUrl          String?
-  syncedAt            DateTime?
+  source               String                   @default("MOC")
+  externalId           String?
+  bookingUrl           String?
+  syncedAt             DateTime?
   // ── Internal seat booking ──────────────────────────────────────────────
   // Most events never enable this (bookingAvailability defaults to
   // DISABLED); it exists alongside — and is mutually exclusive with — the
@@ -438,23 +446,23 @@ model Event {
   // with EventBooking rows inside the same transaction as every write to
   // them — it is the capacity check's source of truth, periodically
   // reconciled against a COUNT(*) of CONFIRMED bookings.
-  bookingAvailability EventBookingAvailability @default(DISABLED)
-  capacity            Int?
-  bookedCount         Int                      @default(0)
-  waitlistEnabled     Boolean                  @default(true)
-  bookingOpensAt      DateTime?
-  bookingClosesAt     DateTime?
-  bookingNoteAr       String?                  @db.Text
-  bookingNoteEn       String?                  @db.Text
+  bookingAvailability  EventBookingAvailability @default(DISABLED)
+  capacity             Int?
+  bookedCount          Int                      @default(0)
+  waitlistEnabled      Boolean                  @default(true)
+  bookingOpensAt       DateTime?
+  bookingClosesAt      DateTime?
+  bookingNoteAr        String?                  @db.Text
+  bookingNoteEn        String?                  @db.Text
   // English proofreading sign-off (LANGUAGE_IDENTITY_REVIEWER). Cleared
   // automatically whenever an English field changes afterwards — a tick that
   // survives a later edit would vouch for text nobody read. Denormalized
   // reviewer id, same as reviewedById above.
   languageReviewedAt   DateTime?
   languageReviewedById String?
-  bookings            EventBooking[]
-  createdAt           DateTime                 @default(now())
-  updatedAt           DateTime                 @updatedAt
+  bookings             EventBooking[]
+  createdAt            DateTime                 @default(now())
+  updatedAt            DateTime                 @updatedAt
 
   @@unique([source, externalId])
   @@index([reviewStatus])
@@ -532,11 +540,13 @@ model EventSubmission {
 }
 
 model CulturalCenter {
-  id          String   @id @default(cuid())
+  id          String                @id @default(cuid())
   nameAr      String
   governorate String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+  submissions CopyrightSubmission[]
+  officers    User[]
 
   @@unique([nameAr, governorate])
 }
@@ -585,37 +595,37 @@ model Setting {
 }
 
 model CopyrightSubmission {
-  id                         String   @id @default(cuid())
+  id                         String             @id @default(cuid())
   // Public sequential reference (CPR-YYYY-NNNN) given to the citizen on submit.
   // Distinct from `internalRefNumber`, which the technical assessor assigns by
   // hand later in the review chain.
-  referenceNo                String?  @unique
+  referenceNo                String?            @unique
   applicantName              String
   applicantPhone             String
   applicantEmail             String
   applicantRole              String
   workTitle                  String
   workCategory               String
-  workDesc                   String   @db.Text
+  workDesc                   String             @db.Text
   province                   String
   center                     String
   completionDate             String
-  hasTelecomDoc              Boolean  @default(false)
-  paymentStatus              String   @default("pending") // pending, initial_paid, fully_paid
-  applicationStatus          String   @default("submitted") // draft, submitted, under_review, etc.
-  applicantSignature         String?  @db.Text // Base64 signature image (optional)
-  reviewerSignature          String?  @db.Text // Base64 reviewer signature image
+  hasTelecomDoc              Boolean            @default(false)
+  paymentStatus              String             @default("pending") // pending, initial_paid, fully_paid
+  applicationStatus          String             @default("submitted") // draft, submitted, under_review, etc.
+  applicantSignature         String?            @db.Text // Base64 signature image (optional)
+  reviewerSignature          String?            @db.Text // Base64 reviewer signature image
   authors                    Json? // Array of joint authors: { name: String, signature: String, idLabel: String }
-  paymentGateway             String?  @default("syriatel_cash")
+  paymentGateway             String?            @default("syriatel_cash")
   paymentRef                 String?
   payments                   CopyrightPayment[]
-  paymentReceipt             String?  @db.Text
-  commercialRegisterFile     String?  @db.Text
-  delegationFile             String?  @db.Text
-  representativeIdFile       String?  @db.Text
-  originalOwnerIdFile        String?  @db.Text
-  assessorReportFile         String?  @db.Text
-  studiesRecommendationsFile String?  @db.Text
+  paymentReceipt             String?            @db.Text
+  commercialRegisterFile     String?            @db.Text
+  delegationFile             String?            @db.Text
+  representativeIdFile       String?            @db.Text
+  originalOwnerIdFile        String?            @db.Text
+  assessorReportFile         String?            @db.Text
+  studiesRecommendationsFile String?            @db.Text
   // Shared, append-only review notes visible to the whole review chain
   // (Finance, Assessor, Studies Head, Legal Director, Deputy Minister).
   // Replaces the old per-stage report file uploads. Each entry:
@@ -626,21 +636,31 @@ model CopyrightSubmission {
   // may change it.
   internalRefNumber          String?
   internalRefSetById         String?
+  // Cultural-center delivery gate: the deposit copy is routed to the citizen's
+  // nearest center before the certificate (paper or electronic) is released.
+  // assignedCenterId is set when Finance dispatches (final_review →
+  // pending_center_delivery); the rest are set together when the center
+  // officer confirms arrival (pending_center_delivery → completed).
+  assignedCenterId           String?
+  assignedCenter             CulturalCenter?    @relation(fields: [assignedCenterId], references: [id], onDelete: SetNull)
+  centerDeliveryMethod       String? // "paper" | "electronic"
+  centerConfirmedAt          DateTime?
+  centerConfirmedById        String?
   // What is missing, written by the reviewer who suspended the submission for
   // deficiencies. Shown to the citizen and emailed to them.
-  deficiencyNote             String?  @db.Text
-  workFile                   String?  @db.Text
+  deficiencyNote             String?            @db.Text
+  workFile                   String?            @db.Text
   workDriveUrl               String?
   workOrigin                 String?
   originalWorkName           String?
-  originalPermission         String?  @db.Text
-  idDocType                  String   @default("national_id") // national_id (front+back) or passport (single page in idFileFront)
-  idFileFront                String?  @db.Text
-  idFileBack                 String?  @db.Text
-  telecomFile                String?  @db.Text
-  roleFile                   String?  @db.Text
-  createdAt                  DateTime @default(now())
-  updatedAt                  DateTime @updatedAt
+  originalPermission         String?            @db.Text
+  idDocType                  String             @default("national_id") // national_id (front+back) or passport (single page in idFileFront)
+  idFileFront                String?            @db.Text
+  idFileBack                 String?            @db.Text
+  telecomFile                String?            @db.Text
+  roleFile                   String?            @db.Text
+  createdAt                  DateTime           @default(now())
+  updatedAt                  DateTime           @updatedAt
 
   @@unique([paymentRef])
   @@unique([internalRefNumber])
