@@ -75,3 +75,26 @@ export async function notifyByRole(roles, { type, titleAr, titleEn = null, link 
     console.error("Notification role fan-out failed:", err);
   }
 }
+
+/**
+ * Targeted fan-out — notifies only the CULTURAL_CENTER_OFFICER account(s)
+ * assigned to one specific center. Unlike notifyByRole (which pings every
+ * holder of a role), a copyright dispatch matters to exactly one center's
+ * staff, not every officer at every center.
+ */
+export async function notifyCenterOfficers(centerId, { type, titleAr, titleEn = null, link = null }) {
+  if (!centerId) return;
+  try {
+    const recipients = await prisma.user.findMany({
+      where: { isActive: true, role: "CULTURAL_CENTER_OFFICER", assignedCenterId: centerId },
+      select: { id: true },
+    });
+    if (recipients.length === 0) return;
+
+    await prisma.notification.createMany({
+      data: recipients.map((u) => ({ userId: u.id, type, titleAr, titleEn, link })),
+    });
+  } catch (err) {
+    console.error("Center-officer notification fan-out failed:", err);
+  }
+}
