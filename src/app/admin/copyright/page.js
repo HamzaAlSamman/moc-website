@@ -18,9 +18,21 @@ export default async function AdminCopyrightPage() {
     redirect("/admin/dashboard");
   }
 
-  // Fetch copyright submissions
+  // Fetch copyright submissions — select only what the list view (stat chips +
+  // CopyrightManager table) renders. The model also carries ~15 @db.Text columns
+  // of base64 file/signature blobs (see prisma/schema.prisma); pulling those for
+  // every row on every dashboard visit is what made this page slow to load. The
+  // full record, files included, is fetched separately on /admin/copyright/[id].
   const submissions = await prisma.copyrightSubmission.findMany({
     orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      applicantName: true,
+      workTitle: true,
+      workCategory: true,
+      applicationStatus: true,
+      createdAt: true,
+    },
   });
 
   // Group the 7 workflow statuses into the 4 buckets staff actually
