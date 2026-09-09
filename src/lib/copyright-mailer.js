@@ -280,6 +280,10 @@ export async function sendApprovalEmail(submission) {
 // EMAIL 4 — إيصال الرسم النهائي + إشعار إصدار الشهادة (يُرسل عند completed)
 // ═══════════════════════════════════════════════════════════════════════════════
 export async function sendCompletedEmail(submission) {
+  if (submission.centerDeliveryMethod === "paper") {
+    return sendCompletedPaperEmail(submission);
+  }
+
   const fees = getFeesForMailer(submission.applicantRole);
   const attachments = await buildReceiptAttachment(submission, "final");
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://moc.gov.sy";
@@ -313,6 +317,30 @@ export async function sendCompletedEmail(submission) {
 
       <div style="margin-top:18px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:13px;font-size:12px;color:#1e3a8a;line-height:1.6;">
         📌 احتفظ بهذه الرسالة وإيصال الدفع المرفق كوثائق رسمية. رقم المعاملة:
+        <strong style="font-family:monospace;">${submission.id}</strong>
+      </div>
+    `,
+  });
+}
+
+// Paper handoff already happened in person at the cultural center — no PDF
+// attached here, just a confirmation the citizen can keep for their records.
+async function sendCompletedPaperEmail(submission) {
+  const fees = getFeesForMailer(submission.applicantRole);
+
+  await dispatchEmail(submission, {
+    subject: `🎓 استُلمت شهادة حماية حقوق المؤلف — #${submission.id}`,
+    titleAr: "تهانينا! استُلمت شهادة حماية حقوق المؤلف الرسمية",
+    contentHtml: `
+      <p style="font-size:14px;">
+        عزيزنا المودع <strong>${esc(submission.applicantName)}</strong>،<br/>
+        تم تدقيق واعتماد الرسم النهائي (${fees.finalTotal})، وصدرت
+        <strong>شهادة حماية حقوق المؤلف الرسمية</strong>
+        للعمل <strong>«${esc(submission.workTitle)}»</strong> وسُلّمت نسخة ورقية منها من المركز الثقافي المعتمد.
+      </p>
+
+      <div style="margin-top:18px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:13px;font-size:12px;color:#1e3a8a;line-height:1.6;">
+        📌 احتفظ بالشهادة الورقية كوثيقة رسمية. رقم المعاملة:
         <strong style="font-family:monospace;">${submission.id}</strong>
       </div>
     `,
