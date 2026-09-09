@@ -41,6 +41,7 @@ export const getCurrentUser = cache(async () => {
       avatar: true,
       isActive: true,
       mustChangePassword: true,
+      assignedCenterId: true,
     },
   });
 

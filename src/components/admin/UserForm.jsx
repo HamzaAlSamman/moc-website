@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { ROLE_LABELS, can } from "@/lib/permissions";
 
@@ -21,6 +21,9 @@ const ALL_ROLES = [
   "TICKET_OFFICER",
   // Proofreads the English text of calendar events and reviews citizen IDs.
   "LANGUAGE_IDENTITY_REVIEWER",
+  // Confirms a copyright deposit arrived at one specific cultural center and
+  // releases the certificate. Scoped to that center via assignedCenterId.
+  "CULTURAL_CENTER_OFFICER",
 ];
 const INPUT = "w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-[#A48E68] focus:ring-2 focus:ring-[#A48E68]/20 disabled:bg-gray-50 disabled:text-gray-400";
 
@@ -35,14 +38,25 @@ export default function UserForm({ user, currentUserRole, isNew }) {
     email:    user?.email    ?? "",
     password: "",
     role:     user?.role     ?? (currentUserRole === "DIRECTORATE" ? "TICKET_OFFICER" : "AUTHOR"),
+    assignedCenterId: user?.assignedCenterId ?? "",
     isActive: user?.isActive ?? true,
   });
+
+  const [centers, setCenters] = useState([]);
+  useEffect(() => {
+    if (form.role !== "CULTURAL_CENTER_OFFICER") return;
+    fetch("/api/admin/cultural-centers")
+      .then((r) => r.json())
+      .then((data) => setCenters(Array.isArray(data) ? data : []))
+      .catch(() => setCenters([]));
+  }, [form.role]);
 
   async function handleSave() {
     setSaving(true);
     setError("");
     if (!form.nameAr.trim() || !form.email.trim()) { setError("الاسم بالعربية والبريد الإلكتروني مطلوبان"); setSaving(false); return; }
     if (isNew && !form.password.trim()) { setError("كلمة المرور مطلوبة للمستخدم الجديد"); setSaving(false); return; }
+    if (form.role === "CULTURAL_CENTER_OFFICER" && !form.assignedCenterId) { setError("يرجى اختيار المركز الثقافي"); setSaving(false); return; }
 
     const payload = { ...form };
     if (!payload.password) delete payload.password;
@@ -94,6 +108,18 @@ export default function UserForm({ user, currentUserRole, isNew }) {
               ))}
             </select>
           </div>
+
+          {form.role === "CULTURAL_CENTER_OFFICER" && (
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-gray-700">المركز الثقافي *</label>
+              <select value={form.assignedCenterId} onChange={(e) => setForm((f) => ({ ...f, assignedCenterId: e.target.value }))} className={INPUT}>
+                <option value="">اختر المركز...</option>
+                {centers.map((c) => (
+                  <option key={c.id} value={c.id}>{c.governorate} — {c.nameAr}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div className="flex items-center gap-3">
             <input id="isActive" type="checkbox" checked={form.isActive}

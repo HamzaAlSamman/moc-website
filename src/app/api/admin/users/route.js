@@ -47,6 +47,7 @@ export async function POST(request) {
         role: userRole,
         isActive: data.isActive ?? true,
         createdById: session.role === "DIRECTORATE" ? session.userId : null,
+        assignedCenterId: userRole === "CULTURAL_CENTER_OFFICER" ? (data.assignedCenterId || null) : null,
       },
       select: { id: true, email: true, nameAr: true, role: true },
     });

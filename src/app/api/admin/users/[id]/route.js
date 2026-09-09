@@ -60,6 +60,17 @@ export async function PUT(request, { params }) {
     updateData.role = data.role;
   }
 
+  const effectiveRole = updateData.role ?? target.role;
+  if (effectiveRole === "CULTURAL_CENTER_OFFICER") {
+    if (!data.assignedCenterId) {
+      return NextResponse.json({ error: "يجب اختيار المركز الثقافي لهذا الحساب" }, { status: 400 });
+    }
+    updateData.assignedCenterId = data.assignedCenterId;
+  } else if (data.role && data.role !== "CULTURAL_CENTER_OFFICER") {
+    // Role changed away from center officer — clear the stale assignment.
+    updateData.assignedCenterId = null;
+  }
+
   // Setting a password here is equivalent to a forced password reset, so it
   // must require the same dedicated permission — NOT merely EDIT_USER. This
   // closes the path where an EDIT_USER-only admin overwrote another account's
