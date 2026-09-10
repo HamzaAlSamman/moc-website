@@ -14,6 +14,7 @@ import {
 import { readLegalLicenseJson } from "@/lib/legal-license-request.mjs";
 import { LEGAL_LICENSE_INCLUDE, legalLicenseError, legalLicenseJson } from "@/lib/legal-license-server";
 import { sendLegalLicenseCitizenEmail } from "@/lib/legal-license-mailer";
+import { getCurrentCitizenOptional } from "@/lib/citizen-dal";
 
 export async function POST(request) {
   if (!rateLimit(`legal-license-create:${getClientIp(request)}`, 10, 60 * 60 * 1000)) {
@@ -25,10 +26,14 @@ export async function POST(request) {
     const referenceNo = await nextReferenceNumber(REFERENCE_SCOPES.LEGAL_LICENSE);
     const { founders } = draft;
     const applicationData = legalLicenseApplicationWriteData(draft);
+    // Attributes the application to the citizen's account automatically if
+    // they're logged in — they never have to remember the access token later.
+    const loggedInCitizen = await getCurrentCitizenOptional();
     const application = await prisma.legalLicenseApplication.create({
       data: {
         ...applicationData,
         referenceNo,
+        citizenId: loggedInCitizen?.citizenId ?? null,
         accessTokenHash: hashLegalLicenseAccessToken(accessToken),
         founders: { create: founders.map(legalLicenseFounderWriteData) },
         history: { create: { action: "DRAFT_CREATED", toStatus: "DRAFT", publicNote: "Draft created" } },

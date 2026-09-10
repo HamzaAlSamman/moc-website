@@ -8,6 +8,8 @@ import { nextReferenceNumberSafe, REFERENCE_SCOPES } from "@/lib/reference-numbe
 import { readCopyrightJson } from "@/lib/copyright-request.mjs";
 import { copyrightReceiptAvailability } from "@/lib/copyright-payments";
 import { isPaymentGatewayActive } from "@/lib/payment-gateways.mjs";
+import { getCurrentCitizenOptional } from "@/lib/citizen-dal";
+import { claimRecordForLoggedInCitizen } from "@/lib/citizen-submission-link.mjs";
 import {
   toPublicCopyrightSubmission,
   validateCopyrightWorkSource,
@@ -101,11 +103,16 @@ export async function POST(request) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
 
+    // Attributes the submission to the citizen's account automatically if
+    // they're logged in — they never have to remember/re-enter a code later.
+    const loggedInCitizen = await getCurrentCitizenOptional();
+
     const submission = await prisma.copyrightSubmission.create({
       data: {
         applicantName:          data.applicantName.trim(),
         applicantPhone:         data.applicantPhone?.trim() || "",
         applicantEmail:         data.applicantEmail?.trim() || "",
+        citizenId:              loggedInCitizen?.citizenId ?? null,
         applicantRole:          data.applicantRole || "author",
         workTitle:              data.workTitle.trim(),
         workCategory:           data.workCategory || "",
@@ -207,6 +214,16 @@ export async function GET(request) {
     if (!submission) {
       return NextResponse.json({ error: "لم يتم العثور على معاملة بهذا الرمز" }, { status: 404 });
     }
+
+    // A citizen who filed this before creating an account (or looked it up
+    // anonymously) gets it auto-attached to their account the moment they
+    // view it while logged in, if the emails match.
+    const claimedCitizenId = await claimRecordForLoggedInCitizen("copyrightSubmission", {
+      id: submission.id,
+      citizenId: submission.citizenId,
+      applicantEmail: submission.applicantEmail,
+    });
+    if (claimedCitizenId) submission.citizenId = claimedCitizenId;
 
     return NextResponse.json({ submission: await publicSubmission(submission) });
   } catch (err) {

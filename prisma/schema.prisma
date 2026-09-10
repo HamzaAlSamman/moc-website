@@ -161,6 +161,10 @@ model LegalLicenseApplication {
   nationalId                String?
   phone                     String?
   email                     String?
+  // Same optional citizen link as CopyrightSubmission.citizenId — set on
+  // creation if logged in, or auto-claimed on lookup if the email matches.
+  citizenId                 String?
+  citizen                   Citizen?                 @relation(fields: [citizenId], references: [id], onDelete: SetNull)
   capacity                  String?
   licenseType               LegalLicenseType?
   entityName                String?
@@ -202,6 +206,7 @@ model LegalLicenseApplication {
   @@index([status])
   @@index([referenceNo])
   @@index([accessTokenHash])
+  @@index([citizenId, createdAt])
 }
 
 model LegalLicenseFounder {
@@ -540,18 +545,18 @@ model EventSubmission {
 }
 
 model CulturalCenter {
-  id          String                @id @default(cuid())
-  nameAr      String
-  governorate String
-  createdAt   DateTime              @default(now())
-  updatedAt   DateTime              @updatedAt
-  submissions CopyrightSubmission[]
-  officers    User[]
+  id                        String                @id @default(cuid())
+  nameAr                    String
+  governorate               String
+  createdAt                 DateTime              @default(now())
+  updatedAt                 DateTime              @updatedAt
+  submissions               CopyrightSubmission[]
+  officers                  User[]
   // Most governorates have many CulturalCenter rows (event venues seeded
   // separately) — this marks the single row per governorate that copyright
   // deposits auto-route to, so the lookup by governorate alone stays
   // unambiguous even where dozens of other rows share that governorate.
-  isCopyrightDeliveryCenter Boolean @default(false)
+  isCopyrightDeliveryCenter Boolean               @default(false)
 
   @@unique([nameAr, governorate])
 }
@@ -608,6 +613,12 @@ model CopyrightSubmission {
   applicantName              String
   applicantPhone             String
   applicantEmail             String
+  // Set when a logged-in citizen files this, or auto-claimed later if they
+  // look it up by reference and its applicantEmail matches their account
+  // email. Nullable and SetNull (never Cascade) — this row is the audit
+  // record and must outlive the account. Same pattern as EventBooking.
+  citizenId                  String?
+  citizen                    Citizen?           @relation(fields: [citizenId], references: [id], onDelete: SetNull)
   applicantRole              String
   workTitle                  String
   workCategory               String
@@ -676,6 +687,7 @@ model CopyrightSubmission {
   @@unique([paymentRef])
   @@unique([internalRefNumber])
   @@index([assignedCenterId])
+  @@index([citizenId, createdAt])
 }
 
 // Preserve both wallet transfers; a reference cannot pay two fees or cases.
@@ -770,9 +782,11 @@ model Citizen {
   sessionVersion    Int      @default(1)
   passwordChangedAt DateTime @default(now())
 
-  bookings  EventBooking[]
-  emailOtps CitizenEmailOtp[]
-  tokens    CitizenToken[]
+  bookings                 EventBooking[]
+  copyrightSubmissions     CopyrightSubmission[]
+  legalLicenseApplications LegalLicenseApplication[]
+  emailOtps                CitizenEmailOtp[]
+  tokens                   CitizenToken[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

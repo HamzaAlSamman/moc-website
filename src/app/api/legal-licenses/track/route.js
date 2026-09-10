@@ -9,6 +9,7 @@ import {
   LEGAL_LICENSE_TRACK_MAX_JSON_BYTES,
   readLegalLicenseJson,
 } from "@/lib/legal-license-request.mjs";
+import { claimRecordForLoggedInCitizen } from "@/lib/citizen-submission-link.mjs";
 
 export async function POST(request) {
   if (!rateLimit(`legal-license-track:${getClientIp(request)}`, 20, 15 * 60 * 1000)) {
@@ -32,5 +33,16 @@ export async function POST(request) {
   const authenticatedRequest = new Request(request.url, { headers: forwarded });
   const application = await findCitizenLegalLicense(authenticatedRequest, { referenceNo });
   if (!application) return NextResponse.json({ error: "Application not found" }, { status: 404 });
+
+  // A citizen who filed this before creating an account (or via the
+  // reference+access-token flow anonymously) gets it auto-attached to their
+  // account the moment they track it while logged in, if the emails match.
+  const claimedCitizenId = await claimRecordForLoggedInCitizen("legalLicenseApplication", {
+    id: application.id,
+    citizenId: application.citizenId,
+    applicantEmail: application.email,
+  });
+  if (claimedCitizenId) application.citizenId = claimedCitizenId;
+
   return NextResponse.json(legalLicenseJson(application));
 }

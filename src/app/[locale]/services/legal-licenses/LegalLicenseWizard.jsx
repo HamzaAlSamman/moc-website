@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Check, ChevronLeft, ChevronRight, Copy, FileText, RotateCcw, Search, ShieldAlert } from "lucide-react";
 import DecorativeCorners from "@/components/DecorativeCorners";
 import SubpageHero from "@/components/SubpageHero";
@@ -132,6 +133,19 @@ export default function LegalLicenseWizard({ locale = "ar" }) {
   const mutationBusy = mutationCount > 0;
   const stepHeadingRef = useRef(null);
   useStepScrollReset(step, { focusRef: stepHeadingRef });
+
+  // Coming from "My Account" with a known reference — switch straight to
+  // track mode and pre-fill it, so the citizen only has to type their
+  // access token instead of also hunting down the reference number.
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    const ref = searchParams.get("ref");
+    if (ref) {
+      setMode("track");
+      setTrack((t) => ({ ...t, referenceNo: ref }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const profile = useMemo(() => getLegalLicenseRequirementProfile(form.licenseType), [form.licenseType]);
   const sourceDocuments = useMemo(() => (profile?.sourceDocuments || [])
