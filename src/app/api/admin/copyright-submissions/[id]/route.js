@@ -11,7 +11,7 @@ import {
   sendCompletedEmail,
   sendPaymentCorrectionEmail,
 } from "@/lib/copyright-mailer";
-import { notifyByRole } from "@/lib/notify";
+import { notifyByRole, notifyCenterOfficers } from "@/lib/notify";
 import { logAudit } from "@/lib/audit";
 import { getClientIp } from "@/lib/rate-limit";
 import { canTransitionCopyright } from "@/lib/business-rules.mjs";
@@ -28,6 +28,7 @@ const ALLOWED_STATUSES = [
   "pending_final_approval",
   "pending_fees",
   "final_review",
+  "pending_center_delivery",
   "completed",
 ];
 
@@ -44,7 +45,7 @@ export async function PATCH(request, { params }) {
   if (!data || typeof data !== "object" || Array.isArray(data)) {
     return NextResponse.json({ error: "بيانات الطلب غير صالحة" }, { status: 400 });
   }
-  for (const field of ["applicationStatus", "assessorReportFile", "studiesRecommendationsFile", "reviewNote", "deficiencyNote", "internalRefNumber"]) {
+  for (const field of ["applicationStatus", "assessorReportFile", "studiesRecommendationsFile", "reviewNote", "deficiencyNote", "internalRefNumber", "assignedCenterId", "centerDeliveryMethod"]) {
     if (data[field] !== undefined && (typeof data[field] !== "string" || data[field].length > 20000)) {
       return NextResponse.json({ error: `قيمة غير صالحة: ${field}` }, { status: 400 });
     }
@@ -56,6 +57,8 @@ export async function PATCH(request, { params }) {
     reviewNote,
     deficiencyNote,
     internalRefNumber,
+    assignedCenterId,
+    centerDeliveryMethod,
   } = data;
 
   if (applicationStatus && !ALLOWED_STATUSES.includes(applicationStatus)) {
@@ -119,11 +122,42 @@ export async function PATCH(request, { params }) {
     return NextResponse.json({ error: "لم يُسجل دفع الرسم المطلوب" }, { status: 409 });
   }
 
+  // Dispatch to a center: Finance/Admin must name a specific CulturalCenter —
+  // there is no auto-selection, and an empty target would leave the record
+  // stuck with nowhere for the confirming officer to look.
+  if (applicationStatus === "pending_center_delivery" && !assignedCenterId?.trim()) {
+    return NextResponse.json({ error: "يجب اختيار المركز الثقافي قبل الإرسال" }, { status: 400 });
+  }
+
+  // Confirm arrival + release: the officer must record how the certificate
+  // left their hands (this is what the completed-email branch below reads).
+  if (applicationStatus === "completed" && existing.applicationStatus === "pending_center_delivery"
+    && !["paper", "electronic"].includes(centerDeliveryMethod)) {
+    return NextResponse.json({ error: "يجب تحديد طريقة تسليم الشهادة (ورقية أو إلكترونية)" }, { status: 400 });
+  }
+
+  // Scope enforcement: a center officer may only confirm a delivery addressed
+  // to their own center. Not expressible in canTransitionCopyright (which only
+  // knows roles and statuses) — same pattern as the STUDIES_ASSESSOR/HEAD/
+  // LEGAL_DIRECTOR "owner" check further up this file.
+  if (session.role === "CULTURAL_CENTER_OFFICER" && applicationStatus === "completed") {
+    const officer = await prisma.user.findUnique({ where: { id: session.userId }, select: { assignedCenterId: true } });
+    if (!officer?.assignedCenterId || officer.assignedCenterId !== existing.assignedCenterId) {
+      return NextResponse.json({ error: "هذه المعاملة ليست مُرسلة إلى مركزك" }, { status: 403 });
+    }
+  }
+
   const updateData = {};
   if (applicationStatus) updateData.applicationStatus = applicationStatus;
   // Finance confirming the final fee closes the payment record too.
   if (applicationStatus === "completed") updateData.paymentStatus = "fully_paid";
   if (isPaymentCorrection) updateData.paymentStatus = correctionTarget === "submitted" ? "pending" : "initial_paid";
+  if (applicationStatus === "pending_center_delivery") updateData.assignedCenterId = assignedCenterId.trim();
+  if (applicationStatus === "completed" && existing.applicationStatus === "pending_center_delivery") {
+    updateData.centerDeliveryMethod = centerDeliveryMethod;
+    updateData.centerConfirmedAt = new Date();
+    updateData.centerConfirmedById = session.userId;
+  }
   // These two carry the assessor's / studies head's stage notes (they used to
   // be file uploads). They still double as the study-phase progress markers the
   // workflow stepper and hand-off notifications below depend on.
@@ -248,6 +282,15 @@ export async function PATCH(request, { params }) {
       type: "COPYRIGHT_HANDOFF",
       titleAr: `معاملة بانتظار موافقتك النهائية: ${title}`,
       titleEn: `Submission awaiting your final approval: ${title}`,
+      link,
+    });
+  } else if (applicationStatus === "pending_center_delivery") {
+    // Dispatched to a specific center — only that center's officer(s) need to
+    // know, not the whole review chain.
+    await notifyCenterOfficers(updated.assignedCenterId, {
+      type: "COPYRIGHT_CENTER_DELIVERY",
+      titleAr: `معاملة قادمة إلى مركزكم: ${title}`,
+      titleEn: `Submission incoming to your center: ${title}`,
       link,
     });
   }
