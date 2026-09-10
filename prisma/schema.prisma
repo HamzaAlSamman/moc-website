@@ -547,6 +547,11 @@ model CulturalCenter {
   updatedAt   DateTime              @updatedAt
   submissions CopyrightSubmission[]
   officers    User[]
+  // Most governorates have many CulturalCenter rows (event venues seeded
+  // separately) — this marks the single row per governorate that copyright
+  // deposits auto-route to, so the lookup by governorate alone stays
+  // unambiguous even where dozens of other rows share that governorate.
+  isCopyrightDeliveryCenter Boolean @default(false)
 
   @@unique([nameAr, governorate])
 }

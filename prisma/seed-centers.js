@@ -99,22 +99,25 @@ const CENTERS = [
   { governorate: "إدلب", nameAr: "مديرية ثقافة إدلب" },
 
   // ── مراكز التسليم الخاصة بمعاملات حقوق المؤلف ──
-  // دمشق وريف دمشق تصبّان معاً في الوزارة مباشرة؛ كل محافظة أخرى تحصل على
-  // مركز واحد واضح، حتى لا تبقى أي محافظة بلا خيار عند إرسال معاملة إليها.
-  { governorate: "دمشق", nameAr: "وزارة الثقافة في دمشق" },
-  { governorate: "ريف دمشق", nameAr: "وزارة الثقافة في دمشق" },
-  { governorate: "حلب", nameAr: "المركز الثقافي في حلب" },
-  { governorate: "حمص", nameAr: "المركز الثقافي في حمص" },
-  { governorate: "حماة", nameAr: "المركز الثقافي في حماة" },
-  { governorate: "اللاذقية", nameAr: "المركز الثقافي في اللاذقية" },
-  { governorate: "طرطوس", nameAr: "المركز الثقافي في طرطوس" },
-  { governorate: "السويداء", nameAr: "المركز الثقافي في السويداء" },
-  { governorate: "درعا", nameAr: "المركز الثقافي في درعا" },
-  { governorate: "القنيطرة", nameAr: "المركز الثقافي في القنيطرة" },
-  { governorate: "دير الزور", nameAr: "المركز الثقافي في دير الزور" },
-  { governorate: "الرقة", nameAr: "المركز الثقافي في الرقة" },
-  { governorate: "الحسكة", nameAr: "المركز الثقافي في الحسكة" },
-  { governorate: "إدلب", nameAr: "المركز الثقافي في إدلب" },
+  // دمشق وريف دمشق تصبّان معاً في مديرية حماية حقوق المؤلف بالوزارة؛ كل محافظة
+  // أخرى تحصل على مركز واحد واضح، حتى لا تبقى أي محافظة بلا مركز عند التوجيه
+  // التلقائي. isCopyrightDeliveryCenter يميّز هذا الصف عن عشرات صفوف مراكز
+  // الفعاليات التي قد تشارك نفس المحافظة — التوجيه التلقائي بالمحافظة وحدها
+  // غير كافٍ لولا هذا العلم.
+  { governorate: "دمشق", nameAr: "مديرية حماية حقوق المؤلف في الوزارة بدمشق", isCopyrightDeliveryCenter: true },
+  { governorate: "ريف دمشق", nameAr: "مديرية حماية حقوق المؤلف في الوزارة بدمشق", isCopyrightDeliveryCenter: true },
+  { governorate: "حلب", nameAr: "المركز الثقافي في حلب", isCopyrightDeliveryCenter: true },
+  { governorate: "حمص", nameAr: "المركز الثقافي في حمص", isCopyrightDeliveryCenter: true },
+  { governorate: "حماة", nameAr: "المركز الثقافي في حماة", isCopyrightDeliveryCenter: true },
+  { governorate: "اللاذقية", nameAr: "المركز الثقافي في اللاذقية", isCopyrightDeliveryCenter: true },
+  { governorate: "طرطوس", nameAr: "المركز الثقافي في طرطوس", isCopyrightDeliveryCenter: true },
+  { governorate: "السويداء", nameAr: "المركز الثقافي في السويداء", isCopyrightDeliveryCenter: true },
+  { governorate: "درعا", nameAr: "المركز الثقافي في درعا", isCopyrightDeliveryCenter: true },
+  { governorate: "القنيطرة", nameAr: "المركز الثقافي في القنيطرة", isCopyrightDeliveryCenter: true },
+  { governorate: "دير الزور", nameAr: "المركز الثقافي في دير الزور", isCopyrightDeliveryCenter: true },
+  { governorate: "الرقة", nameAr: "المركز الثقافي في الرقة", isCopyrightDeliveryCenter: true },
+  { governorate: "الحسكة", nameAr: "المركز الثقافي في الحسكة", isCopyrightDeliveryCenter: true },
+  { governorate: "إدلب", nameAr: "المركز الثقافي في إدلب", isCopyrightDeliveryCenter: true },
 ];
 
 async function main() {
@@ -132,7 +135,7 @@ async function main() {
           },
         },
         create: center,
-        update: {},
+        update: { isCopyrightDeliveryCenter: center.isCopyrightDeliveryCenter },
       });
       created++;
     } catch (err) {
