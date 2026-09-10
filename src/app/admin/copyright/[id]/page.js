@@ -20,15 +20,30 @@ export default async function AdminCopyrightDetailPage(props) {
   const { id } = params;
   const submission = await prisma.copyrightSubmission.findUnique({
     where: { id },
+    include: { assignedCenter: true },
   });
 
   if (!submission) {
     notFound();
   }
 
+  // A center officer may open only the cases routed to their own center —
+  // everything before pending_center_delivery has no assignedCenterId yet, so
+  // this also correctly hides cases that haven't reached their stage.
+  if (user.role === "CULTURAL_CENTER_OFFICER" && submission.assignedCenterId !== user.assignedCenterId) {
+    redirect("/admin/copyright");
+  }
+
+  // Centers list for the dispatch dropdown, pre-filtered to this submission's
+  // governorate — fetched here (not client-side) so it's ready on first paint.
+  const centers = await prisma.culturalCenter.findMany({
+    where: { governorate: submission.province },
+    orderBy: { nameAr: "asc" },
+  });
+
   return (
     <AdminShell user={user} fullWidth={true}>
-      <CopyrightDetailView submission={submission} currentUser={user} />
+      <CopyrightDetailView submission={submission} currentUser={user} centers={centers} />
     </AdminShell>
   );
 }

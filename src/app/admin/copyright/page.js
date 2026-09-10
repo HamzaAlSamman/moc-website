@@ -24,6 +24,7 @@ export default async function AdminCopyrightPage() {
   // every row on every dashboard visit is what made this page slow to load. The
   // full record, files included, is fetched separately on /admin/copyright/[id].
   const submissions = await prisma.copyrightSubmission.findMany({
+    where: user.role === "CULTURAL_CENTER_OFFICER" ? { assignedCenterId: user.assignedCenterId } : undefined,
     orderBy: { createdAt: "desc" },
     select: {
       id: true,
@@ -38,7 +39,7 @@ export default async function AdminCopyrightPage() {
   // Group the 7 workflow statuses into the 4 buckets staff actually
   // care about at a glance — mirrors the stat-chip pattern on
   // /admin/event-submissions.
-  const STAFF_ACTION_STATUSES = ["finance_review", "under_review", "pending_final_approval", "final_review"];
+  const STAFF_ACTION_STATUSES = ["finance_review", "under_review", "pending_final_approval", "final_review", "pending_center_delivery"];
   const CITIZEN_WAIT_STATUSES = ["submitted", "suspended", "pending_fees"];
   const DONE_STATUSES = ["completed"];
 
