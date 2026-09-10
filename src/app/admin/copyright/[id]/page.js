@@ -34,16 +34,17 @@ export default async function AdminCopyrightDetailPage(props) {
     redirect("/admin/copyright");
   }
 
-  // Centers list for the dispatch dropdown, pre-filtered to this submission's
-  // governorate — fetched here (not client-side) so it's ready on first paint.
-  const centers = await prisma.culturalCenter.findMany({
-    where: { governorate: submission.province },
-    orderBy: { nameAr: "asc" },
+  // The center dispatch is fully automatic (resolved server-side by
+  // province when Finance verifies the final fee — no manual picking), so
+  // this is purely informational: shown on the final-review card so staff
+  // know where the case will go before they confirm.
+  const deliveryCenter = await prisma.culturalCenter.findFirst({
+    where: { governorate: submission.province, isCopyrightDeliveryCenter: true },
   });
 
   return (
     <AdminShell user={user} fullWidth={true}>
-      <CopyrightDetailView submission={submission} currentUser={user} centers={centers} />
+      <CopyrightDetailView submission={submission} currentUser={user} deliveryCenter={deliveryCenter} />
     </AdminShell>
   );
 }

@@ -303,7 +303,7 @@ function getFeesForAdmin(role) {
   }
 }
 
-export default function CopyrightDetailView({ submission, currentUser, centers = [] }) {
+export default function CopyrightDetailView({ submission, currentUser, deliveryCenter = null }) {
   const router = useRouter();
   const [sub, setSub] = useState(submission);
   const fees = getFeesForAdmin(sub.applicantRole);
@@ -321,8 +321,6 @@ export default function CopyrightDetailView({ submission, currentUser, centers =
   // Suspend/reject decision awaiting the reviewer's written reason.
   const [decision, setDecision] = useState(null); // { status }
   const [decisionNote, setDecisionNote] = useState("");
-  // Finance/Admin picks the destination center when dispatching.
-  const [selectedCenterId, setSelectedCenterId] = useState("");
   // Center officer records how they handed the certificate over.
   const [deliveryMethod, setDeliveryMethod] = useState("");
 
@@ -1240,22 +1238,14 @@ export default function CopyrightDetailView({ submission, currentUser, centers =
                     <div className="space-y-3">
                       <div className="bg-teal-50 border border-teal-200 rounded-2xl p-4 text-xs text-teal-800 font-semibold flex gap-2">
                         <Info className="w-4 h-4 shrink-0 mt-0.5 text-teal-600" />
-                        <p>سدّد المواطن الرسم النهائي ({fees.final}). يرجى تدقيق إيصال الدفع المرفق، ثم اختيار المركز الثقافي الذي سيُرسل إليه المصنف قبل إصدار الشهادة.</p>
+                        <p>سدّد المواطن الرسم النهائي ({fees.final}). يرجى تدقيق إيصال الدفع المرفق ثم التأكيد — يُرسل المصنف تلقائياً إلى المركز الثقافي المعتمد لمحافظة الطلب.</p>
                       </div>
 
-                      <div className="space-y-2">
-                        <span className="text-xs text-slate-550 font-bold block">المركز الثقافي *:</span>
-                        <select
-                          value={selectedCenterId}
-                          onChange={(e) => setSelectedCenterId(e.target.value)}
-                          className="w-full text-xs border border-slate-250 rounded-xl p-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
-                        >
-                          <option value="">اختر المركز...</option>
-                          {centers.map((c) => (
-                            <option key={c.id} value={c.id}>{c.nameAr}</option>
-                          ))}
-                        </select>
-                        {centers.length === 0 && (
+                      <div className="space-y-1 bg-slate-50 border border-slate-200 rounded-2xl p-3.5">
+                        <span className="text-slate-400 text-[11px] block font-semibold">سيُرسل تلقائياً إلى:</span>
+                        {deliveryCenter ? (
+                          <p className="font-bold text-slate-800 text-sm">{deliveryCenter.nameAr}</p>
+                        ) : (
                           <p className="text-[11px] text-rose-600 font-semibold">
                             لا يوجد مركز ثقافي مسجل لمحافظة «{sub.province}» بعد — يرجى إضافته أولاً من صفحة{" "}
                             <a href="/admin/cultural-centers" target="_blank" rel="noopener noreferrer" className="underline">إدارة المراكز الثقافية</a>.
@@ -1264,8 +1254,8 @@ export default function CopyrightDetailView({ submission, currentUser, centers =
                       </div>
 
                       <button
-                        onClick={() => handleAction(sub.id, "pending_center_delivery", { assignedCenterId: selectedCenterId })}
-                        disabled={!!actionLoading || !selectedCenterId}
+                        onClick={() => handleAction(sub.id, "pending_center_delivery")}
+                        disabled={!!actionLoading || !deliveryCenter}
                         className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold py-3 rounded-2xl transition shadow-md text-xs cursor-pointer flex items-center justify-center gap-1.5"
                       >
                         {actionLoading === "pending_center_delivery" ? <><Loader2 className="w-4 h-4 animate-spin" /> جارٍ الإرسال...</> : "تأكيد استلام الرسم النهائي وإرسال المصنف للمركز"}

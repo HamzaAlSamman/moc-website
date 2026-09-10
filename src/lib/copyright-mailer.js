@@ -277,6 +277,35 @@ export async function sendApprovalEmail(submission) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// EMAIL 3.5 — توجيه لتسليم نسخة الإيداع (يُرسل فور تدقيق المالية للرسم النهائي،
+// حين تُوجَّه المعاملة تلقائياً إلى المركز الثقافي الخاص بمحافظة المتقدم).
+// ═══════════════════════════════════════════════════════════════════════════════
+export async function sendCenterDeliveryEmail(submission, center) {
+  await dispatchEmail(submission, {
+    subject: `يرجى تسليم نسخة الإيداع إلى المركز الثقافي - المعاملة #${submission.id}`,
+    titleAr: "الخطوة الأخيرة: تسليم نسخة الإيداع للمركز الثقافي",
+    contentHtml: `
+      <p style="font-size:14px;">
+        عزيزنا المودع <strong>${esc(submission.applicantName)}</strong>،<br/>
+        تم تدقيق واعتماد الرسم النهائي الخاص بطلبك للعمل <strong>«${esc(submission.workTitle)}»</strong>.
+        لإصدار شهادة حماية حقوق المؤلف الرسمية، يتبقى تسليم نسخة الإيداع من المصنف شخصياً إلى المركز الثقافي التالي:
+      </p>
+
+      <div style="background:#fbf9f6;border-right:4px solid #B9A779;border-radius:8px;padding:16px;margin:20px 0;border:1px solid #f0eada;text-align:center;">
+        <p style="font-size:12px;color:#888;margin:0 0 6px 0;">المركز الثقافي المعتمد لمحافظة ${esc(submission.province)}</p>
+        <p style="font-size:17px;font-weight:bold;color:#002723;margin:0;">${esc(center?.nameAr || "أقرب مركز ثقافي لمحافظتك")}</p>
+      </div>
+
+      <div style="margin-top:18px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:14px;font-size:12px;color:#1e3a8a;line-height:1.6;">
+        📌 بعد استلام المركز لنسخة الإيداع سيؤكد ذلك في النظام، وستصلك رسالة بإصدار شهادتك الرسمية.
+      </div>
+
+      ${trackingButton(submission)}
+    `,
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // EMAIL 4 — إيصال الرسم النهائي + إشعار إصدار الشهادة (يُرسل عند completed)
 // ═══════════════════════════════════════════════════════════════════════════════
 export async function sendCompletedEmail(submission) {

@@ -10,6 +10,7 @@ import {
   sendRejectedEmail,
   sendCompletedEmail,
   sendPaymentCorrectionEmail,
+  sendCenterDeliveryEmail,
 } from "@/lib/copyright-mailer";
 import { notifyByRole, notifyCenterOfficers } from "@/lib/notify";
 import { logAudit } from "@/lib/audit";
@@ -45,7 +46,7 @@ export async function PATCH(request, { params }) {
   if (!data || typeof data !== "object" || Array.isArray(data)) {
     return NextResponse.json({ error: "بيانات الطلب غير صالحة" }, { status: 400 });
   }
-  for (const field of ["applicationStatus", "assessorReportFile", "studiesRecommendationsFile", "reviewNote", "deficiencyNote", "internalRefNumber", "assignedCenterId", "centerDeliveryMethod"]) {
+  for (const field of ["applicationStatus", "assessorReportFile", "studiesRecommendationsFile", "reviewNote", "deficiencyNote", "internalRefNumber", "centerDeliveryMethod"]) {
     if (data[field] !== undefined && (typeof data[field] !== "string" || data[field].length > 20000)) {
       return NextResponse.json({ error: `قيمة غير صالحة: ${field}` }, { status: 400 });
     }
@@ -57,7 +58,6 @@ export async function PATCH(request, { params }) {
     reviewNote,
     deficiencyNote,
     internalRefNumber,
-    assignedCenterId,
     centerDeliveryMethod,
   } = data;
 
@@ -122,11 +122,18 @@ export async function PATCH(request, { params }) {
     return NextResponse.json({ error: "لم يُسجل دفع الرسم المطلوب" }, { status: 409 });
   }
 
-  // Dispatch to a center: Finance/Admin must name a specific CulturalCenter —
-  // there is no auto-selection, and an empty target would leave the record
-  // stuck with nowhere for the confirming officer to look.
-  if (applicationStatus === "pending_center_delivery" && !assignedCenterId?.trim()) {
-    return NextResponse.json({ error: "يجب اختيار المركز الثقافي قبل الإرسال" }, { status: 400 });
+  // Dispatch to a center: the destination is resolved automatically from the
+  // applicant's own province — Finance/Admin never pick a center by hand.
+  // isCopyrightDeliveryCenter disambiguates this from the many event-venue
+  // rows most governorates also have under the same governorate value.
+  let dispatchCenter = null;
+  if (applicationStatus === "pending_center_delivery") {
+    dispatchCenter = await prisma.culturalCenter.findFirst({
+      where: { governorate: existing.province, isCopyrightDeliveryCenter: true },
+    });
+    if (!dispatchCenter) {
+      return NextResponse.json({ error: `لا يوجد مركز ثقافي مسجل لمحافظة «${existing.province}» — يرجى تسجيله قبل المتابعة` }, { status: 400 });
+    }
   }
 
   // Confirm arrival + release: the officer must record how the certificate
@@ -152,7 +159,7 @@ export async function PATCH(request, { params }) {
   // Finance confirming the final fee closes the payment record too.
   if (applicationStatus === "completed") updateData.paymentStatus = "fully_paid";
   if (isPaymentCorrection) updateData.paymentStatus = correctionTarget === "submitted" ? "pending" : "initial_paid";
-  if (applicationStatus === "pending_center_delivery") updateData.assignedCenterId = assignedCenterId.trim();
+  if (applicationStatus === "pending_center_delivery") updateData.assignedCenterId = dispatchCenter.id;
   if (applicationStatus === "completed" && existing.applicationStatus === "pending_center_delivery") {
     updateData.centerDeliveryMethod = centerDeliveryMethod;
     updateData.centerConfirmedAt = new Date();
@@ -245,6 +252,10 @@ export async function PATCH(request, { params }) {
   } else if (applicationStatus === "completed") {
     // Finance verified the final fee → issue the certificate + final receipt.
     sendCompletedEmail(updated).catch((err) => console.error("Completed email send error async:", err));
+  } else if (applicationStatus === "pending_center_delivery") {
+    // Dispatched automatically on final-fee verification — tell the citizen
+    // where to take their deposit copy in person.
+    sendCenterDeliveryEmail(updated, dispatchCenter).catch((err) => console.error("Center-delivery email send error async:", err));
   }
 
   // Stage hand-off: ping ONLY the role that owns the next stage. The two report
