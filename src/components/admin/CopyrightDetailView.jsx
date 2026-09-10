@@ -34,6 +34,7 @@ const STATUS_LABELS = {
   rejected: "مرفوض",
   pending_fees: "بانتظار استكمال الرسوم",
   final_review: "قيد التدقيق المالي للرسم النهائي",
+  pending_center_delivery: "بانتظار التسليم عبر المركز الثقافي",
   completed: "منجز"
 };
 
@@ -75,6 +76,7 @@ const STATUS_TOKENS = {
   rejected:               { pill: "bg-rose-50 text-rose-750 border-rose-200",       bar: "bg-rose-500" },
   pending_fees:           { pill: "bg-orange-50 text-orange-750 border-orange-200", bar: "bg-orange-500" },
   final_review:           { pill: "bg-teal-50 text-teal-700 border-teal-200",       bar: "bg-teal-500" },
+  pending_center_delivery: { pill: "bg-purple-50 text-purple-750 border-purple-200", bar: "bg-purple-500" },
   completed:              { pill: "bg-emerald-100 text-emerald-800 border-emerald-300", bar: "bg-emerald-500" },
 };
 
@@ -149,6 +151,7 @@ const WORKFLOW_STEPS = [
   { key: "deputy",    label: "الموافقة النهائية — معاون الوزير" },
   { key: "fees",      label: "استكمال الرسوم النهائية" },
   { key: "final_finance", label: "تدقيق المالية للرسم النهائي" },
+  { key: "center_delivery", label: "الإرسال إلى المركز الثقافي وتأكيد الاستلام" },
   { key: "completed", label: "إصدار شهادة الحماية والأرشفة" },
 ];
 
@@ -182,7 +185,8 @@ function getStepNote(sub, stepIndex) {
 // we lean on the same file checks the actions panel uses.
 function getStepIndex(sub) {
   const s = sub.applicationStatus;
-  if (s === "completed") return 8;
+  if (s === "completed") return 9;
+  if (s === "pending_center_delivery") return 8;
   if (s === "final_review") return 7;
   if (s === "pending_fees") return 6;
   if (s === "pending_final_approval") return 5;
@@ -299,7 +303,7 @@ function getFeesForAdmin(role) {
   }
 }
 
-export default function CopyrightDetailView({ submission, currentUser }) {
+export default function CopyrightDetailView({ submission, currentUser, centers = [] }) {
   const router = useRouter();
   const [sub, setSub] = useState(submission);
   const fees = getFeesForAdmin(sub.applicantRole);
@@ -317,6 +321,10 @@ export default function CopyrightDetailView({ submission, currentUser }) {
   // Suspend/reject decision awaiting the reviewer's written reason.
   const [decision, setDecision] = useState(null); // { status }
   const [decisionNote, setDecisionNote] = useState("");
+  // Finance/Admin picks the destination center when dispatching.
+  const [selectedCenterId, setSelectedCenterId] = useState("");
+  // Center officer records how they handed the certificate over.
+  const [deliveryMethod, setDeliveryMethod] = useState("");
 
   // Reset the per-stage note field whenever the stage changes.
   useEffect(() => {
@@ -660,6 +668,21 @@ export default function CopyrightDetailView({ submission, currentUser }) {
                     {sub.province} - {sub.center}
                   </p>
                 </div>
+
+                {sub.assignedCenter && (
+                  <div className="space-y-1 sm:col-span-2">
+                    <span className="text-slate-400 text-xs block font-semibold">المركز الثقافي لتسليم الشهادة</span>
+                    <p className="font-bold text-slate-800 flex items-center gap-2">
+                      <MapPin className="w-4.5 h-4.5 text-slate-400 shrink-0" />
+                      {sub.assignedCenter.governorate} — {sub.assignedCenter.nameAr}
+                      {sub.centerConfirmedAt && (
+                        <span className="text-[10px] font-black text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                          وصل {sub.centerDeliveryMethod === "paper" ? "— سُلّم ورقياً" : "— سُلّم إلكترونياً"}
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                )}
               </div>
 
               <div className="pt-1 space-y-2">
@@ -1210,21 +1233,42 @@ export default function CopyrightDetailView({ submission, currentUser }) {
                 </div>
               )}
 
-              {/* 5. Final finance review — verify the final fee before issuing the certificate */}
+              {/* 5. Final finance review — verify the final fee, then dispatch to a center */}
               {sub.applicationStatus === "final_review" && (
                 <>
                   {(currentUser?.role === "FINANCE" || !currentUser || currentUser.role === "SUPER_ADMIN" || currentUser.role === "ADMIN") ? (
                     <div className="space-y-3">
                       <div className="bg-teal-50 border border-teal-200 rounded-2xl p-4 text-xs text-teal-800 font-semibold flex gap-2">
                         <Info className="w-4 h-4 shrink-0 mt-0.5 text-teal-600" />
-                        <p>سدّد المواطن الرسم النهائي ({fees.final}). يرجى تدقيق إيصال الدفع المرفق وتأكيد استلام الرسم لإصدار الشهادة الرسمية وإرسال إيصال الدفع النهائي للمواطن.</p>
+                        <p>سدّد المواطن الرسم النهائي ({fees.final}). يرجى تدقيق إيصال الدفع المرفق، ثم اختيار المركز الثقافي الذي سيُرسل إليه المصنف قبل إصدار الشهادة.</p>
                       </div>
+
+                      <div className="space-y-2">
+                        <span className="text-xs text-slate-550 font-bold block">المركز الثقافي *:</span>
+                        <select
+                          value={selectedCenterId}
+                          onChange={(e) => setSelectedCenterId(e.target.value)}
+                          className="w-full text-xs border border-slate-250 rounded-xl p-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+                        >
+                          <option value="">اختر المركز...</option>
+                          {centers.map((c) => (
+                            <option key={c.id} value={c.id}>{c.nameAr}</option>
+                          ))}
+                        </select>
+                        {centers.length === 0 && (
+                          <p className="text-[11px] text-rose-600 font-semibold">
+                            لا يوجد مركز ثقافي مسجل لمحافظة «{sub.province}» بعد — يرجى إضافته أولاً من صفحة{" "}
+                            <a href="/admin/cultural-centers" target="_blank" rel="noopener noreferrer" className="underline">إدارة المراكز الثقافية</a>.
+                          </p>
+                        )}
+                      </div>
+
                       <button
-                        onClick={() => handleAction(sub.id, "completed")}
-                        disabled={!!actionLoading}
+                        onClick={() => handleAction(sub.id, "pending_center_delivery", { assignedCenterId: selectedCenterId })}
+                        disabled={!!actionLoading || !selectedCenterId}
                         className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold py-3 rounded-2xl transition shadow-md text-xs cursor-pointer flex items-center justify-center gap-1.5"
                       >
-                        {actionLoading === "completed" ? <><Loader2 className="w-4 h-4 animate-spin" /> جارٍ الإنجاز...</> : "تأكيد استلام الرسم النهائي وإنجاز المعاملة"}
+                        {actionLoading === "pending_center_delivery" ? <><Loader2 className="w-4 h-4 animate-spin" /> جارٍ الإرسال...</> : "تأكيد استلام الرسم النهائي وإرسال المصنف للمركز"}
                       </button>
                       <button
                         onClick={() => handleAction(sub.id, "pending_fees")}
@@ -1237,7 +1281,59 @@ export default function CopyrightDetailView({ submission, currentUser }) {
                   ) : (
                     <div className="bg-slate-50 border border-slate-250 rounded-2xl p-4 text-xs text-slate-655 font-semibold flex gap-2">
                       <Info className="w-4.5 h-4.5 shrink-0 mt-0.5 text-slate-400" />
-                      <p>المعاملة حالياً لدى قسم المالية للتحقق من تسديد الرسم النهائي قبل إصدار الشهادة.</p>
+                      <p>المعاملة حالياً لدى قسم المالية للتحقق من تسديد الرسم النهائي قبل إرسالها للمركز الثقافي.</p>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* 5b. Pending center delivery — the officer of the assigned center confirms arrival */}
+              {sub.applicationStatus === "pending_center_delivery" && (
+                <>
+                  {(currentUser?.role === "SUPER_ADMIN" || currentUser?.role === "ADMIN"
+                    || (currentUser?.role === "CULTURAL_CENTER_OFFICER" && currentUser?.assignedCenterId === sub.assignedCenterId)) ? (
+                    <div className="space-y-3">
+                      <div className="bg-purple-50 border border-purple-200 rounded-2xl p-4 text-xs text-purple-800 font-semibold flex gap-2">
+                        <Info className="w-4 h-4 shrink-0 mt-0.5 text-purple-600" />
+                        <p>بانتظار وصول المصنف إلى «{sub.assignedCenter?.nameAr}». عند وصوله، أكّد الاستلام وحدّد طريقة تسليم الشهادة للمواطن.</p>
+                      </div>
+
+                      <div className="space-y-2">
+                        <span className="text-xs text-slate-550 font-bold block">طريقة تسليم الشهادة *:</span>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setDeliveryMethod("paper")}
+                            className={`py-2.5 rounded-xl text-xs font-bold border transition cursor-pointer ${
+                              deliveryMethod === "paper" ? "bg-[#003D33] text-white border-[#003D33]" : "bg-white text-slate-600 border-slate-250 hover:border-[#003D33]/40"
+                            }`}
+                          >
+                            ورقياً (حضور شخصي)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDeliveryMethod("electronic")}
+                            className={`py-2.5 rounded-xl text-xs font-bold border transition cursor-pointer ${
+                              deliveryMethod === "electronic" ? "bg-[#003D33] text-white border-[#003D33]" : "bg-white text-slate-600 border-slate-250 hover:border-[#003D33]/40"
+                            }`}
+                          >
+                            إلكترونياً (PDF بالبريد)
+                          </button>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => handleAction(sub.id, "completed", { centerDeliveryMethod: deliveryMethod })}
+                        disabled={!!actionLoading || !deliveryMethod}
+                        className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold py-3 rounded-2xl transition shadow-md text-xs cursor-pointer flex items-center justify-center gap-1.5"
+                      >
+                        {actionLoading === "completed" ? <><Loader2 className="w-4 h-4 animate-spin" /> جارٍ التأكيد...</> : "تأكيد الاستلام وإصدار الشهادة"}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="bg-slate-50 border border-slate-250 rounded-2xl p-4 text-xs text-slate-655 font-semibold flex gap-2">
+                      <Info className="w-4.5 h-4.5 shrink-0 mt-0.5 text-slate-400" />
+                      <p>المعاملة حالياً بانتظار تأكيد استلام المصنف من «{sub.assignedCenter?.nameAr || "المركز الثقافي المعني"}».</p>
                     </div>
                   )}
                 </>
