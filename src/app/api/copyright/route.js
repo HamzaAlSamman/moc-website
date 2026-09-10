@@ -200,7 +200,10 @@ export async function GET(request) {
       return NextResponse.json({ error: "رمز المعاملة مطلوب" }, { status: 400 });
     }
 
-    const submission = await prisma.copyrightSubmission.findUnique({ where: { id: code } });
+    const submission = await prisma.copyrightSubmission.findUnique({
+      where: { id: code },
+      include: { assignedCenter: true },
+    });
     if (!submission) {
       return NextResponse.json({ error: "لم يتم العثور على معاملة بهذا الرمز" }, { status: 404 });
     }
