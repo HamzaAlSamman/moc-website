@@ -34,6 +34,7 @@ const STATUS_LABELS = {
   rejected: "مرفوض",
   pending_fees: "بانتظار استكمال الرسوم",
   final_review: "قيد التدقيق المالي للرسم النهائي",
+  pending_center_delivery: "بانتظار التسليم عبر المركز الثقافي",
   completed: "منجز"
 };
 
@@ -46,8 +47,15 @@ const STATUS_CLASSES = {
   rejected: "bg-rose-50 text-rose-700 border-rose-200",
   pending_fees: "bg-orange-50 text-orange-700 border-orange-200",
   final_review: "bg-teal-50 text-teal-700 border-teal-200",
+  pending_center_delivery: "bg-purple-50 text-purple-700 border-purple-200",
   completed: "bg-emerald-100 text-emerald-800 border-emerald-300"
 };
+
+const STATUS_CLASS_FALLBACK = "bg-slate-50 text-slate-600 border-slate-200";
+
+function statusBadgeClasses(status) {
+  return `px-2.5 py-1 rounded-lg text-[10px] font-bold border whitespace-nowrap ${STATUS_CLASSES[status] || STATUS_CLASS_FALLBACK}`;
+}
 
 const CATEGORIES = {
   written: "نصوص مكتوبة — كتاب أو رواية",
@@ -281,12 +289,12 @@ export default function CopyrightManager({ initialSubmissions = [], currentUser 
               {filtered.map((item) => (
                 <div 
                   key={item.id} 
-                  onClick={() => window.open(`/admin/copyright/${item.id}`, "_blank")}
+                  onClick={() => router.push(`/admin/copyright/${item.id}`)}
                   className="p-4 hover:bg-slate-50/80 active:bg-slate-50 transition-colors flex flex-col gap-3 cursor-pointer text-right"
                 >
                   <div className="flex justify-between items-center">
                     <span className="font-mono text-xs text-slate-400">#{shortId(item.id)}</span>
-                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${STATUS_CLASSES[item.applicationStatus] || ""}`}>
+                    <span className={statusBadgeClasses(item.applicationStatus)}>
                       {STATUS_LABELS[item.applicationStatus] || item.applicationStatus}
                     </span>
                   </div>
@@ -315,8 +323,6 @@ export default function CopyrightManager({ initialSubmissions = [], currentUser 
                       )}
                       <a
                         href={`/admin/copyright/${item.id}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
                         onClick={(e) => { e.stopPropagation(); }}
                         className="bg-[#003D33] text-white text-[11px] font-bold px-3.5 py-1.5 rounded-lg hover:bg-[#002B24] transition cursor-pointer shadow-sm"
                       >
@@ -346,7 +352,7 @@ export default function CopyrightManager({ initialSubmissions = [], currentUser 
                   {filtered.map((item) => (
                     <tr
                       key={item.id}
-                      onClick={() => window.open(`/admin/copyright/${item.id}`, "_blank")}
+                      onClick={() => router.push(`/admin/copyright/${item.id}`)}
                       className="hover:bg-slate-50/80 transition-colors cursor-pointer"
                     >
                       <td className="px-4 py-3.5 font-mono text-xs text-slate-500" title={item.id}>
@@ -365,7 +371,7 @@ export default function CopyrightManager({ initialSubmissions = [], currentUser 
                         <span className="inline-block" dir="ltr">{formatDate(item.createdAt)}</span>
                       </td>
                       <td className="px-4 py-3.5">
-                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${STATUS_CLASSES[item.applicationStatus] || ""}`}>
+                        <span className={statusBadgeClasses(item.applicationStatus)}>
                           {STATUS_LABELS[item.applicationStatus] || item.applicationStatus}
                         </span>
                       </td>
@@ -373,8 +379,6 @@ export default function CopyrightManager({ initialSubmissions = [], currentUser 
                         <div className="flex items-center justify-center gap-2">
                           <a
                             href={`/admin/copyright/${item.id}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
                             onClick={(e) => { e.stopPropagation(); }}
                             className="inline-block bg-slate-100 text-slate-800 text-xs font-extrabold px-3 py-1.5 rounded-lg hover:bg-[#003D33] hover:text-white transition cursor-pointer"
                           >
