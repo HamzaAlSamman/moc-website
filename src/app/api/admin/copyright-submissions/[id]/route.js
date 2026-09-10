@@ -46,7 +46,7 @@ export async function PATCH(request, { params }) {
   if (!data || typeof data !== "object" || Array.isArray(data)) {
     return NextResponse.json({ error: "بيانات الطلب غير صالحة" }, { status: 400 });
   }
-  for (const field of ["applicationStatus", "assessorReportFile", "studiesRecommendationsFile", "reviewNote", "deficiencyNote", "internalRefNumber", "centerDeliveryMethod"]) {
+  for (const field of ["applicationStatus", "assessorReportFile", "studiesRecommendationsFile", "reviewNote", "deficiencyNote", "internalRefNumber"]) {
     if (data[field] !== undefined && (typeof data[field] !== "string" || data[field].length > 20000)) {
       return NextResponse.json({ error: `قيمة غير صالحة: ${field}` }, { status: 400 });
     }
@@ -58,7 +58,6 @@ export async function PATCH(request, { params }) {
     reviewNote,
     deficiencyNote,
     internalRefNumber,
-    centerDeliveryMethod,
   } = data;
 
   if (applicationStatus && !ALLOWED_STATUSES.includes(applicationStatus)) {
@@ -136,13 +135,6 @@ export async function PATCH(request, { params }) {
     }
   }
 
-  // Confirm arrival + release: the officer must record how the certificate
-  // left their hands (this is what the completed-email branch below reads).
-  if (applicationStatus === "completed" && existing.applicationStatus === "pending_center_delivery"
-    && !["paper", "electronic"].includes(centerDeliveryMethod)) {
-    return NextResponse.json({ error: "يجب تحديد طريقة تسليم الشهادة (ورقية أو إلكترونية)" }, { status: 400 });
-  }
-
   // Scope enforcement: a center officer may only confirm a delivery addressed
   // to their own center. Not expressible in canTransitionCopyright (which only
   // knows roles and statuses) — same pattern as the STUDIES_ASSESSOR/HEAD/
@@ -161,7 +153,6 @@ export async function PATCH(request, { params }) {
   if (isPaymentCorrection) updateData.paymentStatus = correctionTarget === "submitted" ? "pending" : "initial_paid";
   if (applicationStatus === "pending_center_delivery") updateData.assignedCenterId = dispatchCenter.id;
   if (applicationStatus === "completed" && existing.applicationStatus === "pending_center_delivery") {
-    updateData.centerDeliveryMethod = centerDeliveryMethod;
     updateData.centerConfirmedAt = new Date();
     updateData.centerConfirmedById = session.userId;
   }

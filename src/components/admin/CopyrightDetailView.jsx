@@ -321,8 +321,6 @@ export default function CopyrightDetailView({ submission, currentUser, deliveryC
   // Suspend/reject decision awaiting the reviewer's written reason.
   const [decision, setDecision] = useState(null); // { status }
   const [decisionNote, setDecisionNote] = useState("");
-  // Center officer records how they handed the certificate over.
-  const [deliveryMethod, setDeliveryMethod] = useState("");
 
   // Reset the per-stage note field whenever the stage changes.
   useEffect(() => {
@@ -675,7 +673,7 @@ export default function CopyrightDetailView({ submission, currentUser, deliveryC
                       {sub.assignedCenter.governorate} — {sub.assignedCenter.nameAr}
                       {sub.centerConfirmedAt && (
                         <span className="text-[10px] font-black text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
-                          وصل {sub.centerDeliveryMethod === "paper" ? "— سُلّم ورقياً" : "— سُلّم إلكترونياً"}
+                          وصل — تم التسليم
                         </span>
                       )}
                     </p>
@@ -1285,36 +1283,12 @@ export default function CopyrightDetailView({ submission, currentUser, deliveryC
                     <div className="space-y-3">
                       <div className="bg-purple-50 border border-purple-200 rounded-2xl p-4 text-xs text-purple-800 font-semibold flex gap-2">
                         <Info className="w-4 h-4 shrink-0 mt-0.5 text-purple-600" />
-                        <p>بانتظار وصول المصنف إلى «{sub.assignedCenter?.nameAr}». عند وصوله، أكّد الاستلام وحدّد طريقة تسليم الشهادة للمواطن.</p>
-                      </div>
-
-                      <div className="space-y-2">
-                        <span className="text-xs text-slate-550 font-bold block">طريقة تسليم الشهادة *:</span>
-                        <div className="grid grid-cols-2 gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setDeliveryMethod("paper")}
-                            className={`py-2.5 rounded-xl text-xs font-bold border transition cursor-pointer ${
-                              deliveryMethod === "paper" ? "bg-[#003D33] text-white border-[#003D33]" : "bg-white text-slate-600 border-slate-250 hover:border-[#003D33]/40"
-                            }`}
-                          >
-                            ورقياً (حضور شخصي)
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setDeliveryMethod("electronic")}
-                            className={`py-2.5 rounded-xl text-xs font-bold border transition cursor-pointer ${
-                              deliveryMethod === "electronic" ? "bg-[#003D33] text-white border-[#003D33]" : "bg-white text-slate-600 border-slate-250 hover:border-[#003D33]/40"
-                            }`}
-                          >
-                            إلكترونياً (PDF بالبريد)
-                          </button>
-                        </div>
+                        <p>بانتظار وصول المصنف إلى «{sub.assignedCenter?.nameAr}». عند وصوله، أكّد الاستلام — يصدر للمواطن نسخة ورقية حضورياً ونسخة إلكترونية عبر البريد معاً.</p>
                       </div>
 
                       <button
-                        onClick={() => handleAction(sub.id, "completed", { centerDeliveryMethod: deliveryMethod })}
-                        disabled={!!actionLoading || !deliveryMethod}
+                        onClick={() => handleAction(sub.id, "completed")}
+                        disabled={!!actionLoading}
                         className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold py-3 rounded-2xl transition shadow-md text-xs cursor-pointer flex items-center justify-center gap-1.5"
                       >
                         {actionLoading === "completed" ? <><Loader2 className="w-4 h-4 animate-spin" /> جارٍ التأكيد...</> : "تأكيد الاستلام وإصدار الشهادة"}
