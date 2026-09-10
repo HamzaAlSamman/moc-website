@@ -589,7 +589,7 @@ export default function CopyrightDetailView({ submission, currentUser, centers =
 
         <div className="print:hidden flex items-center gap-2">
           <button
-            onClick={() => window.close()}
+            onClick={() => router.push("/admin/copyright")}
             className="bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 text-xs font-bold px-4 py-2.5 rounded-xl transition cursor-pointer flex items-center gap-1.5 shadow-sm"
           >
             إغلاق الصفحة
