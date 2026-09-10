@@ -40,11 +40,21 @@ test("final fee verification dispatches to a cultural center instead of completi
   assert.equal(canTransitionCopyright("ADMIN", "final_review", "pending_center_delivery"), true);
 });
 
-test("only a cultural center officer completes a delivery, and only from pending_center_delivery", () => {
-  assert.equal(canTransitionCopyright("CULTURAL_CENTER_OFFICER", "pending_center_delivery", "completed"), true);
-  assert.equal(canTransitionCopyright("CULTURAL_CENTER_OFFICER", "final_review", "completed"), false);
-  assert.equal(canTransitionCopyright("FINANCE", "pending_center_delivery", "completed"), false);
-  assert.equal(canTransitionCopyright("ADMIN", "pending_center_delivery", "completed"), true);
+test("only a cultural center officer confirms a delivery, and only from pending_center_delivery", () => {
+  assert.equal(canTransitionCopyright("CULTURAL_CENTER_OFFICER", "pending_center_delivery", "pending_certificate"), true);
+  assert.equal(canTransitionCopyright("CULTURAL_CENTER_OFFICER", "final_review", "pending_certificate"), false);
+  assert.equal(canTransitionCopyright("CULTURAL_CENTER_OFFICER", "pending_center_delivery", "completed"), false);
+  assert.equal(canTransitionCopyright("FINANCE", "pending_center_delivery", "pending_certificate"), false);
+  assert.equal(canTransitionCopyright("ADMIN", "pending_center_delivery", "pending_certificate"), true);
+});
+
+test("only the studies assessor or head issue the certificate, and only from pending_certificate", () => {
+  assert.equal(canTransitionCopyright("STUDIES_ASSESSOR", "pending_certificate", "completed"), true);
+  assert.equal(canTransitionCopyright("STUDIES_HEAD", "pending_certificate", "completed"), true);
+  assert.equal(canTransitionCopyright("STUDIES_ASSESSOR", "pending_center_delivery", "completed"), false);
+  assert.equal(canTransitionCopyright("CULTURAL_CENTER_OFFICER", "pending_certificate", "completed"), false);
+  assert.equal(canTransitionCopyright("FINANCE", "pending_certificate", "completed"), false);
+  assert.equal(canTransitionCopyright("ADMIN", "pending_certificate", "completed"), true);
 });
 
 test("public copyright DTO never exposes attachments or internal review data", () => {

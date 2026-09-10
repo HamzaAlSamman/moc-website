@@ -3,13 +3,16 @@ export const MAX_COPYRIGHT_WORK_BYTES = 100 * 1024 * 1024;
 const COPYRIGHT_TRANSITIONS = {
   FINANCE: new Set(["finance_review:under_review", "final_review:pending_center_delivery", "finance_review:submitted", "final_review:pending_fees", "finance_review:rejected", "final_review:rejected"]),
   LEGAL_DIRECTOR: new Set(["under_review:pending_final_approval", "under_review:suspended", "under_review:rejected"]),
-  STUDIES_ASSESSOR: new Set(["under_review:under_review", "under_review:suspended", "under_review:rejected"]),
-  STUDIES_HEAD: new Set(["under_review:under_review", "under_review:suspended", "under_review:rejected"]),
+  // Also issue the certificate (pending_certificate:completed) — reuses these
+  // two existing roles instead of a new dedicated one, same people who already
+  // handle the technical study earlier in the same case.
+  STUDIES_ASSESSOR: new Set(["under_review:under_review", "under_review:suspended", "under_review:rejected", "pending_certificate:completed"]),
+  STUDIES_HEAD: new Set(["under_review:under_review", "under_review:suspended", "under_review:rejected", "pending_certificate:completed"]),
   DEPUTY_MINISTER: new Set(["pending_final_approval:pending_fees", "pending_final_approval:suspended", "pending_final_approval:rejected"]),
   // Scoped to their own center by a DB lookup in the route handler (this graph
   // only knows roles and statuses, not which center a submission or officer
   // belongs to) — see PATCH /api/admin/copyright-submissions/[id].
-  CULTURAL_CENTER_OFFICER: new Set(["pending_center_delivery:completed"]),
+  CULTURAL_CENTER_OFFICER: new Set(["pending_center_delivery:pending_certificate"]),
 };
 
 const COPYRIGHT_STATUS_GRAPH = {
@@ -20,7 +23,8 @@ const COPYRIGHT_STATUS_GRAPH = {
   pending_final_approval: new Set(["pending_fees", "suspended", "rejected"]),
   pending_fees: new Set(["final_review"]),
   final_review: new Set(["pending_center_delivery", "pending_fees", "rejected"]),
-  pending_center_delivery: new Set(["completed"]),
+  pending_center_delivery: new Set(["pending_certificate"]),
+  pending_certificate: new Set(["completed"]),
 };
 
 const PUBLIC_COPYRIGHT_FIELDS = [
@@ -137,6 +141,12 @@ export function toPublicCopyrightSubmission(submission) {
   publicData.authors = Array.isArray(submission.authors)
     ? submission.authors.filter((author) => typeof author?.name === "string").map(({ name }) => ({ name }))
     : [];
+  // Only set once dispatched (pending_center_delivery onward) — tells the
+  // citizen exactly where to deliver their deposit copy in person, mirrored
+  // from the same info the dispatch email already sends.
+  if (submission.assignedCenter) {
+    publicData.assignedCenter = { nameAr: submission.assignedCenter.nameAr, governorate: submission.assignedCenter.governorate };
+  }
   return publicData;
 }
 
