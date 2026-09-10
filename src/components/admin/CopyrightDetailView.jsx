@@ -35,6 +35,7 @@ const STATUS_LABELS = {
   pending_fees: "بانتظار استكمال الرسوم",
   final_review: "قيد التدقيق المالي للرسم النهائي",
   pending_center_delivery: "بانتظار التسليم عبر المركز الثقافي",
+  pending_certificate: "بانتظار رفع الشهادة وإرسالها",
   completed: "منجز"
 };
 
@@ -77,6 +78,7 @@ const STATUS_TOKENS = {
   pending_fees:           { pill: "bg-orange-50 text-orange-750 border-orange-200", bar: "bg-orange-500" },
   final_review:           { pill: "bg-teal-50 text-teal-700 border-teal-200",       bar: "bg-teal-500" },
   pending_center_delivery: { pill: "bg-purple-50 text-purple-750 border-purple-200", bar: "bg-purple-500" },
+  pending_certificate:    { pill: "bg-sky-50 text-sky-750 border-sky-200",           bar: "bg-sky-500" },
   completed:              { pill: "bg-emerald-100 text-emerald-800 border-emerald-300", bar: "bg-emerald-500" },
 };
 
@@ -152,6 +154,7 @@ const WORKFLOW_STEPS = [
   { key: "fees",      label: "استكمال الرسوم النهائية" },
   { key: "final_finance", label: "تدقيق المالية للرسم النهائي" },
   { key: "center_delivery", label: "الإرسال إلى المركز الثقافي وتأكيد الاستلام" },
+  { key: "certificate", label: "رفع الشهادة الموقّعة وإرسالها" },
   { key: "completed", label: "إصدار شهادة الحماية والأرشفة" },
 ];
 
@@ -185,7 +188,8 @@ function getStepNote(sub, stepIndex) {
 // we lean on the same file checks the actions panel uses.
 function getStepIndex(sub) {
   const s = sub.applicationStatus;
-  if (s === "completed") return 9;
+  if (s === "completed") return 10;
+  if (s === "pending_certificate") return 9;
   if (s === "pending_center_delivery") return 8;
   if (s === "final_review") return 7;
   if (s === "pending_fees") return 6;
@@ -321,6 +325,9 @@ export default function CopyrightDetailView({ submission, currentUser, deliveryC
   // Suspend/reject decision awaiting the reviewer's written reason.
   const [decision, setDecision] = useState(null); // { status }
   const [decisionNote, setDecisionNote] = useState("");
+  // The signed certificate a studies officer uploads to close the case.
+  const [certificateFile, setCertificateFile] = useState(null);
+  const [certificateFileName, setCertificateFileName] = useState("");
 
   // Reset the per-stage note field whenever the stage changes.
   useEffect(() => {
@@ -1283,21 +1290,70 @@ export default function CopyrightDetailView({ submission, currentUser, deliveryC
                     <div className="space-y-3">
                       <div className="bg-purple-50 border border-purple-200 rounded-2xl p-4 text-xs text-purple-800 font-semibold flex gap-2">
                         <Info className="w-4 h-4 shrink-0 mt-0.5 text-purple-600" />
-                        <p>بانتظار وصول المصنف إلى «{sub.assignedCenter?.nameAr}». عند وصوله، أكّد الاستلام — يصدر للمواطن نسخة ورقية حضورياً ونسخة إلكترونية عبر البريد معاً.</p>
+                        <p>بانتظار وصول المصنف إلى «{sub.assignedCenter?.nameAr}». عند وصوله، أكّد الاستلام — تُحال المعاملة بعدها لرفع الشهادة الرسمية وإرسالها.</p>
                       </div>
 
                       <button
-                        onClick={() => handleAction(sub.id, "completed")}
+                        onClick={() => handleAction(sub.id, "pending_certificate")}
                         disabled={!!actionLoading}
                         className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold py-3 rounded-2xl transition shadow-md text-xs cursor-pointer flex items-center justify-center gap-1.5"
                       >
-                        {actionLoading === "completed" ? <><Loader2 className="w-4 h-4 animate-spin" /> جارٍ التأكيد...</> : "تأكيد الاستلام وإصدار الشهادة"}
+                        {actionLoading === "pending_certificate" ? <><Loader2 className="w-4 h-4 animate-spin" /> جارٍ التأكيد...</> : "تأكيد استلام المصنف"}
                       </button>
                     </div>
                   ) : (
                     <div className="bg-slate-50 border border-slate-250 rounded-2xl p-4 text-xs text-slate-655 font-semibold flex gap-2">
                       <Info className="w-4.5 h-4.5 shrink-0 mt-0.5 text-slate-400" />
                       <p>المعاملة حالياً بانتظار تأكيد استلام المصنف من «{sub.assignedCenter?.nameAr || "المركز الثقافي المعني"}».</p>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* 5c. Pending certificate — the studies assessor or head uploads the
+                  signed certificate and sends it; this is what closes the case. */}
+              {sub.applicationStatus === "pending_certificate" && (
+                <>
+                  {(currentUser?.role === "SUPER_ADMIN" || currentUser?.role === "ADMIN"
+                    || currentUser?.role === "STUDIES_ASSESSOR" || currentUser?.role === "STUDIES_HEAD") ? (
+                    <div className="space-y-3">
+                      <div className="bg-sky-50 border border-sky-200 rounded-2xl p-4 text-xs text-sky-800 font-semibold flex gap-2">
+                        <Info className="w-4 h-4 shrink-0 mt-0.5 text-sky-600" />
+                        <p>استلم المركز الثقافي نسخة الإيداع. ارفع الشهادة الرسمية الموقّعة ثم اضغط إرسال لتصدر للمواطن.</p>
+                      </div>
+
+                      <div className="space-y-2">
+                        <span className="text-xs text-slate-550 font-bold block">الشهادة الرسمية *:</span>
+                        <label className="flex items-center justify-center gap-2 w-full text-xs border-2 border-dashed border-slate-250 rounded-xl p-4 cursor-pointer hover:border-[#003D33]/40 transition">
+                          <input
+                            type="file"
+                            accept="application/pdf,image/jpeg,image/png,image/webp"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              setCertificateFileName(file.name);
+                              const reader = new FileReader();
+                              reader.onload = (ev) => setCertificateFile(ev.target.result);
+                              reader.readAsDataURL(file);
+                            }}
+                          />
+                          <span className="text-slate-600 font-bold">{certificateFileName || "اختر ملف الشهادة (PDF أو صورة)..."}</span>
+                        </label>
+                      </div>
+
+                      <button
+                        onClick={() => handleAction(sub.id, "completed", { certificateFile })}
+                        disabled={!!actionLoading || !certificateFile}
+                        className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold py-3 rounded-2xl transition shadow-md text-xs cursor-pointer flex items-center justify-center gap-1.5"
+                      >
+                        {actionLoading === "completed" ? <><Loader2 className="w-4 h-4 animate-spin" /> جارٍ الإرسال...</> : "إرسال الشهادة للمواطن"}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="bg-slate-50 border border-slate-250 rounded-2xl p-4 text-xs text-slate-655 font-semibold flex gap-2">
+                      <Info className="w-4.5 h-4.5 shrink-0 mt-0.5 text-slate-400" />
+                      <p>المعاملة حالياً بانتظار رفع الشهادة الرسمية من قسم الدراسات.</p>
                     </div>
                   )}
                 </>

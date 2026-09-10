@@ -1399,6 +1399,8 @@ export default function CopyrightPage(props) {
       rejected: "مرفوض",
       pending_fees: "بانتظار استكمال الرسوم",
       final_review: "قيد التدقيق المالي النهائي",
+      pending_center_delivery: "بانتظار التسليم عبر المركز الثقافي",
+      pending_certificate: "بانتظار رفع الشهادة وإرسالها",
       completed: "منجز",
       certificate_issued: "منجز"
     };
@@ -1432,6 +1434,8 @@ export default function CopyrightPage(props) {
       { key: "pending_final_approval", titleAr: "الموافقة النهائية", titleEn: "Final Approval" },
       { key: "pending_fees", titleAr: "استكمال الرسوم", titleEn: "Pending Fees" },
       { key: "final_review", titleAr: "التدقيق المالي النهائي", titleEn: "Final Finance Review" },
+      { key: "pending_center_delivery", titleAr: "الإرسال إلى المركز الثقافي وتأكيد الاستلام", titleEn: "Cultural Center Delivery" },
+      { key: "pending_certificate", titleAr: "رفع الشهادة وإرسالها", titleEn: "Certificate Issuance" },
       { key: "completed", titleAr: "منجز", titleEn: "Completed" }
     ];
 
@@ -1793,6 +1797,47 @@ export default function CopyrightPage(props) {
             >
               <span>{isRtl ? `تسديد الرسم النهائي (${fees.finalTotal.toLocaleString()} ل.س)` : `Pay Final Fee (${fees.finalTotal.toLocaleString()} L.S.)`}</span>
             </button>
+          </div>
+        )}
+
+        {/* 4.5. Pending center delivery — final fee cleared, deposit copy must
+            reach the assigned cultural center in person before the
+            certificate is issued. */}
+        {sub.applicationStatus === "pending_center_delivery" && (
+          <div className="bg-[#054239]/5 border-2 border-[#b9a779]/30 rounded-2xl p-5 space-y-3 text-start">
+            <h5 className="text-sm font-extrabold text-[#054239]">
+              {isRtl ? "الخطوة الأخيرة: تسليم نسخة الإيداع" : "Final Step: Deliver Your Deposit Copy"}
+            </h5>
+            <p className="text-xs text-slate-655 font-bold leading-normal">
+              {isRtl
+                ? "تم تدقيق واعتماد الرسم النهائي. لإصدار شهادة حماية حقوق المؤلف الرسمية، يتبقى تسليم نسخة الإيداع من المصنف شخصياً إلى المركز الثقافي التالي. بعد استلام المركز لها تنتقل المعاملة لإصدار الشهادة الرسمية وإرسالها إليك."
+                : "The final fee has been verified. To issue your official certificate, you still need to deliver your deposit copy in person to the cultural center below. Once the center confirms receipt, your case moves to certificate issuance."}
+            </p>
+
+            <div className="bg-white p-4 rounded-xl border border-slate-200 text-xs space-y-1">
+              <span className="text-slate-450 font-bold block">
+                {isRtl ? `المركز الثقافي المعتمد لمحافظة ${sub.province}:` : `Assigned cultural center for ${sub.province}:`}
+              </span>
+              <span className="text-[#054239] font-black text-sm block">
+                {sub.assignedCenter?.nameAr || (isRtl ? "سيصلك اسم المركز عبر بريدك الإلكتروني قريباً" : "Center details will be emailed to you shortly")}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* 4.6. Pending certificate — deposit copy received at the center;
+            the studies officer still has to upload and send the signed
+            certificate before the case closes. */}
+        {sub.applicationStatus === "pending_certificate" && (
+          <div className="bg-[#054239]/5 border-2 border-[#b9a779]/30 rounded-2xl p-5 space-y-3 text-start">
+            <h5 className="text-sm font-extrabold text-[#054239]">
+              {isRtl ? "تم استلام نسخة الإيداع — جارٍ إصدار الشهادة" : "Deposit Copy Received — Certificate Being Issued"}
+            </h5>
+            <p className="text-xs text-slate-655 font-bold leading-normal">
+              {isRtl
+                ? "أكّد المركز الثقافي استلام نسخة الإيداع من مصنفك. تقوم مديرية الدراسات الآن بإصدار شهادة حماية حقوق المؤلف الرسمية، وستصلك عبر بريدك الإلكتروني فور إرسالها."
+                : "The cultural center has confirmed receiving your deposit copy. The studies department is now issuing your official certificate, which will be emailed to you once sent."}
+            </p>
           </div>
         )}
 

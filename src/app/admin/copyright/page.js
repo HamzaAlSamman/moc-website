@@ -39,7 +39,7 @@ export default async function AdminCopyrightPage() {
   // Group the 7 workflow statuses into the 4 buckets staff actually
   // care about at a glance — mirrors the stat-chip pattern on
   // /admin/event-submissions.
-  const STAFF_ACTION_STATUSES = ["finance_review", "under_review", "pending_final_approval", "final_review", "pending_center_delivery"];
+  const STAFF_ACTION_STATUSES = ["finance_review", "under_review", "pending_final_approval", "final_review", "pending_center_delivery", "pending_certificate"];
   const CITIZEN_WAIT_STATUSES = ["submitted", "suspended", "pending_fees"];
   const DONE_STATUSES = ["completed"];
 

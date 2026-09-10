@@ -35,6 +35,7 @@ const STATUS_LABELS = {
   pending_fees: "بانتظار استكمال الرسوم",
   final_review: "قيد التدقيق المالي للرسم النهائي",
   pending_center_delivery: "بانتظار التسليم عبر المركز الثقافي",
+  pending_certificate: "بانتظار رفع الشهادة وإرسالها",
   completed: "منجز"
 };
 
@@ -48,6 +49,7 @@ const STATUS_CLASSES = {
   pending_fees: "bg-orange-50 text-orange-700 border-orange-200",
   final_review: "bg-teal-50 text-teal-700 border-teal-200",
   pending_center_delivery: "bg-purple-50 text-purple-700 border-purple-200",
+  pending_certificate: "bg-sky-50 text-sky-700 border-sky-200",
   completed: "bg-emerald-100 text-emerald-800 border-emerald-300"
 };
 
