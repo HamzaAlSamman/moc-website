@@ -23,6 +23,7 @@ export default function ImageWithFallback({
   sizes,
   preload = false,
   priority = false,
+  onLoad,
   ...rest
 }) {
   // stages: "optimized" -> "raw" -> "failed"
@@ -66,6 +67,7 @@ export default function ImageWithFallback({
         loading={preload || priority ? "eager" : "lazy"}
         className={fill ? `absolute inset-0 h-full w-full ${className}` : className}
         onError={() => setStage("failed")}
+        onLoad={onLoad}
       />
     );
   }
@@ -80,6 +82,7 @@ export default function ImageWithFallback({
       priority={priority}
       className={className}
       onError={() => setStage("raw")}
+      onLoad={onLoad}
       {...rest}
     />
   );

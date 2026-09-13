@@ -957,16 +957,16 @@ export default function CulturalCalendarSection({ locale, isDedicated = false })
                 <div className="absolute inset-0 bg-[url(/svg/unisco_pattern.svg)] bg-repeat" />
               </div>
               
-              <div className="relative z-10 max-w-2xl space-y-3">
-                <span className="text-[10px] uppercase text-[#A48E68] font-extrabold tracking-widest leading-none border border-[#A48E68]/30 rounded-full px-3 py-1 bg-white/5">
+              <div className="relative z-10 max-w-2xl space-y-3 text-start">
+                <span className="inline-block text-[10px] uppercase text-[#A48E68] font-extrabold tracking-widest leading-none border border-[#A48E68]/30 rounded-full px-3 py-1 bg-white/5">
                   {isRtl ? "المشاركة الثقافية" : "Cultural Collaboration"}
                 </span>
-                <h3 className="text-white font-extrabold text-xl sm:text-2xl font-sans">
+                <h3 className="text-white font-extrabold text-xl sm:text-2xl font-sans text-start">
                   {isRtl 
                     ? "هل ترغب في نشر فعاليتك الثقافية على الروزنامة الثقافية؟" 
                     : "Do you want to publish your event on the National Calendar?"}
                 </h3>
-                <p className="text-slate-300 text-xs sm:text-sm leading-relaxed font-sans max-w-xl">
+                <p className="text-slate-300 text-xs sm:text-sm leading-relaxed font-sans max-w-xl text-start">
                   {isRtl 
                     ? "تتيح وزارة الثقافة للمواطنين تقديم طلب إقامة فعالياتهم لتضاف إلى الروزنامة الثقافية بعد مراجعتها وتدقيقها."
                     : "The Ministry of Culture invites cultural centers, NGO groups, and independent artists to suggest events to be listed on the national portal."}

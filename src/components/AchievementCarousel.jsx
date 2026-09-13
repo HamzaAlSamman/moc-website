@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import Image from "next/image";
+import ImageWithFallback from "./ImageWithFallback";
 
 /**
  * Instagram-style 1:1 carousel for achievement media (images + videos).
@@ -156,7 +156,7 @@ export default function AchievementCarousel({
                 )}
               </div>
             ) : (
-              <Image
+              <ImageWithFallback
                 src={s.url}
                 alt={alt}
                 fill

@@ -2,7 +2,7 @@ import React from "react";
 
 export default function DecorativeCorners({ className = "" }) {
   return (
-    <div className={className}>
+    <div className={`pointer-events-none absolute inset-0 ${className}`}>
       {/* Top Left */}
       <div className="absolute top-2.5 left-2.5 w-6 h-6 pointer-events-none z-10 border-t-2 border-l-2 border-[#B9A779]/80 rounded-tl-sm transition-all duration-300 group-hover:top-2 group-hover:left-2"></div>
       

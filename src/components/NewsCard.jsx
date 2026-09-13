@@ -47,8 +47,6 @@ export default function NewsCard({ article, locale }) {
           sizes="(max-width: 768px) 100vw, 40vw"
           imageClassName="transition-transform duration-700 ease-out group-hover:scale-105"
         />
-        {/* Shadow Overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent"></div>
 
         {/* Floating Category/Platform Indicator */}
         <div className={`absolute top-2 ${isRtl ? "right-2" : "left-2"} z-2 bg-white text-xs text-[#6B6B6B] font-semibold px-2 py-1 rounded-full shadow flex items-center gap-1.5`}>

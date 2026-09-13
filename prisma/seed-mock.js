@@ -311,7 +311,7 @@ async function main() {
       governorateEn: "Damascus",
       startDate: new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1, 18, 0), // started yesterday
       endDate: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 3, 22, 0), // ends in 3 days
-      featuredImage: "/images/event-fest.jpg",
+      featuredImage: "/images/cultural-principle1.jpg",
       status: "ONGOING",
       eventCategoryId: eventCategoryMap["مهرجان ثقافي"],
       eventKindId: eventKindMap["مهرجان"],
@@ -328,7 +328,7 @@ async function main() {
       governorateEn: "Damascus",
       startDate: new Date(today.getFullYear(), today.getMonth(), today.getDate() - 2, 10, 0), // started 2 days ago
       endDate: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 2, 21, 0), // ends in 2 days
-      featuredImage: "/images/event-book.jpg",
+      featuredImage: "/images/cultural-principle2.jpg",
       status: "ONGOING",
       eventCategoryId: eventCategoryMap["معرض فنون تشكيلية"], // fits in fine arts / exhibitions
       eventKindId: eventKindMap["معرض"],
@@ -346,7 +346,7 @@ async function main() {
       governorateEn: "Damascus",
       startDate: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 4, 20, 0), // starts in 4 days
       endDate: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 4, 22, 30),
-      featuredImage: "/images/event-music.jpg",
+      featuredImage: "/images/cultural-principle3.jpg",
       status: "UPCOMING",
       eventCategoryId: eventCategoryMap["حفل غنائي وموسيقي"],
       eventKindId: eventKindMap["حفل"],
@@ -369,7 +369,7 @@ async function main() {
       governorateEn: "Damascus",
       startDate: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 7, 19, 0), // starts in 7 days
       endDate: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 9, 21, 30), // runs 3 days
-      featuredImage: "/images/event-theater.jpg",
+      featuredImage: "/images/cultural-principle4.jpg",
       status: "UPCOMING",
       eventCategoryId: eventCategoryMap["عرض مسرحي"],
       eventKindId: eventKindMap["مسرحية"],
@@ -392,7 +392,7 @@ async function main() {
       governorateEn: "Damascus",
       startDate: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 12, 17, 30), // in 12 days
       endDate: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 12, 19, 30),
-      featuredImage: "/images/event-symp.jpg",
+      featuredImage: "/images/cultural-principle5.jpg",
       status: "UPCOMING",
       eventCategoryId: eventCategoryMap["ندوات ومحاضرات فكرية"],
       eventKindId: eventKindMap["ندوة"],
@@ -414,7 +414,7 @@ async function main() {
       governorateEn: "Homs",
       startDate: new Date(today.getFullYear(), today.getMonth() - 1, 10, 10, 0), // 1 month ago
       endDate: new Date(today.getFullYear(), today.getMonth() - 1, 15, 20, 0),
-      featuredImage: "/images/event-art.jpg",
+      featuredImage: "/images/cultural-principle6.jpg",
       status: "COMPLETED",
       eventCategoryId: eventCategoryMap["معرض فنون تشكيلية"],
       eventKindId: eventKindMap["معرض"],
@@ -432,7 +432,7 @@ async function main() {
       governorateEn: "Damascus",
       startDate: new Date(today.getFullYear(), today.getMonth() - 1, 24, 18, 0), // last month
       endDate: new Date(today.getFullYear(), today.getMonth() - 1, 24, 20, 30),
-      featuredImage: "/images/event-poet.jpg",
+      featuredImage: "/images/cultural-principle7.jpg",
       status: "COMPLETED",
       eventCategoryId: eventCategoryMap["ندوات ومحاضرات فكرية"],
       eventKindId: eventKindMap["ندوة"],
@@ -451,7 +451,7 @@ async function main() {
       governorateEn: "Aleppo",
       startDate: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 15, 11, 0), // in 15 days
       endDate: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 19, 16, 0),
-      featuredImage: "/images/event-kids.jpg",
+      featuredImage: "/images/panorama.jpg",
       status: "UPCOMING",
       eventCategoryId: eventCategoryMap["ورشات تفاعلية للأطفال"],
       eventKindId: eventKindMap["مهرجان"],
@@ -470,7 +470,7 @@ async function main() {
       governorateEn: "Latakia",
       startDate: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 20, 10, 0), // in 20 days
       endDate: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 25, 20, 0),
-      featuredImage: "/images/event-photo.jpg",
+      featuredImage: "/images/aleppo.jpg",
       status: "UPCOMING",
       eventCategoryId: eventCategoryMap["معرض فنون تشكيلية"],
       eventKindId: eventKindMap["معرض"],
@@ -488,7 +488,7 @@ async function main() {
       governorateEn: "Idlib",
       startDate: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 28, 11, 0), // in 28 days
       endDate: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 28, 15, 0),
-      featuredImage: "/images/event-ant.jpg",
+      featuredImage: "/images/ministry.jpg",
       status: "UPCOMING",
       eventCategoryId: eventCategoryMap["ندوات ومحاضرات فكرية"],
       eventKindId: eventKindMap["ندوة"],
