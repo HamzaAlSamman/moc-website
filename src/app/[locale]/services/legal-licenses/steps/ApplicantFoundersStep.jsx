@@ -13,9 +13,10 @@ const managerFields = [
 ];
 
 const founderFields = [
-  ["fullName", "الاسم الكامل", "Full name"],
+  ["fullName", "الاسم واللقب والنسب", "Full name and lineage"],
   ["nationalId", "الرقم الوطني", "National ID", "text", "ltr"],
   ["birthDate", "تاريخ الميلاد", "Birth date", "date"],
+  ["nationality", "الجنسية", "Nationality"],
   ["occupation", "المهنة", "Occupation"],
   ["qualification", "المؤهل العلمي", "Qualification"],
   ["phone", "الهاتف", "Phone", "tel", "ltr"],
@@ -150,7 +151,7 @@ export default function ApplicantFoundersStep({
                     dir={dir}
                     isRtl={isRtl}
                     disabled={!canEditField(key, founder.id)}
-                    maxDate={key === "birthDate" ? new Date().toISOString().split("T")[0] : undefined}
+                    minDate={key === "birthDate" ? "1900-01-01" : undefined}
                     showPresets={key !== "birthDate"}
                   />
                 ))}

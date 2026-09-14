@@ -78,8 +78,7 @@ export default function LicenseGuideStep({
               <a
                 key={source.key}
                 href={source.publicUrl}
-                target="_blank"
-                rel="noreferrer"
+                download
                 className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-[#054239] outline-none hover:border-[#b9a779] focus-visible:ring-4 focus-visible:ring-[#b9a779]/25"
               >
                 <span>{isRtl ? source.label.ar : source.label.en}</span>

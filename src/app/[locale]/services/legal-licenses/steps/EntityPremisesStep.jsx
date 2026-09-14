@@ -7,9 +7,25 @@ const entityFields = [
   ["entityName", "اسم الجهة المقترح", "Proposed entity name", false],
   ["governorate", "المحافظة", "Governorate", false],
   ["address", "عنوان المقر", "Premises address", true],
-  ["purpose", "الغاية", "Purpose", true],
   ["objectives", "الأهداف", "Objectives", true],
   ["activityDescription", "وصف النشاط", "Activity description", true],
+];
+
+const SYRIAN_GOVERNORATES = [
+  ["دمشق", "Damascus"],
+  ["ريف دمشق", "Rif Dimashq"],
+  ["حلب", "Aleppo"],
+  ["حمص", "Homs"],
+  ["حماة", "Hama"],
+  ["اللاذقية", "Latakia"],
+  ["طرطوس", "Tartus"],
+  ["السويداء", "As-Suwayda"],
+  ["درعا", "Daraa"],
+  ["إدلب", "Idlib"],
+  ["دير الزور", "Deir ez-Zor"],
+  ["الرقة", "Ar-Raqqah"],
+  ["الحسكة", "Al-Hasakah"],
+  ["القنيطرة", "Quneitra"],
 ];
 
 function RequirementAnswer({ requirement, value, onChange, disabled, source, isRtl }) {
@@ -80,15 +96,22 @@ export default function EntityPremisesStep({
         <h3 className="mb-4 font-qomra text-lg font-black text-[#054239]">{isRtl ? "بيانات الجهة والمقر" : "Entity and premises"}</h3>
         <div className="grid gap-4 md:grid-cols-2">
           {entityFields.map(([key, ar, en, multiline]) => (
-            <StepField
-              key={key}
-              required
-              multiline={multiline}
-              label={isRtl ? ar : en}
-              value={form[key]}
-              onChange={(value) => update(key, value)}
-              disabled={!canEditField(key)}
-            />
+            <div key={key} className={key === "activityDescription" ? "md:col-span-2" : undefined}>
+              <StepField
+                required
+                multiline={multiline}
+                label={isRtl ? ar : en}
+                value={form[key]}
+                onChange={(value) => update(key, value)}
+                disabled={!canEditField(key)}
+                isRtl={isRtl}
+                options={key === "governorate" ? SYRIAN_GOVERNORATES.map(([arValue, enLabel]) => ({
+                  value: arValue,
+                  label: isRtl ? arValue : enLabel,
+                })) : undefined}
+                placeholder={key === "governorate" ? (isRtl ? "— اختر المحافظة —" : "— Select governorate —") : undefined}
+              />
+            </div>
           ))}
         </div>
       </section>

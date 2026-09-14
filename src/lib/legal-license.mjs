@@ -6,34 +6,42 @@ export const GENERAL_LEGAL_LICENSE_DOCUMENTS = Object.freeze([
   document("NATIONAL_ID_FRONT", "صورة الهوية - الوجه الأمامي", "National ID - front"),
   document("NATIONAL_ID_BACK", "صورة الهوية - الوجه الخلفي", "National ID - back"),
   document("CRIMINAL_RECORD", "لا حكم عليه", "Criminal record certificate"),
-  document("RESIDENCE_DOCUMENT", "إثبات الإقامة", "Proof of residence"),
   document("PERSONAL_PHOTO", "صورة شخصية", "Personal photo"),
+  document("FOUNDER_NON_EMPLOYMENT_CERTIFICATE", "شهادة غير عامل", "Non-employment certificate"),
   document("AUTHORIZATION", "وثيقة التفويض", "Authorization document"),
 ]);
 
 export const LEGAL_LICENSE_DOCUMENT_RULES = Object.freeze({
-  NATIONAL_ID_FRONT: Object.freeze({ owner: "FOUNDER", required: true, label: Object.freeze({ ar: "\u0627\u0644\u0647\u0648\u064a\u0629 - \u0627\u0644\u0648\u062c\u0647 \u0627\u0644\u0623\u0645\u0627\u0645\u064a", en: "National ID - front" }) }),
-  NATIONAL_ID_BACK: Object.freeze({ owner: "FOUNDER", required: true, label: Object.freeze({ ar: "\u0627\u0644\u0647\u0648\u064a\u0629 - \u0627\u0644\u0648\u062c\u0647 \u0627\u0644\u062e\u0644\u0641\u064a", en: "National ID - back" }) }),
-  CRIMINAL_RECORD: Object.freeze({ owner: "FOUNDER", required: true, label: Object.freeze({ ar: "\u0644\u0627 \u062d\u0643\u0645 \u0639\u0644\u064a\u0647", en: "Criminal record certificate" }) }),
-  RESIDENCE_DOCUMENT: Object.freeze({ owner: "FOUNDER", required: true, label: Object.freeze({ ar: "\u0625\u062b\u0628\u0627\u062a \u0627\u0644\u0625\u0642\u0627\u0645\u0629", en: "Proof of residence" }) }),
-  PERSONAL_PHOTO: Object.freeze({ owner: "FOUNDER", required: true, label: Object.freeze({ ar: "\u0635\u0648\u0631\u0629 \u0634\u062e\u0635\u064a\u0629", en: "Personal photo" }) }),
-  AUTHORIZATION: Object.freeze({ owner: "APPLICATION", required: true, label: Object.freeze({ ar: "\u0648\u062b\u064a\u0642\u0629 \u0627\u0644\u062a\u0641\u0648\u064a\u0636", en: "Authorization document" }) }),
-  FOUNDERS_MINUTES: Object.freeze({ owner: "APPLICATION", required: true, label: Object.freeze({ ar: "\u0645\u062d\u0636\u0631 \u0627\u062c\u062a\u0645\u0627\u0639 \u0627\u0644\u0645\u0624\u0633\u0633\u064a\u0646", en: "Founders meeting minutes" }) }),
-  ACTIVITY_PLAN: Object.freeze({ owner: "APPLICATION", required: true, label: Object.freeze({ ar: "\u062e\u0637\u0629 \u0627\u0644\u0646\u0634\u0627\u0637", en: "Activity plan" }) }),
-  OWNERSHIP_OR_LEASE: Object.freeze({ owner: "APPLICATION", required: true, label: Object.freeze({ ar: "\u0633\u0646\u062f \u0645\u0644\u0643\u064a\u0629 \u0623\u0648 \u0625\u064a\u062c\u0627\u0631", en: "Ownership or lease" }) }),
-  FLOOR_PLAN: Object.freeze({ owner: "APPLICATION", required: true, label: Object.freeze({ ar: "\u0645\u062e\u0637\u0637 \u0627\u0644\u0645\u0642\u0631", en: "Floor plan" }) }),
-  SAFETY_APPROVAL: Object.freeze({ owner: "APPLICATION", required: true, label: Object.freeze({ ar: "\u0645\u0648\u0627\u0641\u0642\u0629 \u0627\u0644\u0633\u0644\u0627\u0645\u0629", en: "Safety approval" }) }),
-  ARTICLES_OF_ASSOCIATION: Object.freeze({ owner: "APPLICATION", required: true, label: Object.freeze({ ar: "\u0627\u0644\u0646\u0638\u0627\u0645 \u0627\u0644\u0623\u0633\u0627\u0633\u064a", en: "Articles of association" }) }),
-  MEMBERS_LIST: Object.freeze({ owner: "APPLICATION", required: true, label: Object.freeze({ ar: "\u0642\u0627\u0626\u0645\u0629 \u0627\u0644\u0623\u0639\u0636\u0627\u0621", en: "Members list" }) }),
-  ARTISTIC_PROGRAM: Object.freeze({ owner: "APPLICATION", required: true, label: Object.freeze({ ar: "\u0627\u0644\u0628\u0631\u0646\u0627\u0645\u062c \u0627\u0644\u0641\u0646\u064a", en: "Artistic program" }) }),
-  PROFESSIONAL_CERTIFICATE: Object.freeze({ owner: "APPLICATION", required: true, label: Object.freeze({ ar: "\u0634\u0647\u0627\u062f\u0629 \u0645\u0647\u0646\u064a\u0629", en: "Professional certificate" }) }),
-  EQUIPMENT_LIST: Object.freeze({ owner: "APPLICATION", required: true, label: Object.freeze({ ar: "\u0642\u0627\u0626\u0645\u0629 \u0627\u0644\u062a\u062c\u0647\u064a\u0632\u0627\u062a", en: "Equipment list" }) }),
-  ARTWORK_PORTFOLIO: Object.freeze({ owner: "APPLICATION", required: true, label: Object.freeze({ ar: "\u0645\u0644\u0641 \u0627\u0644\u0623\u0639\u0645\u0627\u0644 \u0627\u0644\u0641\u0646\u064a\u0629", en: "Artwork portfolio" }) }),
-  COLLECTION_INVENTORY: Object.freeze({ owner: "APPLICATION", required: true, label: Object.freeze({ ar: "\u062c\u0631\u062f \u0627\u0644\u0645\u0642\u062a\u0646\u064a\u0627\u062a", en: "Collection inventory" }) }),
-  COLLECTION_PROVENANCE: Object.freeze({ owner: "APPLICATION", required: true, label: Object.freeze({ ar: "\u0645\u0635\u0627\u062f\u0631 \u0627\u0644\u0645\u0642\u062a\u0646\u064a\u0627\u062a", en: "Collection provenance" }) }),
-  ACADEMIC_QUALIFICATION: Object.freeze({ owner: "APPLICATION", required: true, label: Object.freeze({ ar: "\u0627\u0644\u0645\u0624\u0647\u0644 \u0627\u0644\u0639\u0644\u0645\u064a", en: "Academic qualification" }) }),
-  PROGRAM_AND_CURRICULUM: Object.freeze({ owner: "APPLICATION", required: true, label: Object.freeze({ ar: "\u0627\u0644\u0628\u0631\u0646\u0627\u0645\u062c \u0648\u0627\u0644\u0645\u0646\u0647\u0627\u062c", en: "Program and curriculum" }) }),
-  GALLERY_PROGRAM: Object.freeze({ owner: "APPLICATION", required: true, label: Object.freeze({ ar: "\u0628\u0631\u0646\u0627\u0645\u062c \u0627\u0644\u0635\u0627\u0644\u0629", en: "Gallery program" }) }),
+  NATIONAL_ID_FRONT: Object.freeze({ owner: "FOUNDER", required: true, label: Object.freeze({ ar: "الهوية - الوجه الأمامي", en: "National ID - front" }) }),
+  NATIONAL_ID_BACK: Object.freeze({ owner: "FOUNDER", required: true, label: Object.freeze({ ar: "الهوية - الوجه الخلفي", en: "National ID - back" }) }),
+  CRIMINAL_RECORD: Object.freeze({ owner: "FOUNDER", required: true, label: Object.freeze({ ar: "لا حكم عليه", en: "Criminal record certificate" }) }),
+  RESIDENCE_DOCUMENT: Object.freeze({ owner: "FOUNDER", required: true, label: Object.freeze({ ar: "إثبات الإقامة", en: "Proof of residence" }) }),
+  PERSONAL_PHOTO: Object.freeze({ owner: "FOUNDER", required: true, label: Object.freeze({ ar: "صورة شخصية", en: "Personal photo" }) }),
+  FOUNDER_ACADEMIC_QUALIFICATION: Object.freeze({ owner: "FOUNDER", required: true, label: Object.freeze({ ar: "شهادة المؤهل العلمي", en: "Academic qualification certificate" }) }),
+  FOUNDER_NON_EMPLOYMENT_CERTIFICATE: Object.freeze({ owner: "FOUNDER", required: true, label: Object.freeze({ ar: "شهادة غير عامل", en: "Non-employment certificate" }) }),
+  AUTHORIZATION: Object.freeze({ owner: "APPLICATION", required: true, label: Object.freeze({ ar: "وثيقة التفويض", en: "Authorization document" }) }),
+  FOUNDERS_MINUTES: Object.freeze({ owner: "APPLICATION", required: true, label: Object.freeze({ ar: "محضر اجتماع المؤسسين", en: "Founders meeting minutes" }) }),
+  ACTIVITY_PLAN: Object.freeze({ owner: "APPLICATION", required: true, label: Object.freeze({ ar: "خطة النشاط", en: "Activity plan" }) }),
+  OWNERSHIP_OR_LEASE: Object.freeze({ owner: "APPLICATION", required: true, label: Object.freeze({ ar: "سند ملكية أو إيجار", en: "Ownership or lease" }) }),
+  FLOOR_PLAN: Object.freeze({ owner: "APPLICATION", required: true, label: Object.freeze({ ar: "مخطط المقر", en: "Floor plan" }) }),
+  SAFETY_APPROVAL: Object.freeze({ owner: "APPLICATION", required: true, label: Object.freeze({ ar: "موافقة السلامة", en: "Safety approval" }) }),
+  ARTICLES_OF_ASSOCIATION: Object.freeze({
+    owner: "APPLICATION",
+    required: true,
+    accept: ".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.pdf,application/pdf",
+    help: Object.freeze({ ar: "مطلوب · ملف Word DOCX أو PDF، حتى 5MB", en: "Required · Word DOCX or PDF, up to 5MB" }),
+    label: Object.freeze({ ar: "النظام الأساسي المستكمل ببيانات الطلب (بما يتوافق مع النظام الداخلي الاسترشادي)", en: "Articles completed from the application data (aligned with the model internal regulations)" }),
+  }),
+  MEMBERS_LIST: Object.freeze({ owner: "APPLICATION", required: true, label: Object.freeze({ ar: "قائمة الأعضاء", en: "Members list" }) }),
+  ARTISTIC_PROGRAM: Object.freeze({ owner: "APPLICATION", required: true, label: Object.freeze({ ar: "البرنامج الفني", en: "Artistic program" }) }),
+  PROFESSIONAL_CERTIFICATE: Object.freeze({ owner: "APPLICATION", required: true, label: Object.freeze({ ar: "شهادة مهنية", en: "Professional certificate" }) }),
+  EQUIPMENT_LIST: Object.freeze({ owner: "APPLICATION", required: true, label: Object.freeze({ ar: "قائمة التجهيزات", en: "Equipment list" }) }),
+  ARTWORK_PORTFOLIO: Object.freeze({ owner: "APPLICATION", required: true, label: Object.freeze({ ar: "ملف الأعمال الفنية", en: "Artwork portfolio" }) }),
+  COLLECTION_INVENTORY: Object.freeze({ owner: "APPLICATION", required: true, label: Object.freeze({ ar: "جرد المقتنيات", en: "Collection inventory" }) }),
+  COLLECTION_PROVENANCE: Object.freeze({ owner: "APPLICATION", required: true, label: Object.freeze({ ar: "مصادر المقتنيات", en: "Collection provenance" }) }),
+  ACADEMIC_QUALIFICATION: Object.freeze({ owner: "APPLICATION", required: true, label: Object.freeze({ ar: "المؤهل العلمي", en: "Academic qualification" }) }),
+  PROGRAM_AND_CURRICULUM: Object.freeze({ owner: "APPLICATION", required: true, label: Object.freeze({ ar: "البرنامج والمنهاج", en: "Program and curriculum" }) }),
+  GALLERY_PROGRAM: Object.freeze({ owner: "APPLICATION", required: true, label: Object.freeze({ ar: "برنامج الصالة", en: "Gallery program" }) }),
 });
 export const LEGAL_LICENSE_TYPES = Object.freeze(Object.fromEntries(
   Object.values(LEGAL_LICENSE_REQUIREMENT_PROFILES).map((profile) => [
@@ -43,11 +51,24 @@ export const LEGAL_LICENSE_TYPES = Object.freeze(Object.fromEntries(
       slug: profile.slug,
       label: profile.label,
       additionalDocuments: profile.attachmentKinds,
+      excludedGeneralDocuments: profile.excludedGeneralAttachmentKinds,
       requiredFields: profile.requiredFields,
       pdfTemplate: profile.pdfTemplate,
     }),
   ]),
 ));
+
+export function requiredLegalLicenseDocumentKinds(licenseType) {
+  const config = LEGAL_LICENSE_TYPES[licenseType];
+  if (!config) throw new Error("Invalid legal-license type");
+  const excluded = new Set(config.excludedGeneralDocuments || []);
+  return [...new Set([
+    ...GENERAL_LEGAL_LICENSE_DOCUMENTS
+      .map((document) => document.kind)
+      .filter((kind) => !excluded.has(kind)),
+    ...config.additionalDocuments,
+  ])];
+}
 
 export const LEGAL_LICENSE_STATUSES = Object.freeze([
   "DRAFT",
@@ -62,6 +83,17 @@ export const LEGAL_LICENSE_STATUSES = Object.freeze([
   "LICENSE_ISSUED",
   "COMPLETED",
 ]);
+
+export const LEGAL_LICENSE_STATUS_REPORT_STATUSES = Object.freeze([
+  "LEGAL_APPROVAL", "MINISTER_APPROVAL", "APPROVED", "REJECTED", "LICENSE_ISSUED", "COMPLETED",
+]);
+
+export function canDownloadLegalLicenseStatusReport(application) {
+  if (!application) return false;
+  if (LEGAL_LICENSE_STATUS_REPORT_STATUSES.includes(application.status)) return true;
+  return application.status === "SUSPENDED"
+    && (application.history || []).some((entry) => Boolean(entry.publicNote));
+}
 
 const LEGAL_LICENSE_STATUS_GRAPH = Object.freeze({
   DRAFT: new Set(["SUBMITTED"]),
@@ -105,7 +137,6 @@ const REQUIRED_TEXT_FIELDS = [
   "email",
   "capacity",
   "entityName",
-  "purpose",
   "objectives",
   "activityDescription",
   "governorate",
@@ -202,8 +233,15 @@ export function validateLegalLicenseApplication(data) {
       nationalId,
       phone: founder.phone ? validatePhone(founder.phone, `founders[${index}].phone`) : null,
       email: founder.email ? validateEmail(founder.email, `founders[${index}].email`) : null,
+      visualSignature: requiredText(founder.visualSignature, `founders[${index}].visualSignature`),
       isAuthorizedRepresentative: founder.isAuthorizedRepresentative === true,
     };
+  });
+
+  normalized.founders.forEach((founder, index) => {
+    if (!isValidLegalLicenseVisualSignature(founder.visualSignature)) {
+      throw new Error(`founders[${index}].visualSignature is invalid`);
+    }
   });
 
   const representativeCount = normalized.founders.filter((founder) => founder.isAuthorizedRepresentative).length;
@@ -233,7 +271,7 @@ export function canTransitionLegalLicense(role, currentStatus, nextStatus) {
 
 const PUBLIC_APPLICATION_FIELDS = [
   "id", "referenceNo", "applicantName", "nationalId", "phone", "email", "capacity",
-  "licenseType", "entityName", "purpose", "objectives", "activityDescription",
+  "licenseType", "entityName", "objectives", "activityDescription",
   "governorate", "address", "status", "revision", "declarationAccuracy",
   "declarationResponsibility", "declarationPrivacy", "applicantSignature",
   "deficiencyNote", "licenseNumber",
@@ -242,8 +280,8 @@ const PUBLIC_APPLICATION_FIELDS = [
 ];
 
 const PUBLIC_FOUNDER_FIELDS = [
-  "id", "fullName", "nationalId", "birthDate", "occupation", "qualification", "phone", "email", "address",
-  "isAuthorizedRepresentative", "createdAt", "updatedAt",
+  "id", "fullName", "nationalId", "birthDate", "nationality", "occupation", "qualification", "phone", "email", "address",
+  "visualSignature", "isAuthorizedRepresentative", "createdAt", "updatedAt",
 ];
 
 const PUBLIC_ATTACHMENT_FIELDS = [

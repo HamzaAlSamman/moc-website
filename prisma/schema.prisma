@@ -76,6 +76,8 @@ enum LegalLicenseAttachmentKind {
   CRIMINAL_RECORD
   RESIDENCE_DOCUMENT
   PERSONAL_PHOTO
+  FOUNDER_ACADEMIC_QUALIFICATION
+  FOUNDER_NON_EMPLOYMENT_CERTIFICATE
   AUTHORIZATION
   FOUNDERS_MINUTES
   ACTIVITY_PLAN
@@ -216,11 +218,13 @@ model LegalLicenseFounder {
   fullName                   String?
   nationalId                 String?
   birthDate                  DateTime?
+  nationality                String?
   occupation                 String?
   qualification              String?
   phone                      String?
   email                      String?
   address                    String?                  @db.Text
+  visualSignature            String?                  @db.Text
   isAuthorizedRepresentative Boolean                  @default(false)
   attachments                LegalLicenseAttachment[]
   createdAt                  DateTime                 @default(now())

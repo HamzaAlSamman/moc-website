@@ -47,12 +47,69 @@ export const LEGAL_LICENSE_SOURCE_DOCUMENTS = deepFreeze({
     publicUrl: "/documents/legal-licenses/fine-arts-galleries.pdf",
     sha256: "9b8b33fcfdeb65ffd173322f411e1687d7dafc30c5c0dfec8215b9d468c68dad",
   },
-  "model-cultural-bylaws": {
-    key: "model-cultural-bylaws",
+  "model-cultural-forum-bylaws": {
+    key: "model-cultural-forum-bylaws",
     kind: "MODEL_BYLAWS",
-    label: { ar: "النظام النموذجي الاسترشادي", en: "Model cultural bylaws" },
-    publicUrl: "/documents/legal-licenses/model-cultural-bylaws.pdf",
-    sha256: "64953e7893799b69027f81c9ce171a23aa6ecf55199ecea39f7477b8319a52e0",
+    format: "DOCX",
+    label: { ar: "النظام النموذجي الاسترشادي للملتقى الثقافي", en: "Cultural forum model bylaws" },
+    publicUrl: "/documents/legal-licenses/model-cultural-forum-bylaws.docx",
+    sha256: "f85b288b111a0909057333a1679a895c1040b486c2975edb1d7f1b4e75f93a36",
+  },
+  "model-cultural-house-bylaws": {
+    key: "model-cultural-house-bylaws",
+    kind: "MODEL_BYLAWS",
+    format: "DOCX",
+    label: { ar: "النظام النموذجي الاسترشادي للدار الثقافية", en: "Cultural house model bylaws" },
+    publicUrl: "/documents/legal-licenses/model-cultural-house-bylaws.docx",
+    sha256: "5bcc31714442dac24f5885f83245562b1513a67a6a7ff537a0dee2a3873ef044",
+  },
+  "model-cultural-association-bylaws": {
+    key: "model-cultural-association-bylaws",
+    kind: "MODEL_BYLAWS",
+    format: "DOCX",
+    label: { ar: "النظام النموذجي الاسترشادي للرابطة الثقافية", en: "Cultural association model bylaws" },
+    publicUrl: "/documents/legal-licenses/model-cultural-association-bylaws.docx",
+    sha256: "d534afa1cbdbfdd5f402dcfd3e9d9056991c5a40974ea9a5120305aaf1f545af",
+  },
+  "model-amateur-troupe-bylaws": {
+    key: "model-amateur-troupe-bylaws",
+    kind: "MODEL_BYLAWS",
+    format: "DOCX",
+    label: { ar: "النظام النموذجي الاسترشادي لفرقة الهواة", en: "Amateur troupe model bylaws" },
+    publicUrl: "/documents/legal-licenses/model-amateur-troupe-bylaws.docx",
+    sha256: "d815663dcff0e8c9e3bdca67d6c14db9d22d9afbf61a61ed3655b04aff774e9e",
+  },
+  "model-cultural-forum-bylaws-pdf": {
+    key: "model-cultural-forum-bylaws-pdf",
+    kind: "MODEL_BYLAWS",
+    format: "PDF",
+    label: { ar: "النظام النموذجي الاسترشادي للملتقى الثقافي", en: "Cultural forum model bylaws" },
+    publicUrl: "/documents/legal-licenses/model-cultural-forum-bylaws.pdf",
+    sha256: "974aad79236dcb11a8711a6c8ee38384f27b706bd596c6edae9bc7737ac7ed82",
+  },
+  "model-cultural-house-bylaws-pdf": {
+    key: "model-cultural-house-bylaws-pdf",
+    kind: "MODEL_BYLAWS",
+    format: "PDF",
+    label: { ar: "النظام النموذجي الاسترشادي للدار الثقافية", en: "Cultural house model bylaws" },
+    publicUrl: "/documents/legal-licenses/model-cultural-house-bylaws.pdf",
+    sha256: "2527f69a68932f1bfd045246d9a857da1a6462d7b83d4a018c6c4d31cc8f7b2e",
+  },
+  "model-cultural-association-bylaws-pdf": {
+    key: "model-cultural-association-bylaws-pdf",
+    kind: "MODEL_BYLAWS",
+    format: "PDF",
+    label: { ar: "النظام النموذجي الاسترشادي للرابطة الثقافية", en: "Cultural association model bylaws" },
+    publicUrl: "/documents/legal-licenses/model-cultural-association-bylaws.pdf",
+    sha256: "a37f3da0ac80e20d94a6bbf87c9780854b620afffe57d6c28010e1f08bed4d91",
+  },
+  "model-amateur-troupe-bylaws-pdf": {
+    key: "model-amateur-troupe-bylaws-pdf",
+    kind: "MODEL_BYLAWS",
+    format: "PDF",
+    label: { ar: "النظام النموذجي الاسترشادي لفرقة الهواة", en: "Amateur troupe model bylaws" },
+    publicUrl: "/documents/legal-licenses/model-amateur-troupe-bylaws.pdf",
+    sha256: "b85017a1422d2ac8eab600ca2b345a80a41466973011e7900da068233e77fb52",
   },
 });
 
@@ -68,7 +125,6 @@ export const LEGAL_LICENSE_REQUIREMENT_CATEGORIES = deepFreeze({
 
 const DEFAULT_LICENSE_REQUIRED_FIELDS = Object.freeze([
   "entityName",
-  "purpose",
   "objectives",
   "activityDescription",
   "governorate",
@@ -109,36 +165,10 @@ export function createLegalLicenseRequirement({
 
 export const LEGAL_LICENSE_POST_LICENSE_DECLARATION_KEY =
   "post_license.comply_with_license_conditions";
+export const LEGAL_LICENSE_PAPER_DELIVERY_DECLARATION_KEY =
+  "post_license.deliver_paper_documents";
 export const LEGAL_LICENSE_BYLAW_ACKNOWLEDGMENT_KEY =
   "bylaws.generated_from_model_acknowledgment";
-
-export const LEGAL_LICENSE_BYLAW_VARIABLES = deepFreeze([
-  {
-    key: "entityName",
-    label: { ar: "اسم الجهة", en: "Entity name" },
-    source: { document: "model-cultural-bylaws", article: "بيانات الجهة" },
-  },
-  {
-    key: "purpose",
-    label: { ar: "غاية الجهة", en: "Entity purpose" },
-    source: { document: "model-cultural-bylaws", article: "الغاية" },
-  },
-  {
-    key: "objectives",
-    label: { ar: "أهداف الجهة", en: "Entity objectives" },
-    source: { document: "model-cultural-bylaws", article: "الأهداف" },
-  },
-  {
-    key: "governorate",
-    label: { ar: "المحافظة", en: "Governorate" },
-    source: { document: "model-cultural-bylaws", article: "المقر" },
-  },
-  {
-    key: "address",
-    label: { ar: "عنوان المقر", en: "Premises address" },
-    source: { document: "model-cultural-bylaws", article: "المقر" },
-  },
-]);
 
 const postLicenseComplianceDeclaration = createLegalLicenseRequirement({
   key: LEGAL_LICENSE_POST_LICENSE_DECLARATION_KEY,
@@ -154,20 +184,33 @@ const postLicenseComplianceDeclaration = createLegalLicenseRequirement({
   source: { kind: "SERVICE_DECLARATION" },
 });
 
+const paperDocumentDeliveryDeclaration = createLegalLicenseRequirement({
+  key: LEGAL_LICENSE_PAPER_DELIVERY_DECLARATION_KEY,
+  category: LEGAL_LICENSE_REQUIREMENT_CATEGORIES.POST_LICENSE,
+  label: {
+    ar: "أتعهد بتسليم جميع الأوراق والوثائق الخاصة بالطلب ورقياً إلى جهة الاستلام المحددة.",
+    en: "I undertake to deliver all paper application documents to the designated receiving office.",
+  },
+  help: {
+    ar: "في محافظات حمص وحماة وحلب واللاذقية وطرطوس ودير الزور وإدلب والقنيطرة ودرعا والسويداء والحسكة والرقة يتم التسليم إلى المركز الثقافي في المحافظة. أما ضمن دمشق وريف دمشق فيتم التسليم إلى دائرة التراخيص والاعتمادات الثقافية في الوزارة بدمشق.",
+    en: "In Homs, Hama, Aleppo, Latakia, Tartous, Deir ez-Zor, Idlib, Quneitra, Daraa, Suwayda, Hasakah and Raqqa, delivery is made to the cultural center in the governorate. In Damascus and Rural Damascus, delivery is made to the Licensing and Cultural Accreditations Department at the Ministry in Damascus.",
+  },
+  source: { kind: "SERVICE_DECLARATION" },
+});
+
 const modelBylawsAcknowledgment = createLegalLicenseRequirement({
   key: LEGAL_LICENSE_BYLAW_ACKNOWLEDGMENT_KEY,
   category: LEGAL_LICENSE_REQUIREMENT_CATEGORIES.BYLAWS,
   label: {
-    ar: "أوافق على توليد مشروع النظام الأساسي من النموذج الاسترشادي المرفق ومراجعته قبل الإرسال.",
-    en: "I agree to generate the draft bylaws from the attached model and review it before submission.",
+    ar: "أوافق على مراجعة النظام الأساسي المستكمل ببيانات الطلب بما يتوافق مع النظام الداخلي الاسترشادي قبل الإرسال.",
+    en: "I agree to review the articles completed from the application data in line with the model internal regulations before submission.",
   },
   help: {
-    ar: "يثبت هذا الإقرار اختيار النموذج الاسترشادي المرفق كأساس لتوليد مشروع النظام.",
-    en: "This acknowledgment records the attached model as the basis for generating the draft bylaws.",
+    ar: "يثبت هذا الإقرار مراجعة البيانات التي دُمجت تلقائياً في النظام الأساسي.",
+    en: "This acknowledgment confirms review of the data automatically merged into the articles.",
   },
   source: {
-    document: "model-cultural-bylaws",
-    article: "النموذج الاسترشادي (كامل الوثيقة)",
+    kind: "SERVICE_DECLARATION",
   },
 });
 
@@ -176,7 +219,9 @@ function createProfile({
   slug,
   label,
   sourceDocuments = [],
+  bylawTemplateDocument = null,
   attachmentKinds,
+  excludedGeneralAttachmentKinds = [],
   requiredFields = DEFAULT_LICENSE_REQUIRED_FIELDS,
   pdfTemplate = "unified-v1",
   generatesBylaws = false,
@@ -187,6 +232,7 @@ function createProfile({
     ...requirements,
     ...(generatesBylaws ? [modelBylawsAcknowledgment] : []),
     postLicenseComplianceDeclaration,
+    paperDocumentDeliveryDeclaration,
   ];
   const groups = Object.fromEntries(
     Object.values(QUESTION_GROUP_BY_CATEGORY).map((group) => [group, []]),
@@ -200,11 +246,13 @@ function createProfile({
     slug,
     label,
     sourceDocuments: [...sourceDocuments],
+    bylawTemplateDocument,
     attachmentKinds: [...attachmentKinds],
+    excludedGeneralAttachmentKinds: [...excludedGeneralAttachmentKinds],
     requiredFields: [...requiredFields],
     pdfTemplate,
     generatesBylaws,
-    bylawVariables: generatesBylaws ? LEGAL_LICENSE_BYLAW_VARIABLES : [],
+    bylawVariables: [],
     pendingOfficialGuidance,
     gated: pendingOfficialGuidance,
     templateVersion: "guided-v1",
@@ -302,8 +350,10 @@ export const LEGAL_LICENSE_REQUIREMENT_PROFILES = deepFreeze({
     licenseType: "CULTURAL_FORUM",
     slug: "cultural-forum",
     label: { ar: "ملتقى ثقافي", en: "Cultural Forum" },
-    sourceDocuments: ["model-cultural-bylaws"],
-    attachmentKinds: ["FOUNDERS_MINUTES", "ACTIVITY_PLAN"],
+    sourceDocuments: ["model-cultural-forum-bylaws-pdf"],
+    bylawTemplateDocument: "model-cultural-forum-bylaws",
+    attachmentKinds: ["ACTIVITY_PLAN", "FOUNDER_ACADEMIC_QUALIFICATION"],
+    excludedGeneralAttachmentKinds: ["AUTHORIZATION", "FOUNDER_NON_EMPLOYMENT_CERTIFICATE"],
     generatesBylaws: true,
     pendingOfficialGuidance: true,
   }),
@@ -311,8 +361,10 @@ export const LEGAL_LICENSE_REQUIREMENT_PROFILES = deepFreeze({
     licenseType: "CULTURAL_HOUSE",
     slug: "cultural-house",
     label: { ar: "دار ثقافية", en: "Cultural House" },
-    sourceDocuments: ["model-cultural-bylaws"],
-    attachmentKinds: ["OWNERSHIP_OR_LEASE", "FLOOR_PLAN", "SAFETY_APPROVAL"],
+    sourceDocuments: ["model-cultural-house-bylaws-pdf"],
+    bylawTemplateDocument: "model-cultural-house-bylaws",
+    attachmentKinds: ["OWNERSHIP_OR_LEASE", "FLOOR_PLAN", "SAFETY_APPROVAL", "FOUNDER_ACADEMIC_QUALIFICATION"],
+    excludedGeneralAttachmentKinds: ["AUTHORIZATION", "FOUNDER_NON_EMPLOYMENT_CERTIFICATE"],
     generatesBylaws: true,
     pendingOfficialGuidance: true,
   }),
@@ -320,8 +372,10 @@ export const LEGAL_LICENSE_REQUIREMENT_PROFILES = deepFreeze({
     licenseType: "CULTURAL_ASSOCIATION",
     slug: "cultural-association",
     label: { ar: "رابطة ثقافية", en: "Cultural Association" },
-    sourceDocuments: ["model-cultural-bylaws"],
-    attachmentKinds: ["ARTICLES_OF_ASSOCIATION", "FOUNDERS_MINUTES"],
+    sourceDocuments: ["model-cultural-association-bylaws-pdf"],
+    bylawTemplateDocument: "model-cultural-association-bylaws",
+    attachmentKinds: ["FOUNDER_ACADEMIC_QUALIFICATION", "OWNERSHIP_OR_LEASE"],
+    excludedGeneralAttachmentKinds: ["AUTHORIZATION", "FOUNDER_NON_EMPLOYMENT_CERTIFICATE"],
     generatesBylaws: true,
     pendingOfficialGuidance: true,
   }),
@@ -329,7 +383,11 @@ export const LEGAL_LICENSE_REQUIREMENT_PROFILES = deepFreeze({
     licenseType: "AMATEUR_TROUPE",
     slug: "amateur-troupe",
     label: { ar: "فرقة هواة", en: "Amateur Troupe" },
-    attachmentKinds: ["MEMBERS_LIST", "ARTISTIC_PROGRAM"],
+    sourceDocuments: ["model-amateur-troupe-bylaws-pdf"],
+    bylawTemplateDocument: "model-amateur-troupe-bylaws",
+    attachmentKinds: ["MEMBERS_LIST", "ARTISTIC_PROGRAM", "FOUNDER_ACADEMIC_QUALIFICATION", "OWNERSHIP_OR_LEASE"],
+    excludedGeneralAttachmentKinds: ["AUTHORIZATION", "FOUNDER_NON_EMPLOYMENT_CERTIFICATE"],
+    generatesBylaws: true,
     pendingOfficialGuidance: true,
   }),
   CINEMA_ARTS: createProfile({
@@ -337,7 +395,7 @@ export const LEGAL_LICENSE_REQUIREMENT_PROFILES = deepFreeze({
     slug: "cinema-arts",
     label: { ar: "فنون سينمائية", en: "Cinema Arts" },
     sourceDocuments: ["cinema-arts"],
-    attachmentKinds: ["PROFESSIONAL_CERTIFICATE", "EQUIPMENT_LIST"],
+    attachmentKinds: ["PROFESSIONAL_CERTIFICATE", "EQUIPMENT_LIST", "FOUNDER_ACADEMIC_QUALIFICATION"],
     requirements: [cinemaSafetyRequirement],
   }),
   FINE_ARTS: createProfile({
@@ -345,7 +403,7 @@ export const LEGAL_LICENSE_REQUIREMENT_PROFILES = deepFreeze({
     slug: "fine-arts",
     label: { ar: "فنون تشكيلية", en: "Fine Arts" },
     sourceDocuments: ["fine-arts"],
-    attachmentKinds: ["PROFESSIONAL_CERTIFICATE", "ARTWORK_PORTFOLIO"],
+    attachmentKinds: ["PROFESSIONAL_CERTIFICATE", "ARTWORK_PORTFOLIO", "FOUNDER_ACADEMIC_QUALIFICATION"],
     requirements: [fineArtsBathroomRequirement],
   }),
   HERITAGE_MUSEUM: createProfile({
@@ -353,7 +411,7 @@ export const LEGAL_LICENSE_REQUIREMENT_PROFILES = deepFreeze({
     slug: "heritage-museum",
     label: { ar: "متحف تراثي", en: "Heritage Museum" },
     sourceDocuments: ["heritage-museums"],
-    attachmentKinds: ["OWNERSHIP_OR_LEASE", "COLLECTION_INVENTORY", "COLLECTION_PROVENANCE", "FLOOR_PLAN", "SAFETY_APPROVAL"],
+    attachmentKinds: ["OWNERSHIP_OR_LEASE", "COLLECTION_INVENTORY", "COLLECTION_PROVENANCE", "FLOOR_PLAN", "SAFETY_APPROVAL", "FOUNDER_ACADEMIC_QUALIFICATION"],
     requirements: [museumInventoryRequirement],
   }),
   MUSIC_INSTITUTE: createProfile({
@@ -361,7 +419,7 @@ export const LEGAL_LICENSE_REQUIREMENT_PROFILES = deepFreeze({
     slug: "music-institute",
     label: { ar: "معهد موسيقي", en: "Music Institute" },
     sourceDocuments: ["music-institutes"],
-    attachmentKinds: ["OWNERSHIP_OR_LEASE", "FLOOR_PLAN", "SAFETY_APPROVAL", "ACADEMIC_QUALIFICATION", "PROGRAM_AND_CURRICULUM", "EQUIPMENT_LIST"],
+    attachmentKinds: ["OWNERSHIP_OR_LEASE", "FLOOR_PLAN", "SAFETY_APPROVAL", "PROGRAM_AND_CURRICULUM", "EQUIPMENT_LIST", "FOUNDER_ACADEMIC_QUALIFICATION"],
     requirements: [musicSoundproofRequirement],
   }),
   THEATER_INSTITUTE: createProfile({
@@ -369,7 +427,7 @@ export const LEGAL_LICENSE_REQUIREMENT_PROFILES = deepFreeze({
     slug: "theater-institute",
     label: { ar: "معهد مسرحي", en: "Theater Institute" },
     sourceDocuments: ["theater-institutes"],
-    attachmentKinds: ["OWNERSHIP_OR_LEASE", "FLOOR_PLAN", "SAFETY_APPROVAL", "ACADEMIC_QUALIFICATION", "PROGRAM_AND_CURRICULUM", "EQUIPMENT_LIST"],
+    attachmentKinds: ["OWNERSHIP_OR_LEASE", "FLOOR_PLAN", "SAFETY_APPROVAL", "PROGRAM_AND_CURRICULUM", "EQUIPMENT_LIST", "FOUNDER_ACADEMIC_QUALIFICATION"],
     requirements: [theaterSoundproofRequirement],
   }),
   FINE_ARTS_GALLERY: createProfile({
@@ -377,7 +435,7 @@ export const LEGAL_LICENSE_REQUIREMENT_PROFILES = deepFreeze({
     slug: "fine-arts-gallery",
     label: { ar: "صالة عرض فنون تشكيلية", en: "Fine Arts Gallery" },
     sourceDocuments: ["fine-arts-galleries"],
-    attachmentKinds: ["OWNERSHIP_OR_LEASE", "FLOOR_PLAN", "SAFETY_APPROVAL", "GALLERY_PROGRAM"],
+    attachmentKinds: ["OWNERSHIP_OR_LEASE", "FLOOR_PLAN", "SAFETY_APPROVAL", "GALLERY_PROGRAM", "FOUNDER_ACADEMIC_QUALIFICATION"],
     requirements: [galleryMembershipOrManagerRequirement],
   }),
 });

@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
-import { generateLegalLicensePackagePdf } from "@/lib/legal-license-pdf-package";
-import { readLegalLicensePrivateFile } from "@/lib/legal-license-storage.mjs";
+import { generateLegalLicensePdf } from "@/lib/legal-license-pdf";
 import { canStaffAccessLegalLicenses, findCitizenLegalLicense } from "@/lib/legal-license-server";
 import { legalLicenseTokenFromRequest } from "@/lib/legal-license-server";
-import { findDevLegalLicense, legalLicenseDevStoreEnabled, readDevLegalLicenseAttachment } from "@/lib/legal-license-dev-store.mjs";
+import { findDevLegalLicense, legalLicenseDevStoreEnabled } from "@/lib/legal-license-dev-store.mjs";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(request, { params }) {
@@ -12,6 +11,7 @@ export async function GET(request, { params }) {
   let application = devStore
     ? findDevLegalLicense(legalLicenseTokenFromRequest(request), { id })
     : await findCitizenLegalLicense(request, { id });
+
   if (!application && !devStore) {
     const staff = await canStaffAccessLegalLicenses();
     if (staff) {
@@ -21,24 +21,21 @@ export async function GET(request, { params }) {
       });
     }
   }
+
   if (!application) return NextResponse.json({ error: "Application not found" }, { status: 404 });
+
   try {
-    const pdf = await generateLegalLicensePackagePdf(application, {
-      readAttachmentBytes: async (attachment) => {
-        if (devStore) return readDevLegalLicenseAttachment(attachment.id);
-        return readLegalLicensePrivateFile(attachment.storageKey);
-      },
-    });
+    const pdf = await generateLegalLicensePdf(application);
     return new NextResponse(pdf, {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="${application.referenceNo || "legal-license"}.pdf"`,
+        "Content-Disposition": `attachment; filename="${application.referenceNo || "legal-license"}-application.pdf"`,
         "Cache-Control": "private, no-store",
         "X-Content-Type-Options": "nosniff",
       },
     });
   } catch (error) {
-    console.error("Legal-license PDF preview failed:", error);
+    console.error("Legal-license application PDF preview failed:", error);
     return NextResponse.json({ error: "PDF generation is temporarily unavailable" }, { status: 503 });
   }
 }

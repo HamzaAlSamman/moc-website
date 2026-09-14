@@ -10,6 +10,7 @@ import {
   readLegalLicenseJson,
 } from "@/lib/legal-license-request.mjs";
 import { claimRecordForLoggedInCitizen } from "@/lib/citizen-submission-link.mjs";
+import { findDevLegalLicense, legalLicenseDevStoreEnabled } from "@/lib/legal-license-dev-store.mjs";
 
 export async function POST(request) {
   if (!rateLimit(`legal-license-track:${getClientIp(request)}`, 20, 15 * 60 * 1000)) {
@@ -28,6 +29,13 @@ export async function POST(request) {
   if (!/^LIC-\d{4}-\d{4,}$/.test(referenceNo)) {
     return NextResponse.json({ error: "Invalid reference number" }, { status: 400 });
   }
+
+  if (legalLicenseDevStoreEnabled()) {
+    const application = findDevLegalLicense(body.accessToken, { referenceNo });
+    if (!application) return NextResponse.json({ error: "Application not found" }, { status: 404 });
+    return NextResponse.json(legalLicenseJson(application));
+  }
+
   const forwarded = new Headers(request.headers);
   if (body.accessToken) forwarded.set("x-legal-license-token", body.accessToken);
   const authenticatedRequest = new Request(request.url, { headers: forwarded });

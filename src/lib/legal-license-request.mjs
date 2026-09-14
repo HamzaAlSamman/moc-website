@@ -1,4 +1,7 @@
-export const LEGAL_LICENSE_MAX_JSON_BYTES = 3 * 1024 * 1024;
+// The draft can carry one applicant signature plus a visual signature for
+// every founder. Keep the body bounded while allowing a practical group of
+// signatories to save together.
+export const LEGAL_LICENSE_MAX_JSON_BYTES = 32 * 1024 * 1024;
 export const LEGAL_LICENSE_TRACK_MAX_JSON_BYTES = 16 * 1024;
 
 function legalLicenseRequestError(code, status) {

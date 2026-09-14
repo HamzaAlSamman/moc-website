@@ -19,7 +19,6 @@ const CITIZEN_EDITABLE_FIELDS = new Set([
   "email",
   "capacity",
   "entityName",
-  "purpose",
   "objectives",
   "activityDescription",
   "governorate",
@@ -44,11 +43,13 @@ const FOUNDER_EDITABLE_FIELDS = new Set([
   "fullName",
   "nationalId",
   "birthDate",
+  "nationality",
   "occupation",
   "qualification",
   "phone",
   "email",
   "address",
+  "visualSignature",
   "isAuthorizedRepresentative",
 ]);
 

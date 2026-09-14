@@ -15,8 +15,11 @@ export default function StepField({
   help,
   error,
   isRtl = true,
+  minDate,
   maxDate,
   showPresets,
+  options,
+  placeholder,
 }) {
   const id = useId();
   const helpId = help ? `${id}-help` : undefined;
@@ -29,7 +32,23 @@ export default function StepField({
       <span className="mb-1.5 block text-xs font-bold text-slate-600">
         {label}{required ? <span aria-hidden="true"> *</span> : null}
       </span>
-      {type === "date" ? (
+      {options ? (
+        <select
+          id={id}
+          value={value || ""}
+          onChange={(event) => onChange(event.target.value)}
+          className={className}
+          dir={dir}
+          required={required}
+          disabled={disabled}
+          aria-invalid={Boolean(error)}
+          aria-describedby={describedBy}
+        >
+          <option value="">{placeholder || "—"}</option>
+          {value && !options.some((option) => option.value === value) ? <option value={value}>{value}</option> : null}
+          {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+        </select>
+      ) : type === "date" ? (
         <ApexDateTimePicker
           id={id}
           type="date"
@@ -41,6 +60,7 @@ export default function StepField({
           disabled={disabled}
           aria-invalid={Boolean(error)}
           aria-describedby={describedBy}
+          minDate={minDate}
           maxDate={maxDate}
           showPresets={showPresets}
         />

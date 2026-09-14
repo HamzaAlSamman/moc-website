@@ -7,6 +7,7 @@ import {
 } from "@/lib/legal-license-api.mjs";
 import { readLegalLicenseJson } from "@/lib/legal-license-request.mjs";
 import { sendLegalLicenseCitizenEmail } from "@/lib/legal-license-mailer";
+import { findDevLegalLicense, legalLicenseDevStoreEnabled, updateDevLegalLicense } from "@/lib/legal-license-dev-store.mjs";
 import {
   findCitizenLegalLicense,
   LEGAL_LICENSE_INCLUDE,
@@ -17,14 +18,19 @@ import {
 
 export async function GET(request, { params }) {
   const { id } = await params;
-  const application = await findCitizenLegalLicense(request, { id });
+  const application = legalLicenseDevStoreEnabled()
+    ? findDevLegalLicense(legalLicenseTokenFromRequest(request), { id })
+    : await findCitizenLegalLicense(request, { id });
   if (!application) return NextResponse.json({ error: "Application not found" }, { status: 404 });
   return NextResponse.json(legalLicenseJson(application));
 }
 
 export async function PUT(request, { params }) {
   const { id } = await params;
-  const current = await findCitizenLegalLicense(request, { id });
+  const devStore = legalLicenseDevStoreEnabled();
+  const current = devStore
+    ? findDevLegalLicense(legalLicenseTokenFromRequest(request), { id })
+    : await findCitizenLegalLicense(request, { id });
   if (!current) return NextResponse.json({ error: "Application not found" }, { status: 404 });
   if (!["DRAFT", "SUSPENDED"].includes(current.status)) {
     return NextResponse.json({ error: "Submitted applications are locked" }, { status: 423 });
@@ -35,6 +41,9 @@ export async function PUT(request, { params }) {
       return NextResponse.json({ error: "The draft changed in another session" }, { status: 409 });
     }
     const draft = normalizeLegalLicenseDraft(body.draft || body);
+    if (devStore) {
+      return NextResponse.json(legalLicenseJson(updateDevLegalLicense(current, draft)));
+    }
     const { founders } = draft;
     const applicationData = legalLicenseApplicationWriteData(draft);
     const application = await prisma.$transaction(async (tx) => {

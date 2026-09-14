@@ -6,7 +6,7 @@ import { PenLine, Upload, Loader2, ScanText, CheckCircle2, ImageOff } from "luci
 /* ─────────────────────────────────────────────────────────────
    Upload + OCR Signature Component
 ───────────────────────────────────────────────────────────── */
-function UploadSignaturePad({ value, onChange, isRtl, disabled }) {
+function UploadSignaturePad({ inputId, value, onChange, isRtl, disabled }) {
   const fileRef = useRef(null);
   const [ocrState, setOcrState] = useState("idle"); // idle | loading | done | empty | error
   const [ocrText, setOcrText] = useState("");
@@ -55,7 +55,7 @@ function UploadSignaturePad({ value, onChange, isRtl, disabled }) {
     <div className="space-y-4">
       {!value ? (
         <label
-          htmlFor="sig-upload"
+          htmlFor={inputId}
           className={`flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-[#b9a779]/60 bg-white py-10 transition hover:border-[#b9a779] hover:bg-[#faf9f6] ${disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}
         >
           <Upload className="h-8 w-8 text-[#b9a779]" />
@@ -64,7 +64,7 @@ function UploadSignaturePad({ value, onChange, isRtl, disabled }) {
             <p className="mt-1 text-xs text-slate-400">{isRtl ? "JPG، PNG، WEBP — حتى 5MB" : "JPG, PNG, WEBP — up to 5MB"}</p>
           </div>
           <input
-            id="sig-upload" ref={fileRef} type="file" className="sr-only"
+            id={inputId} ref={fileRef} type="file" className="sr-only"
             accept="image/jpeg,image/png,image/webp" disabled={disabled}
             onChange={handleFile}
           />
@@ -115,6 +115,7 @@ export default function DeclarationStep({
   update,
   postLicenseRequirements,
   onPostLicenseAnswer,
+  setFounder,
   isRtl,
   canEditField,
   canEditRequirement,
@@ -144,7 +145,7 @@ export default function DeclarationStep({
             />
             <span>
               {isRtl ? req.label.ar : req.label.en}
-              <span className="mt-1 block text-xs font-normal text-slate-500">{isRtl ? req.help.ar : req.help.en}</span>
+              <span className="mt-1 block whitespace-pre-line text-xs font-normal leading-6 text-slate-500">{isRtl ? req.help.ar : req.help.en}</span>
             </span>
           </label>
         ))}
@@ -153,19 +154,42 @@ export default function DeclarationStep({
       <section className="border-t border-slate-100 pt-6">
         <div className="mb-3 flex items-center gap-2">
           <PenLine className="h-5 w-5 text-[#054239]" />
-          <h3 className="font-qomra text-lg font-black text-[#054239]">{isRtl ? "التوقيع المرئي" : "Visual signature"}</h3>
+          <h3 className="font-qomra text-lg font-black text-[#054239]">{isRtl ? "التواقيع المرئية" : "Visual signatures"}</h3>
         </div>
         <p className="mb-4 text-xs leading-6 text-amber-800">
           {isRtl
             ? "يعتبر التوقيع المدخل بمثابة إقرار خطي مرئي مرفق بالطلب لاستكمال المعاملة إلكترونياً."
             : "This is a visual declaration attached to the application, not a legally qualified electronic signature."}
         </p>
-        <UploadSignaturePad
-          value={form.applicantSignature}
-          onChange={(value) => update("applicantSignature", value)}
-          isRtl={isRtl}
-          disabled={!canEditField("applicantSignature")}
-        />
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <h4 className="mb-3 text-sm font-black text-[#054239]">
+              {isRtl ? `توقيع مقدم الطلب: ${form.applicantName || "—"}` : `Applicant signature: ${form.applicantName || "—"}`}
+            </h4>
+            <UploadSignaturePad
+              inputId="applicant-signature-upload"
+              value={form.applicantSignature}
+              onChange={(value) => update("applicantSignature", value)}
+              isRtl={isRtl}
+              disabled={!canEditField("applicantSignature")}
+            />
+          </div>
+
+          {(form.founders || []).map((founder, index) => (
+            <div key={founder.id || `${founder.nationalId}-${index}`} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <h4 className="mb-3 text-sm font-black text-[#054239]">
+                {isRtl ? `توقيع المؤسس: ${founder.fullName || `المؤسس ${index + 1}`}` : `Founder signature: ${founder.fullName || `Founder ${index + 1}`}`}
+              </h4>
+              <UploadSignaturePad
+                inputId={`founder-signature-upload-${founder.id || index}`}
+                value={founder.visualSignature}
+                onChange={(value) => setFounder(index, "visualSignature", value)}
+                isRtl={isRtl}
+                disabled={!canEditField("visualSignature", founder.id)}
+              />
+            </div>
+          ))}
+        </div>
       </section>
     </div>
   );

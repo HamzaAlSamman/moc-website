@@ -3,12 +3,12 @@ import {
   getApplicableLegalLicenseRequirements,
 } from "./legal-license-requirements.mjs";
 import {
-  GENERAL_LEGAL_LICENSE_DOCUMENTS,
   LEGAL_LICENSE_DOCUMENT_RULES,
   isValidLegalLicenseEmail,
   isValidLegalLicenseNationalId,
   isValidLegalLicensePhone,
   isValidLegalLicenseVisualSignature,
+  requiredLegalLicenseDocumentKinds,
 } from "./legal-license.mjs";
 
 const STEP_DEFINITIONS = [
@@ -25,6 +25,12 @@ const STEP_DEFINITIONS = [
 export const LEGAL_LICENSE_WIZARD_STEPS = Object.freeze(
   STEP_DEFINITIONS.map((step, index) => Object.freeze({ ...step, index })),
 );
+const BYLAWS_FIRST_STEP_ORDER = Object.freeze([0, 1, 2, 3, 5, 4, 6, 7]);
+
+export function orderedLegalLicenseWizardSteps(profile) {
+  if (!profile?.generatesBylaws) return LEGAL_LICENSE_WIZARD_STEPS;
+  return BYLAWS_FIRST_STEP_ORDER.map((index) => LEGAL_LICENSE_WIZARD_STEPS[index]);
+}
 
 export const LOCAL_WIZARD_SNAPSHOT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export const LOCAL_TRACKING_SNAPSHOT_TTL_MS = LOCAL_WIZARD_SNAPSHOT_TTL_MS;
@@ -54,7 +60,6 @@ const STEP_BY_FIELD = Object.freeze({
   managerDetails: 2,
   founders: 2,
   entityName: 3,
-  purpose: 3,
   objectives: 3,
   activityDescription: 3,
   governorate: 3,
@@ -71,10 +76,10 @@ const STEP_BY_FIELD = Object.freeze({
 
 const FORM_TEXT_FIELDS = Object.freeze([
   "licenseType", "applicantName", "nationalId", "phone", "email", "capacity",
-  "entityName", "purpose", "objectives", "activityDescription", "governorate", "address",
+  "entityName", "objectives", "activityDescription", "governorate", "address",
 ]);
 const FOUNDER_TEXT_FIELDS = Object.freeze([
-  "id", "fullName", "nationalId", "birthDate", "occupation", "qualification", "phone", "email", "address",
+  "id", "fullName", "nationalId", "birthDate", "nationality", "occupation", "qualification", "phone", "email", "address",
 ]);
 const MANAGER_TEXT_FIELDS = Object.freeze([
   "fullName", "nationalId", "phone", "email", "occupation", "qualification",
@@ -173,17 +178,17 @@ function entityCompleted(profile, form) {
 
 function requiredDocumentKinds(profile) {
   if (!profile) return [];
-  return [...new Set([
-    ...GENERAL_LEGAL_LICENSE_DOCUMENTS.map((document) => document.kind),
-    ...profile.attachmentKinds,
-  ])].filter((kind) => LEGAL_LICENSE_DOCUMENT_RULES[kind]?.required !== false);
+  return requiredLegalLicenseDocumentKinds(profile.licenseType)
+    .filter((kind) => LEGAL_LICENSE_DOCUMENT_RULES[kind]?.required !== false);
 }
 
 function documentsCompleted(profile, form, application) {
   if (!profile || !Array.isArray(application?.attachments)) return false;
   const founders = Array.isArray(form.founders) ? form.founders : [];
   const attachments = application.attachments;
-  return requiredDocumentKinds(profile).every((kind) => {
+  return requiredDocumentKinds(profile)
+    .filter((kind) => !(profile.generatesBylaws && kind === "ARTICLES_OF_ASSOCIATION"))
+    .every((kind) => {
     const owner = LEGAL_LICENSE_DOCUMENT_RULES[kind]?.owner;
     if (owner === "FOUNDER") {
       return founders.length > 0 && founders.every((founder) => nonEmpty(founder?.id)
@@ -200,10 +205,13 @@ function bylawsCompleted(profile, form) {
 
 function declarationCompleted(profile, form) {
   const requirements = applicableBlocking(profile, form, [LEGAL_LICENSE_REQUIREMENT_CATEGORIES.POST_LICENSE]);
+  const foundersSigned = Array.isArray(form.founders)
+    && form.founders.every((founder) => isValidLegalLicenseVisualSignature(founder?.visualSignature));
   return form.declarationAccuracy === true
     && form.declarationResponsibility === true
     && form.declarationPrivacy === true
     && isValidLegalLicenseVisualSignature(form.applicantSignature)
+    && foundersSigned
     && requirementsSatisfied(requirements, form.postLicenseDeclarations);
 }
 
@@ -228,6 +236,9 @@ export function wizardStepStatus(stepId, context = {}) {
   } else if (stepId === "bylaws") {
     const required = applicableBlocking(context.profile, context.form || {}, [LEGAL_LICENSE_REQUIREMENT_CATEGORIES.BYLAWS]).length > 0;
     status = { required, completed: baseStepCompleted(stepId, context), notRequired: !required };
+  } else if (stepId === "eligibility") {
+    const required = blockingEligibility(context.profile, context.form || {}).length > 0;
+    status = { required, completed: baseStepCompleted(stepId, context), notRequired: !required };
   } else if (LEGAL_LICENSE_WIZARD_STEPS.some((step) => step.id === stepId)) {
     status = { required: true, completed: baseStepCompleted(stepId, context), notRequired: false };
   } else {
@@ -237,7 +248,7 @@ export function wizardStepStatus(stepId, context = {}) {
 }
 
 export function firstIncompleteWizardStep(context = {}) {
-  for (const step of LEGAL_LICENSE_WIZARD_STEPS) {
+  for (const step of orderedLegalLicenseWizardSteps(context.profile)) {
     if (!wizardStepStatus(step.id, context).completed) return step.index;
   }
   return null;
@@ -246,7 +257,10 @@ export function firstIncompleteWizardStep(context = {}) {
 export function canNavigateToWizardStep(stepIndex, context = {}) {
   if (!Number.isInteger(stepIndex) || stepIndex < 0 || stepIndex >= LEGAL_LICENSE_WIZARD_STEPS.length) return false;
   if (stepIndex === 0) return true;
-  return LEGAL_LICENSE_WIZARD_STEPS.slice(0, stepIndex)
+  const orderedSteps = orderedLegalLicenseWizardSteps(context.profile);
+  const targetPosition = orderedSteps.findIndex((step) => step.index === stepIndex);
+  if (targetPosition < 0) return false;
+  return orderedSteps.slice(0, targetPosition)
     .every((step) => wizardStepStatus(step.id, context).completed);
 }
 
@@ -256,7 +270,7 @@ const INCOMPLETE_MESSAGES = Object.freeze([
   { ar: "استكمل بيانات مقدم الطلب والمؤسسين وحدد مفوضاً واحداً.", en: "Complete the applicant and founder details and select one representative." },
   { ar: "استكمل بيانات الجهة ومتطلبات المقر.", en: "Complete the entity and premises requirements." },
   { ar: "ارفع جميع الوثائق المطلوبة للطلب ولكل مؤسس.", en: "Upload every required application and founder document." },
-  { ar: "راجع مشروع النظام الأساسي وأكّد الإقرار المطلوب.", en: "Review the draft bylaws and accept the required acknowledgment." },
+  { ar: "نزّل النظام الأساسي المستكمل ببيانات الطلب، راجعه وأكّد الإقرار المطلوب.", en: "Download and review the articles completed from the application data, then accept the acknowledgment." },
   { ar: "استكمل الخطوات السابقة قبل مراجعة الطلب.", en: "Complete the previous steps before reviewing the application." },
   { ar: "أكمل الإقرارات والتوقيع قبل إرسال الطلب.", en: "Complete the declarations and signature before submitting." },
 ]);
@@ -288,6 +302,7 @@ function sanitizeFounder(value) {
   }
   if (value.isAuthorizedRepresentative !== undefined && typeof value.isAuthorizedRepresentative !== "boolean") return null;
   founder.isAuthorizedRepresentative = value.isAuthorizedRepresentative === true;
+  founder.visualSignature = null;
   return founder;
 }
 
@@ -433,12 +448,24 @@ export function hydrateLocalWizardSnapshot(snapshot, serverApplication) {
   const localForm = sanitizeSnapshotForm(snapshot.form);
   const serverForm = sanitizeSnapshotForm(serverApplication);
   if (!localForm || !serverForm) return null;
+  const serverFounders = new Map(
+    (serverApplication.founders || []).map((founder) => [founder.id || founder.nationalId, founder]),
+  );
   return {
     application: serverApplication,
     token: snapshot.token.trim(),
     form: {
       ...serverForm,
       ...localForm,
+      founders: localForm.founders.map((founder) => {
+        const serverFounder = serverFounders.get(founder.id || founder.nationalId);
+        return {
+          ...founder,
+          visualSignature: isValidLegalLicenseVisualSignature(serverFounder?.visualSignature)
+            ? serverFounder.visualSignature
+            : null,
+        };
+      }),
       applicantSignature: isValidLegalLicenseVisualSignature(serverApplication.applicantSignature)
         ? serverApplication.applicantSignature
         : null,
@@ -503,6 +530,12 @@ function rootField(field) {
 
 export function mapDeficiencyToWizardStep(deficiency) {
   if (!isRecord(deficiency)) return null;
+  if (deficiency.attachmentKind === "ARTICLES_OF_ASSOCIATION") return 5;
+  if (
+    deficiency.scope === "FOUNDER"
+    && typeof deficiency.field === "string"
+    && deficiency.field.replace(/^founders[.]/, "") === "visualSignature"
+  ) return 7;
   if (Object.hasOwn(STEP_BY_SCOPE, deficiency.scope)) return STEP_BY_SCOPE[deficiency.scope];
   if (deficiency.attachmentKind) return STEP_BY_SCOPE.ATTACHMENT;
   const field = rootField(deficiency.field);
@@ -557,14 +590,17 @@ export function wizardApiErrorMessage(operation, language = "en", response = {})
 }
 
 export class WizardUserError extends Error {
-  constructor(message) {
+  constructor(message, { status = null } = {}) {
     super(message);
     this.name = "WizardUserError";
+    this.status = Number.isInteger(status) ? status : null;
   }
 }
 
 export function createWizardUserError(operation, language = "en", response = {}) {
-  return new WizardUserError(wizardApiErrorMessage(operation, language, response));
+  return new WizardUserError(wizardApiErrorMessage(operation, language, response), {
+    status: Number(response?.status),
+  });
 }
 
 export function wizardFailureMessage(error, operation, language = "en") {
@@ -620,24 +656,23 @@ export function isWizardAttachmentEditable(kind, subjectRef = null, context = {}
 
 export function getWizardStepValidationError(stepId, { profile, form = {}, application } = {}, language = "en") {
   const isAr = language === "ar";
-  
+
   if (stepId === "guide") {
     if (!profile || form.licenseType !== profile.licenseType) {
       return isAr ? "يرجى اختيار نوع الترخيص أولاً للمتابعة." : "Please select a license type first to continue.";
     }
   }
-  
+
   if (stepId === "eligibility") {
     const el = wizardEligibility(profile, form);
     if (!el.eligible) {
-      return isAr 
-        ? "يرجى استكمال جميع شروط الأهلية والموافقة عليها للمتابعة." 
+      return isAr
+        ? "يرجى استكمال جميع شروط الأهلية والموافقة عليها للمتابعة."
         : "Please complete and accept all eligibility requirements to continue.";
     }
   }
-  
+
   if (stepId === "people") {
-    // 1. Applicant validation
     if (!nonEmpty(form.applicantName)) {
       return isAr ? "بيانات مقدم الطلب: الاسم الكامل مطلوب." : "Applicant Details: Full name is required.";
     }
@@ -663,12 +698,11 @@ export function getWizardStepValidationError(stepId, { profile, form = {}, appli
       return isAr ? "بيانات مقدم الطلب: البريد الإلكتروني غير صالح." : "Applicant Details: Email address is invalid.";
     }
 
-    // 2. Founders validation
     const founders = Array.isArray(form.founders) ? form.founders : [];
     if (founders.length === 0) {
       return isAr ? "بيانات المؤسسين: يجب إضافة مؤسس واحد على الأقل." : "Founders: At least one founder must be added.";
     }
-    
+
     const usedNationalIds = new Set([form.nationalId.trim()]);
     for (let i = 0; i < founders.length; i++) {
       const founder = founders[i];
@@ -682,11 +716,11 @@ export function getWizardStepValidationError(stepId, { profile, form = {}, appli
       if (!isValidLegalLicenseNationalId(founder.nationalId)) {
         return isAr ? `بيانات المؤسس ${indexDisplay}: الرقم الوطني يجب أن يتكون من 11 رقماً.` : `Founder ${indexDisplay}: National ID must be exactly 11 digits.`;
       }
-      
+
       const nationalId = founder.nationalId.trim();
       if (usedNationalIds.has(nationalId)) {
-        return isAr 
-          ? `بيانات المؤسس ${indexDisplay}: الرقم الوطني مكرر (مستخدم لمقدم الطلب أو لمؤسس آخر).` 
+        return isAr
+          ? `بيانات المؤسس ${indexDisplay}: الرقم الوطني مكرر (مستخدم لمقدم الطلب أو لمؤسس آخر).`
           : `Founder ${indexDisplay}: National ID is duplicated.`;
       }
       usedNationalIds.add(nationalId);
@@ -699,20 +733,18 @@ export function getWizardStepValidationError(stepId, { profile, form = {}, appli
       }
     }
 
-    // 3. Authorized signatory check
     const representativeCount = founders.filter((founder) => founder?.isAuthorizedRepresentative === true).length;
     if (representativeCount === 0) {
-      return isAr 
-        ? "بيانات المؤسسين: يرجى تحديد مؤسس واحد كـ 'مفوض وحيد بالتوقيع'." 
+      return isAr
+        ? "بيانات المؤسسين: يرجى تحديد مؤسس واحد كـ 'مفوض وحيد بالتوقيع'."
         : "Founders: Please select exactly one founder as the sole authorized signatory.";
     }
     if (representativeCount > 1) {
-      return isAr 
-        ? "بيانات المؤسسين: يمكن تحديد مفوض واحد فقط بالتوقيع." 
+      return isAr
+        ? "بيانات المؤسسين: يمكن تحديد مفوض واحد فقط بالتوقيع."
         : "Founders: Only one founder can be the authorized signatory.";
     }
 
-    // 4. Manager validation
     const manager = form.managerDetails;
     if (isRecord(manager) && manager.enabled === true) {
       if (!nonEmpty(manager.fullName)) {
@@ -735,20 +767,17 @@ export function getWizardStepValidationError(stepId, { profile, form = {}, appli
 
   if (stepId === "entity") {
     if (!profile) return isAr ? "يرجى استكمال اختيار نوع الترخيص." : "License profile not loaded.";
-    
-    // Check required fields based on profile requirements
+
     for (const field of profile.requiredFields) {
       if (!nonEmpty(form[field])) {
         const fieldLabels = isAr ? {
           entityName: "اسم الجهة مطلوب.",
-          purpose: "الغرض من التأسيس مطلوب.",
           objectives: "أهداف الجهة مطلوبة.",
           activityDescription: "وصف النشاط مطلوب.",
           governorate: "المحافظة مطلوبة.",
           address: "عنوان المقر مطلوب."
         } : {
           entityName: "Entity name is required.",
-          purpose: "Purpose of establishment is required.",
           objectives: "Objectives are required.",
           activityDescription: "Activity description is required.",
           governorate: "Governorate is required.",
@@ -764,25 +793,25 @@ export function getWizardStepValidationError(stepId, { profile, form = {}, appli
       LEGAL_LICENSE_REQUIREMENT_CATEGORIES.EVIDENCE,
     ]);
     if (!requirementsSatisfied(requirements, form.premisesAnswers)) {
-      return isAr 
-        ? "متطلبات المقر والتجهيزات: يرجى الإجابة على جميع الحقول والشروط المطلوبة." 
+      return isAr
+        ? "متطلبات المقر والتجهيزات: يرجى الإجابة على جميع الحقول والشروط المطلوبة."
         : "Premises & Equipment: Please answer all required conditions.";
     }
   }
 
   if (stepId === "documents") {
     if (!baseStepCompleted("documents", { profile, form, application })) {
-      return isAr 
-        ? "الوثائق والمستندات: يرجى رفع جميع الأوراق الثبوتية والوثائق المطلوبة للطلب ولأعضاء الهيئة التأسيسية." 
+      return isAr
+        ? "الوثائق والمستندات: يرجى رفع جميع الأوراق الثبوتية والوثائق المطلوبة للطلب ولأعضاء الهيئة التأسيسية."
         : "Documents: Please upload all required files for the application and founders.";
     }
   }
 
   if (stepId === "bylaws") {
     if (!baseStepCompleted("bylaws", { profile, form, application })) {
-      return isAr 
-        ? "النظام الأساسي: يرجى مراجعة مسودة النظام الأساسي المتولدة والموافقة على إقرار الالتزام به." 
-        : "Bylaws: Please review the draft bylaws and check the commitment acknowledgment.";
+      return isAr
+        ? "النظام الأساسي: يرجى تنزيل النظام الأساسي المستكمل ببيانات الطلب ومراجعته والموافقة على الإقرار."
+        : "Bylaws: Download and review the articles completed from the application data, then check the acknowledgment.";
     }
   }
 
@@ -793,6 +822,14 @@ export function getWizardStepValidationError(stepId, { profile, form = {}, appli
     }
     if (!isValidLegalLicenseVisualSignature(form.applicantSignature)) {
       return isAr ? "الإقرار والتعهد: يرجى رسم توقيعكم الخطي في المربع المخصص لإتمام الطلب." : "Declarations: Visual signature is required.";
+    }
+    const unsignedFounder = (form.founders || []).find(
+      (founder) => !isValidLegalLicenseVisualSignature(founder?.visualSignature),
+    );
+    if (unsignedFounder) {
+      return isAr
+        ? `الإقرار والتعهد: يرجى إرفاق التوقيع المرئي للمؤسس ${unsignedFounder.fullName || "المحدد"}.`
+        : `Declarations: A visual signature is required for founder ${unsignedFounder.fullName || "listed"}.`;
     }
     if (!requirementsSatisfied(requirements, form.postLicenseDeclarations)) {
       return isAr ? "الإقرار والتعهد: يرجى استكمال شروط ما بعد الترخيص." : "Declarations: Please satisfy post-license requirements.";

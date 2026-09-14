@@ -3,10 +3,11 @@
 import { Check, FileWarning, RotateCcw, Trash2, Upload } from "lucide-react";
 import { LEGAL_LICENSE_DOCUMENT_RULES } from "@/lib/legal-license.mjs";
 
-function DocumentRow({
+export function DocumentRow({
   application,
   kind,
   founderId,
+  founderIndex,
   isRtl,
   busyKey,
   mutationBusy,
@@ -19,8 +20,9 @@ function DocumentRow({
   const latest = application?.attachments?.find(
     (attachment) => attachment.kind === kind && (attachment.founderId || null) === (founderId || null),
   );
-  const inputId = `license-file-${kind}-${founderId || "application"}`;
-  const busy = busyKey === `${kind}:${founderId || ""}`;
+  const founderKey = founderId || (Number.isInteger(founderIndex) ? `founder-${founderIndex}` : "application");
+  const inputId = `license-file-${kind}-${founderKey}`;
+  const busy = busyKey === `${kind}:${founderKey}`;
 
   return (
     <article className={`rounded-xl border p-3 ${latest ? "border-emerald-200 bg-emerald-50/60" : "border-amber-200 bg-amber-50/60"}`}>
@@ -33,7 +35,9 @@ function DocumentRow({
           <p className="mt-1 truncate text-[11px] text-slate-500">
             {latest
               ? `${latest.originalName} · v${latest.version} · ${Math.ceil(latest.size / 1024)} KB`
-              : (isRtl ? "مطلوب · PDF أو JPEG أو PNG أو WebP، حتى 5MB" : "Missing · PDF, JPEG, PNG or WebP, up to 5MB")}
+              : (rule.help
+                ? (isRtl ? rule.help.ar : rule.help.en)
+                : (isRtl ? "مطلوب · PDF أو JPEG أو PNG أو WebP، حتى 5MB" : "Missing · PDF, JPEG, PNG or WebP, up to 5MB"))}
           </p>
           {latest?.version > 1 ? (
             <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-white px-2 py-1 text-[10px] font-bold text-[#054239]">
@@ -57,10 +61,10 @@ function DocumentRow({
               id={inputId}
               className="sr-only"
               type="file"
-              accept=".pdf,image/jpeg,image/png,image/webp"
+              accept={rule.accept || ".pdf,image/jpeg,image/png,image/webp"}
               disabled={!editable || busy || mutationBusy}
               onChange={(event) => {
-                onUpload(event.target.files?.[0], kind, founderId);
+                onUpload(event.target.files?.[0], kind, founderId, founderIndex);
                 event.target.value = "";
               }}
             />
@@ -95,10 +99,6 @@ export default function DocumentsStep({
   onUpload,
   onDelete,
 }) {
-  if (!application) {
-    return <p className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm font-bold text-amber-900">{isRtl ? "يرجى حفظ مسودة الطلب أولاً لتفعيل خاصية رفع الوثائق." : "Save the draft first to enable document uploads."}</p>;
-  }
-
   const rowProps = { application, isRtl, busyKey, mutationBusy, onUpload, onDelete };
   return (
     <div className="space-y-7">
@@ -111,7 +111,7 @@ export default function DocumentsStep({
               {...rowProps}
               kind={kind}
               editable={canEditAttachment(kind, null)}
-              canDelete={application.status === "DRAFT" && canEditAttachment(kind, null)}
+              canDelete={application?.status === "DRAFT" && canEditAttachment(kind, null)}
             />
           ))}
         </div>
@@ -121,22 +121,19 @@ export default function DocumentsStep({
           <h3 className="mb-3 font-qomra text-lg font-black text-[#054239]">
             {isRtl ? `وثائق المؤسس: ${founder.fullName || index + 1}` : `Founder evidence: ${founder.fullName || index + 1}`}
           </h3>
-          {!founder.id ? (
-            <p className="rounded-xl bg-amber-50 p-3 text-xs font-bold text-amber-800">{isRtl ? "يرجى حفظ بيانات المؤسس أولاً لتمكين رفع الوثائق الخاصة به." : "Save the founder before uploading their evidence."}</p>
-          ) : (
-            <div className="grid gap-3 md:grid-cols-2">
-              {founderKinds.map((kind) => (
-                <DocumentRow
-                  key={kind}
-                  {...rowProps}
-                  kind={kind}
-                  founderId={founder.id}
-                  editable={canEditAttachment(kind, founder.id)}
-                  canDelete={application.status === "DRAFT" && canEditAttachment(kind, founder.id)}
-                />
-              ))}
-            </div>
-          )}
+          <div className="grid gap-3 md:grid-cols-2">
+            {founderKinds.map((kind) => (
+              <DocumentRow
+                key={kind}
+                {...rowProps}
+                kind={kind}
+                founderId={founder.id}
+                founderIndex={index}
+                editable={canEditAttachment(kind, founder.id || null)}
+                canDelete={application?.status === "DRAFT" && canEditAttachment(kind, founder.id || null)}
+              />
+            ))}
+          </div>
         </section>
       ))}
     </div>

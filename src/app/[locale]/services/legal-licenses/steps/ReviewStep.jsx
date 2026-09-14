@@ -1,12 +1,12 @@
 "use client";
 
-import { ClipboardCheck, Download, FileCode2, FileText, ListChecks, Loader2 } from "lucide-react";
+import { Download, FileCode2, FileText, Loader2, ScrollText } from "lucide-react";
+import { canDownloadLegalLicenseStatusReport } from "@/lib/legal-license.mjs";
 
 const previewCards = [
   { key: "application", icon: FileText, ar: "نسخة الطلب", en: "Application copy" },
-  { key: "bylaws", icon: FileCode2, ar: "مشروع النظام الأساسي", en: "Draft bylaws" },
-  { key: "checklist", icon: ListChecks, ar: "قائمة التحقق", en: "Requirements checklist" },
-  { key: "technical", icon: ClipboardCheck, ar: "الملخص الفني", en: "Technical summary" },
+  { key: "bylaws", icon: FileCode2, ar: "النظام الأساسي المستكمل ببيانات الطلب (بما يتوافق مع النظام الداخلي الاسترشادي)", en: "Articles completed from the application data" },
+  { key: "status", icon: ScrollText, ar: "حالة الطلب", en: "Application status" },
 ];
 
 export default function ReviewStep({
@@ -15,10 +15,13 @@ export default function ReviewStep({
   application,
   isRtl,
   onPreviewApplication,
-  sourceBylawsUrl,
-  sourceChecklistUrl,
+  onPreviewDossier,
+  onDownloadStatus,
   busyPdf,
 }) {
+  const completedBylawsAvailable = Boolean(profile?.generatesBylaws && application);
+  const visiblePreviewCards = previewCards.filter((card) => card.key !== "bylaws" || profile?.generatesBylaws);
+
   return (
     <div className="space-y-6">
       <section className="rounded-2xl bg-slate-50 p-5">
@@ -34,25 +37,24 @@ export default function ReviewStep({
       <section>
         <h3 className="font-qomra text-lg font-black text-[#054239]">{isRtl ? "معاينات ملف المعاملة" : "Dossier previews"}</h3>
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          {previewCards.map((card) => {
+          {visiblePreviewCards.map((card) => {
             let active = false;
-            let downloadUrl = null;
             let onClick = undefined;
 
             if (card.key === "application") {
               active = Boolean(application);
               onClick = onPreviewApplication;
             } else if (card.key === "bylaws") {
-              active = Boolean(sourceBylawsUrl);
-              downloadUrl = sourceBylawsUrl;
-            } else if (card.key === "checklist") {
-              active = Boolean(sourceChecklistUrl);
-              downloadUrl = sourceChecklistUrl;
+              active = completedBylawsAvailable;
+              onClick = onPreviewDossier;
+            } else if (card.key === "status") {
+              active = canDownloadLegalLicenseStatusReport(application);
+              onClick = onDownloadStatus;
             }
 
-            const isPdfLoading = card.key === "application" && busyPdf;
+            const isPdfLoading = ["application", "bylaws"].includes(card.key) && busyPdf;
             const Icon = isPdfLoading ? Loader2 : card.icon;
-            
+
             const content = (
               <span className="flex items-center gap-3">
                 <span className="rounded-xl bg-[#054239]/10 p-2 text-[#054239]">
@@ -64,31 +66,22 @@ export default function ReviewStep({
                     {isPdfLoading
                       ? (isRtl ? "جاري إنشاء ملف PDF وتنزيله..." : "Generating PDF and downloading...")
                       : active
-                      ? (isRtl ? "متاحة الآن بصيغة PDF للتحميل" : "Available now as PDF to download")
-                      : card.key === "technical"
-                      ? (isRtl ? "سيتوفر بعد مراجعة ودراسة الطلب من قبل اللجنة" : "Available after technical review")
+                      ? card.key === "application"
+                        ? (isRtl ? "نسخة الطلب الإلكتروني فقط دون المرفقات" : "Electronic application only, without attachments")
+                        : card.key === "bylaws"
+                          ? (isRtl
+                            ? "يتضمن النظام الأساسي المستكمل ببيانات الطلب بما يتوافق مع النظام الداخلي الاسترشادي، وكافة الوثائق والمرفقات المرفوعة في خطوة الوثائق."
+                            : "Includes the articles completed from the application data and every document uploaded in the documents step.")
+                          : (isRtl ? "متاحة الآن بصيغة PDF للتحميل" : "Available now as PDF to download")
+                      : card.key === "status"
+                      ? (isRtl ? "سيتوفر بعد مراجعة ودراسة الطلب من قبل اللجنة" : "Available after the committee reviews and studies the application")
                       : (isRtl ? "ستتوفر بعد اختيار نوع الترخيص وحفظ البيانات" : "Available after license selection and save")}
                   </span>
                 </span>
               </span>
             );
 
-            const className = "flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-start outline-none enabled:hover:border-[#b9a779] enabled:focus-visible:ring-4 enabled:focus-visible:ring-[#b9a779]/25 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400 w-full transition duration-150 hover:shadow-sm";
-
-            if (downloadUrl) {
-              return (
-                <a
-                  key={card.key}
-                  href={downloadUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className={className}
-                >
-                  {content}
-                  <Download className="h-4 w-4 shrink-0" />
-                </a>
-              );
-            }
+            const className = "flex w-full items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-start outline-none transition duration-150 hover:shadow-sm enabled:hover:border-[#b9a779] enabled:focus-visible:ring-4 enabled:focus-visible:ring-[#b9a779]/25 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400";
 
             return (
               <button

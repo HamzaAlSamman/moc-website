@@ -15,6 +15,7 @@ import { readLegalLicenseJson } from "@/lib/legal-license-request.mjs";
 import { LEGAL_LICENSE_INCLUDE, legalLicenseError, legalLicenseJson } from "@/lib/legal-license-server";
 import { sendLegalLicenseCitizenEmail } from "@/lib/legal-license-mailer";
 import { getCurrentCitizenOptional } from "@/lib/citizen-dal";
+import { createDevLegalLicense, legalLicenseDevStoreEnabled } from "@/lib/legal-license-dev-store.mjs";
 
 export async function POST(request) {
   if (!rateLimit(`legal-license-create:${getClientIp(request)}`, 10, 60 * 60 * 1000)) {
@@ -23,6 +24,10 @@ export async function POST(request) {
   try {
     const draft = normalizeLegalLicenseDraft(await readLegalLicenseJson(request));
     const accessToken = createLegalLicenseAccessToken();
+    if (legalLicenseDevStoreEnabled()) {
+      const application = createDevLegalLicense(draft, accessToken);
+      return NextResponse.json(legalLicenseJson(application, { accessToken }), { status: 201 });
+    }
     const referenceNo = await nextReferenceNumber(REFERENCE_SCOPES.LEGAL_LICENSE);
     const { founders } = draft;
     const applicationData = legalLicenseApplicationWriteData(draft);

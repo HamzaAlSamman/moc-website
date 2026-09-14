@@ -3,6 +3,8 @@ import path from "node:path";
 import puppeteer from "puppeteer-core";
 import QRCode from "qrcode";
 import { LEGAL_LICENSE_TYPES, LEGAL_LICENSE_DOCUMENT_RULES } from "./legal-license.mjs";
+import { LEGAL_LICENSE_SOURCE_DOCUMENTS, getLegalLicenseRequirementProfile } from "./legal-license-requirements.mjs";
+import { currentLegalLicenseAttachments } from "./legal-license-pdf-package-core.mjs";
 import { computeVerificationCode } from "./pdf-verification.mjs";
 import { requireChromiumExecutable } from "./chromium-executable.mjs";
 import { ltrIsolate } from "./bidi.mjs";
@@ -29,6 +31,23 @@ function assets() {
   return cachedAssets;
 }
 
+function buildDocumentHeader(application, { statusDocument = false } = {}) {
+  const a = assets();
+  const title = statusDocument ? "حالة طلب الترخيص" : "طلب ترخيص قانوني";
+  const subtitle = statusDocument
+    ? "وزارة الثقافة - مديرية الشؤون القانونية"
+    : "Legal License Application - Syrian Ministry of Culture";
+  const reference = escapeLegalLicenseHtml(application.referenceNo || application.id);
+  const revision = escapeLegalLicenseHtml(application.revision || 1);
+  return `<div class="document-header" style="width:100%;margin:0 0 7mm;box-sizing:border-box;direction:rtl;font-family:Arial,sans-serif;-webkit-print-color-adjust:exact;break-inside:avoid;page-break-inside:avoid">
+    <div style="height:28mm;border-radius:10px;background:#054239;color:#fff;border-bottom:4px solid #b9a779;padding:8px 14px;display:flex;align-items:center;gap:14px;box-sizing:border-box">
+      ${a.logo ? `<img src="${a.logo}" alt="Ministry logo" style="width:17mm;height:17mm;object-fit:contain;background:#fff;border-radius:8px;padding:4px">` : ""}
+      <div><div style="font-size:20px;font-weight:700">${title}</div><div style="color:#d6c58e;margin-top:4px;font-size:10px">${subtitle}</div></div>
+      <div style="margin-right:auto;text-align:left;direction:ltr"><span style="display:block;font-size:9px;color:#d1fae5">رقم المعاملة / Reference</span><strong style="display:block;color:#d6c58e;font-size:17px">${reference}</strong>${statusDocument ? "" : `<span style="display:block;font-size:9px;color:#d1fae5">مراجعة / Revision ${revision}</span>`}</div>
+    </div>
+  </div>`;
+}
+
 export function escapeLegalLicenseHtml(value) {
   return String(value ?? "")
     .replace(/&/g, "&amp;")
@@ -39,11 +58,22 @@ export function escapeLegalLicenseHtml(value) {
 }
 
 function field(labelAr, labelEn, value) {
-  return `<div class="field"><dt>${labelAr}<small>${labelEn}</small></dt><dd>${escapeLegalLicenseHtml(value || "\u2014")}</dd></div>`;
+  return `<div class="field"><dt>${labelAr}<small>${labelEn}</small></dt><dd>${escapeLegalLicenseHtml(value || "—")}</dd></div>`;
+}
+
+function visualSignature(value) {
+  return /^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(value || "") ? value : "";
+}
+
+function dateOnly(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? String(value).slice(0, 10) : date.toISOString().slice(0, 10);
 }
 
 export function buildLegalLicenseHtml(application, qrSection = "") {
   const type = LEGAL_LICENSE_TYPES[application.licenseType];
+  const profile = getLegalLicenseRequirementProfile(application.licenseType);
   const a = assets();
   const founders = (application.founders || []).map((founder, index) => `
     <section class="item">
@@ -53,17 +83,61 @@ export function buildLegalLicenseHtml(application, qrSection = "") {
       </h3>
       <div class="grid">
         ${field("الرقم الوطني", "National ID", founder.nationalId)}
+        ${field("تاريخ الميلاد", "Birth date", dateOnly(founder.birthDate))}
+        ${field("الجنسية", "Nationality", founder.nationality)}
+        ${field("المهنة", "Occupation", founder.occupation)}
+        ${field("المؤهل العلمي", "Qualification", founder.qualification)}
         ${field("الهاتف", "Phone", ltrIsolate(founder.phone))}
         ${field("البريد", "Email", founder.email)}
         ${field("العنوان", "Address", founder.address)}
       </div>
     </section>`).join("");
 
-  const signature = /^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(application.applicantSignature || "")
-    ? application.applicantSignature
-    : "";
+  const signatureCards = [
+    {
+      role: "مقدم الطلب / Applicant",
+      name: application.applicantName,
+      image: visualSignature(application.applicantSignature),
+    },
+    ...(application.founders || []).map((founder) => ({
+      role: "مؤسس / Founder",
+      name: founder.fullName,
+      image: visualSignature(founder.visualSignature),
+    })),
+  ].map((item) => `<div class="signature-card">
+    <h3>${escapeLegalLicenseHtml(item.role)}</h3>
+    <strong>${escapeLegalLicenseHtml(item.name || "—")}</strong>
+    ${item.image ? `<img class="signature" src="${item.image}" alt="Visual signature">` : '<span class="missing-signature">—</span>'}
+  </div>`).join("");
 
-  const attachments = (application.attachments || []).map((attachment) => {
+  const declarations = [
+    {
+      label: "أقر بصحة جميع البيانات والوثائق المقدمة.",
+      labelEn: "I confirm that all submitted information and documents are accurate.",
+      accepted: application.declarationAccuracy === true,
+    },
+    {
+      label: "أتحمل المسؤولية القانونية عن صحة هذا الطلب.",
+      labelEn: "I accept legal responsibility for the accuracy of this application.",
+      accepted: application.declarationResponsibility === true,
+    },
+    {
+      label: "أوافق على معالجة البيانات لأغراض هذه المعاملة.",
+      labelEn: "I consent to processing the data for this application.",
+      accepted: application.declarationPrivacy === true,
+    },
+    ...(profile?.postLicenseDeclarations || []).map((item) => ({
+      label: item.label.ar,
+      labelEn: item.label.en,
+      help: item.help.ar,
+      accepted: application.postLicenseDeclarations?.[item.key] === true,
+    })),
+  ].map((item) => `<div class="declaration ${item.accepted ? "accepted" : "pending"}">
+    <span class="declaration-check">${item.accepted ? "✓" : "○"}</span>
+    <span><strong>${escapeLegalLicenseHtml(item.label)}</strong>${item.help ? `<em>${escapeLegalLicenseHtml(item.help)}</em>` : ""}<small>${escapeLegalLicenseHtml(item.labelEn)}</small></span>
+  </div>`).join("");
+
+  const attachments = currentLegalLicenseAttachments(application.attachments).map((attachment) => {
     const label = LEGAL_LICENSE_DOCUMENT_RULES[attachment.kind]?.label?.ar || attachment.kind;
     const labelEn = LEGAL_LICENSE_DOCUMENT_RULES[attachment.kind]?.label?.en || "";
     return `
@@ -78,6 +152,11 @@ export function buildLegalLicenseHtml(application, qrSection = "") {
       </td>
     </tr>`;
   }).join("");
+
+  const sourceDocuments = (profile?.sourceDocuments || []).map((key) => LEGAL_LICENSE_SOURCE_DOCUMENTS[key])
+    .filter((source) => source && source.kind !== "MODEL_BYLAWS")
+    .map((source) => `<div class="source-document"><span>✓</span><strong>${escapeLegalLicenseHtml(source.label.ar)}</strong><small>${escapeLegalLicenseHtml(source.label.en)}</small></div>`)
+    .join("");
 
   const issuedAt = new Date().toISOString();
   const docTitle = `طلب ترخيص قانوني — ${escapeLegalLicenseHtml(application.entityName || "")} — ${escapeLegalLicenseHtml(application.referenceNo || application.id)}`;
@@ -110,18 +189,13 @@ export function buildLegalLicenseHtml(application, qrSection = "") {
 <style>
 ${a.regular ? `@font-face{font-family:'Qomra';font-weight:400;font-style:normal;src:url('${a.regular}') format('opentype');}` : ""}
 ${a.bold ? `@font-face{font-family:'Qomra';font-weight:700;font-style:normal;src:url('${a.bold}') format('opentype');}` : ""}
-@page { size: A4; margin: 13mm; }
+@page { size: A4; }
 *{box-sizing:border-box}
 body{font-family:'Qomra',Arial,sans-serif;color:#1e293b;font-size:12px;margin:0;background:#fff}
-.header{border-radius:12px;background:#054239;color:#fff;border-bottom:4px solid #b9a779;padding:20px 24px;display:flex;align-items:center;gap:20px}
-.header img{width:64px;height:64px;object-fit:contain;background:#fff;border-radius:10px;padding:5px}
-.header h1{font-size:22px;margin:0;font-weight:700}
-.header p{color:#b9a779;margin:6px 0 0;font-size:11px}
-.ref{margin-inline-start:auto;text-align:left}
-.ref span{display:block;font-size:10px;color:#d1fae5;opacity:0.85}
-.ref strong{display:block;color:#b9a779;font-size:18px;direction:ltr;font-family:Arial,sans-serif}
-.section{margin-top:18px;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;break-inside:avoid;box-shadow:0 1px 3px rgba(0,0,0,0.02);background:#fff}
+.section{margin-top:18px;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;break-inside:avoid-page;page-break-inside:avoid;box-shadow:0 1px 3px rgba(0,0,0,0.02);background:#fff}
+.section.splittable{overflow:visible;break-inside:auto;page-break-inside:auto}
 .section>h2{margin:0;background:#f8fafc;color:#054239;border-bottom:1px solid #e2e8f0;border-right:5px solid #b9a779;padding:10px 15px;font-size:13px;font-weight:bold}
+.section.splittable>h2{break-after:avoid-page;page-break-after:avoid;border:1px solid #e2e8f0;border-radius:12px 12px 0 0}
 .grid{display:grid;grid-template-columns:1fr 1fr}
 .field{display:flex;flex-direction:row;border-bottom:1px solid #f1f5f9;min-height:44px;align-items:center}
 .field dt,.field dd{margin:0;padding:10px 12px}
@@ -129,27 +203,46 @@ body{font-family:'Qomra',Arial,sans-serif;color:#1e293b;font-size:12px;margin:0;
 .field dt small{display:block;color:#94a3b8;font-weight:400;font-size:9px;margin-top:2px;direction:ltr;text-align:right}
 .field dd{width:60%;color:#0f172a;font-weight:bold;white-space:normal;overflow-wrap:anywhere}
 .wide{grid-column:1/-1}
-.item{padding:12px 15px;border-bottom:1px dashed #e2e8f0;break-inside:avoid}
+.item{padding:12px 15px;border-bottom:1px dashed #e2e8f0;break-inside:avoid-page;page-break-inside:avoid;background:#fff}
 .item:last-child{border-bottom:none}
 .badge{background:#ecfdf5;color:#047857;border:1px solid #a7f3d0;border-radius:999px;padding:3px 10px;font-size:9px;font-weight:bold;margin-inline-start:8px;display:inline-block;vertical-align:middle}
 table{width:100%;border-collapse:collapse}
+thead{display:table-header-group}
+tr{break-inside:avoid-page;page-break-inside:avoid}
 th,td{border:1px solid #ded8c9;padding:10px;text-align:right}
 th{background:#f8fafc;color:#054239;font-weight:bold}
-.signature{display:block;max-width:220px;max-height:90px;margin:12px auto;border-bottom:1px solid #7b705d}
+.signature{display:block;max-width:220px;max-height:90px;margin:12px auto 0;border-bottom:1px solid #7b705d}
+.declarations{padding:12px;display:grid;gap:8px}
+.declaration{display:flex;align-items:flex-start;gap:9px;padding:9px 11px;border:1px solid #dbe5e3;border-radius:8px;background:#f8fafc;break-inside:avoid-page;page-break-inside:avoid}
+.declaration.accepted{border-color:#86efac;background:#ecfdf5;color:#065f46}
+.declaration.pending{border-color:#f3d6a2;background:#fff8e6;color:#7c5b18}
+.declaration-check{font:700 15px Arial,sans-serif;line-height:1.2}
+.declaration small{display:block;margin-top:3px;color:#64748b;font-size:9px;direction:ltr;text-align:right;font-weight:400}
+.declaration em{display:block;margin-top:4px;color:#475569;font-size:9px;font-style:normal;font-weight:400;line-height:1.6}
+.signature-block{margin:0 12px 12px;padding:10px;border-top:1px solid #e2e8f0}
+.signature-list{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.signature-card{padding:10px;border:1px solid #ded8c9;border-radius:8px;text-align:center;break-inside:avoid-page;page-break-inside:avoid;background:#faf9f6}
+.signature-card h3{margin:0;color:#054239;font-size:11px}
+.signature-card strong{display:block;margin-top:4px;font-size:11px;color:#334155}
+.missing-signature{display:block;margin:14px;color:#94a3b8}
+.source-documents{padding:12px;display:grid;gap:8px}
+.source-document{display:grid;grid-template-columns:auto 1fr;column-gap:8px;padding:9px 11px;border:1px solid #ded8c9;border-radius:8px;background:#faf9f6;color:#054239}
+.source-document span{grid-row:1/3;color:#16a34a;font:bold 14px Arial}
+.source-document small{display:block;color:#64748b;font-size:9px;direction:ltr;text-align:right;font-weight:400}
 .notice{margin-top:14px;background:#fff8e6;border:1px solid #ead69d;padding:10px;border-radius:9px;color:#604d19}
-.footer{margin-top:25px;padding-top:15px;border-top:1px solid #e2e8f0;color:#64748b;text-align:center;font-size:10px}
 </style></head><body>
-<header class="header">${a.logo ? `<img src="${a.logo}" alt="Ministry logo">` : ""}<div><h1>طلب ترخيص قانوني</h1><p>Legal License Application — Syrian Ministry of Culture</p></div><div class="ref"><span>رقم المعاملة / Reference</span><strong>${escapeLegalLicenseHtml(application.referenceNo || application.id)}</strong><span>مراجعة / Revision ${escapeLegalLicenseHtml(application.revision || 1)}</span></div></header>
+${buildDocumentHeader(application)}
 <section class="section"><h2>نوع الترخيص / License type</h2><div class="grid">${field("النوع", "Type", type ? `${type.label.ar} / ${type.label.en}` : application.licenseType)}</div></section>
 <section class="section"><h2>بيانات مقدم الطلب / Applicant</h2><div class="grid">
 ${field("الاسم", "Name", application.applicantName)}${field("الرقم الوطني", "National ID", application.nationalId)}
 ${field("الهاتف", "Phone", ltrIsolate(application.phone))}${field("البريد", "Email", application.email)}${field("الصفة", "Capacity", application.capacity)}</div></section>
 <section class="section"><h2>بيانات الجهة / Entity</h2><div class="grid">
 ${field("الاسم", "Name", application.entityName)}${field("المحافظة", "Governorate", application.governorate)}
-${field("العنوان", "Address", application.address)}${field("الغاية", "Purpose", application.purpose)}
-${field("الأهداف", "Objectives", application.objectives)}${field("النشاط", "Activity", application.activityDescription)}</div></section>
-<section class="section"><h2>المؤسسون / Founders</h2>${founders || '<div class="item">—</div>'}</section>
-<section class="section"><h2>الوثائق المرفقة / Attachments</h2>
+${field("العنوان", "Address", application.address)}${field("الأهداف", "Objectives", application.objectives)}
+${field("النشاط", "Activity", application.activityDescription)}</div></section>
+<section class="section splittable"><h2>المؤسسون / Founders</h2>${founders || '<div class="item">—</div>'}</section>
+${sourceDocuments ? `<section class="section"><h2>نظام وقرار الترخيص المرفق / Included licensing rules</h2><div class="source-documents">${sourceDocuments}</div></section>` : ""}
+<section class="section splittable"><h2>الوثائق المرفقة / Attachments</h2>
   <table style="width: 100%; border-collapse: collapse;">
     <thead>
       <tr>
@@ -165,13 +258,39 @@ ${field("الأهداف", "Objectives", application.objectives)}${field("الن�
 
 ${qrSection}
 <section class="section">
-  <h2>الإقرار والتوقيع / Declaration and signature</h2>
-  ${signature ? `<img class="signature" src="${signature}" alt="Visual signature">` : "—"}
+  <h2>التعهدات والتوقيع / Declarations and signature</h2>
+  <div class="declarations">${declarations}</div>
+  <div class="signature-block">
+    <div class="signature-list">${signatureCards}</div>
+    <p style="margin:7px 0 0;color:#7c5b18;font-size:9px;line-height:1.5">التوقيع المرئي إقرار مرفق بالطلب وليس توقيعاً إلكترونياً مؤهلاً. Visual declaration only: this is not a qualified electronic signature.</p>
+  </div>
 </section>
-<div class="notice"><strong>Visual declaration only:</strong> the signature drawn in this service records the applicant declaration. It is not a qualified electronic signature.</div>
 
-<footer class="footer">الجمهورية العربية السورية — وزارة الثقافة — بوابة التراخيص والاعتمادات الثقافية الإلكترونية</footer>
 </body></html>`;
+}
+
+const STATUS_LABELS = Object.freeze({
+  DRAFT: "مسودة", SUBMITTED: "تم الإرسال", UNDER_REVIEW: "قيد التدقيق",
+  COMMITTEE_REVIEW: "لدى اللجنة", SUSPENDED: "بانتظار استكمال النواقص",
+  LEGAL_APPROVAL: "الاعتماد القانوني", MINISTER_APPROVAL: "اعتماد المفوض",
+  APPROVED: "مقبول", REJECTED: "مرفوض", LICENSE_ISSUED: "صدر الترخيص", COMPLETED: "مكتمل",
+});
+
+export function buildLegalLicenseStatusHtml(application) {
+  const a = assets();
+  const notes = (application.history || [])
+    .filter((entry) => entry.actorRole === "LICENSING_COMMITTEE" && entry.publicNote)
+    .map((entry) => `<li><p>${escapeLegalLicenseHtml(entry.publicNote)}</p><time>${escapeLegalLicenseHtml(new Date(entry.createdAt).toLocaleDateString("ar-SY"))}</time></li>`)
+    .join("");
+  return `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>حالة الطلب - ${escapeLegalLicenseHtml(application.referenceNo)}</title><style>
+${a.regular ? `@font-face{font-family:'Qomra';font-weight:400;src:url('${a.regular}') format('opentype');}` : ""}
+${a.bold ? `@font-face{font-family:'Qomra';font-weight:700;src:url('${a.bold}') format('opentype');}` : ""}
+@page{size:A4}*{box-sizing:border-box}body{font-family:'Qomra',Arial,sans-serif;color:#1e293b;margin:0;font-size:13px}.card{border:1px solid #ded8c9;border-radius:14px;overflow:hidden;margin-bottom:18px;break-inside:avoid-page;page-break-inside:avoid}.card h2{margin:0;padding:11px 16px;background:#f8fafc;border-right:5px solid #b9a779;color:#054239;font-size:15px}.grid{display:grid;grid-template-columns:1fr 1fr}.field{padding:14px 16px;border-top:1px solid #eef2f7}.field span{display:block;color:#64748b;font-size:11px}.field strong{display:block;margin-top:5px;color:#054239;font-size:15px}.notes{margin:0;padding:15px 38px 18px}.notes li{margin:0 0 12px;break-inside:avoid-page;page-break-inside:avoid}.notes p{margin:0;white-space:pre-wrap}.notes time{color:#94a3b8;font-size:10px}.empty{padding:18px;color:#64748b}.footer{margin-top:22px;padding-top:12px;border-top:1px solid #e2e8f0;text-align:center;color:#64748b;font-size:10px}
+</style></head><body>
+${buildDocumentHeader(application, { statusDocument: true })}
+<section class="card"><h2>بيانات الطلب</h2><div class="grid"><div class="field"><span>مقدم الطلب</span><strong>${escapeLegalLicenseHtml(application.applicantName || "-")}</strong></div><div class="field"><span>الجهة</span><strong>${escapeLegalLicenseHtml(application.entityName || "-")}</strong></div><div class="field"><span>الحالة الحالية</span><strong>${escapeLegalLicenseHtml(STATUS_LABELS[application.status] || application.status)}</strong></div><div class="field"><span>آخر تحديث</span><strong>${escapeLegalLicenseHtml(new Date(application.updatedAt).toLocaleDateString("ar-SY"))}</strong></div></div></section>
+<section class="card"><h2>ملاحظات اللجنة الموجهة لمقدم الطلب</h2>${notes ? `<ol class="notes">${notes}</ol>` : '<p class="empty">لا توجد ملاحظات موجهة لمقدم الطلب حتى الآن.</p>'}</section>
+<footer class="footer">هذه الوثيقة تعرض حالة الطلب والملاحظات العامة المسجلة في بوابة التراخيص الثقافية.</footer></body></html>`;
 }
 
 async function buildQrSection(application) {
@@ -217,12 +336,22 @@ async function render(html) {
     browser = await puppeteer.launch({
       executablePath,
       headless: true,
-      args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
+      timeout: 60_000,
+      args: [
+        "--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--disable-gpu",
+        "--no-first-run", "--no-default-browser-check", "--disable-extensions",
+      ],
     });
     const page = await browser.newPage();
     await page.setContent(html, { waitUntil: "load", timeout: 60_000 });
     await page.evaluate(() => document.fonts?.ready);
-    return Buffer.from(await page.pdf({ format: "A4", printBackground: true, preferCSSPageSize: true }));
+    return Buffer.from(await page.pdf({
+      format: "A4",
+      printBackground: true,
+      preferCSSPageSize: true,
+      displayHeaderFooter: false,
+      margin: { top: "13mm", right: "13mm", bottom: "16mm", left: "13mm" },
+    }));
   } finally {
     if (browser) await browser.close().catch(() => {});
   }
@@ -233,6 +362,18 @@ export function generateLegalLicensePdf(application) {
     const qrSection = await buildQrSection(application);
     return render(buildLegalLicenseHtml(application, qrSection));
   });
+  queue = task.then(() => {}, () => {});
+  return task;
+}
+
+export function generateLegalLicenseStatusPdf(application) {
+  const task = queue.then(() => render(buildLegalLicenseStatusHtml(application)));
+  queue = task.then(() => {}, () => {});
+  return task;
+}
+
+export function renderLegalLicenseHtmlPdf(html) {
+  const task = queue.then(() => render(html));
   queue = task.then(() => {}, () => {});
   return task;
 }

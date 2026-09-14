@@ -1,12 +1,12 @@
 import { z } from "zod";
 import {
-  GENERAL_LEGAL_LICENSE_DOCUMENTS,
   LEGAL_LICENSE_DOCUMENT_RULES,
   LEGAL_LICENSE_TYPES,
   isValidLegalLicenseEmail,
   isValidLegalLicenseNationalId,
   isValidLegalLicensePhone,
   normalizeLegalLicensePhone,
+  requiredLegalLicenseDocumentKinds,
   validateLegalLicenseApplication,
 } from "./legal-license.mjs";
 import {
@@ -63,11 +63,13 @@ const founderDraftSchema = z.object({
   fullName: text(300),
   nationalId: text(32),
   birthDate: z.string().trim().max(32).nullable().optional(),
+  nationality: text(200),
   occupation: text(300),
   qualification: text(300),
   phone: text(32),
   email: optionalEmail,
   address: text(2_000),
+  visualSignature: z.string().max(2_000_000).nullable().optional().default(null),
   isAuthorizedRepresentative: z.boolean().optional().default(false),
 }).strip();
 
@@ -79,7 +81,6 @@ export const legalLicenseDraftSchema = z.object({
   email: optionalEmail,
   capacity: text(300),
   entityName: text(500),
-  purpose: text(10_000),
   objectives: text(20_000),
   activityDescription: text(20_000),
   governorate: text(200),
@@ -240,14 +241,7 @@ export function buildRequirementSnapshot(licenseType, context = {}) {
   };
 }
 
-export function requiredLegalLicenseDocumentKinds(licenseType) {
-  const config = LEGAL_LICENSE_TYPES[licenseType];
-  if (!config) throw new Error("Invalid legal-license type");
-  return [...new Set([
-    ...GENERAL_LEGAL_LICENSE_DOCUMENTS.map((document) => document.kind),
-    ...config.additionalDocuments,
-  ])];
-}
+export { requiredLegalLicenseDocumentKinds };
 
 
 function managerRequiredText(value, field) {
@@ -336,11 +330,13 @@ export function legalLicenseFounderWriteData(draft) {
     fullName: parsed.fullName || null,
     nationalId: parsed.nationalId || null,
     birthDate: parsed.birthDate ? new Date(parsed.birthDate) : null,
+    nationality: parsed.nationality || null,
     occupation: parsed.occupation || null,
     qualification: parsed.qualification || null,
     phone: parsed.phone || null,
     email: parsed.email || null,
     address: parsed.address || null,
+    visualSignature: parsed.visualSignature || null,
     isAuthorizedRepresentative: parsed.isAuthorizedRepresentative,
   };
 }

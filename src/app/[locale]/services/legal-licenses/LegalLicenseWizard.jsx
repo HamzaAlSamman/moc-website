@@ -1,12 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
-import { Check, ChevronLeft, ChevronRight, Copy, FileText, RotateCcw, Search, ShieldAlert } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Copy, Download, FileText, RotateCcw, Search, ShieldAlert } from "lucide-react";
 import DecorativeCorners from "@/components/DecorativeCorners";
 import SubpageHero from "@/components/SubpageHero";
 import { useStepScrollReset } from "@/lib/use-step-scroll-reset";
-import { GENERAL_LEGAL_LICENSE_DOCUMENTS, LEGAL_LICENSE_DOCUMENT_RULES } from "@/lib/legal-license.mjs";
+import { LEGAL_LICENSE_DOCUMENT_RULES, canDownloadLegalLicenseStatusReport, requiredLegalLicenseDocumentKinds } from "@/lib/legal-license.mjs";
 import { LEGAL_LICENSE_SOURCE_DOCUMENTS, getLegalLicenseRequirementProfile } from "@/lib/legal-license-requirements.mjs";
 import {
   LEGAL_LICENSE_WIZARD_STEPS,
@@ -26,6 +25,7 @@ import {
   isWizardFieldEditable,
   isWizardRequirementEditable,
   isWizardStepEditable,
+  orderedLegalLicenseWizardSteps,
   parseLocalTrackingSnapshot,
   parseLocalWizardSnapshot,
   wizardFailureMessage,
@@ -56,7 +56,7 @@ const STATUS = {
 };
 const EMPTY_FORM = {
   licenseType: "", applicantName: "", nationalId: "", phone: "", email: "", capacity: "",
-  entityName: "", purpose: "", objectives: "", activityDescription: "", governorate: "", address: "",
+  entityName: "", objectives: "", activityDescription: "", governorate: "", address: "",
   founders: [], managerDetails: { enabled: false }, eligibilityAnswers: {}, premisesAnswers: {}, bylawAnswers: {}, postLicenseDeclarations: {},
   declarationAccuracy: false, declarationResponsibility: false, declarationPrivacy: false, applicantSignature: null,
 };
@@ -85,7 +85,28 @@ function freshEmptyForm() {
 async function downloadProtectedBlob(url, accessToken, fileName) {
   const response = await fetch(url, { headers: { "x-legal-license-token": accessToken } });
   if (!response.ok) throw new Error("Download failed");
-  const objectUrl = URL.createObjectURL(await response.blob());
+  const bytes = await response.arrayBuffer();
+  const contentType = (response.headers.get("content-type") || "").split(";", 1)[0].trim().toLowerCase();
+  const isPdf = /[.]pdf$/i.test(fileName || "") || contentType === "application/pdf";
+  const isDocx = /[.]docx$/i.test(fileName || "")
+    || contentType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+  const signature = new Uint8Array(bytes, 0, Math.min(bytes.byteLength, 5));
+  const hasPdfSignature = signature.length === 5
+    && signature[0] === 0x25
+    && signature[1] === 0x50
+    && signature[2] === 0x44
+    && signature[3] === 0x46
+    && signature[4] === 0x2d;
+  if (!bytes.byteLength || (isPdf && !hasPdfSignature)) throw new Error("Invalid PDF download");
+  const hasZipSignature = signature.length >= 4
+    && signature[0] === 0x50
+    && signature[1] === 0x4b
+    && signature[2] === 0x03
+    && signature[3] === 0x04;
+  if (isDocx && !hasZipSignature) throw new Error("Invalid DOCX download");
+
+  const blob = new Blob([bytes], { type: contentType || "application/octet-stream" });
+  const objectUrl = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = objectUrl;
   anchor.download = fileName || "legal-license-document";
@@ -93,7 +114,9 @@ async function downloadProtectedBlob(url, accessToken, fileName) {
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();
-  setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
+  // Some browsers finish reading the Blob after the click handler returns.
+  // Revoking immediately can therefore create a zero-byte download.
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
 }
 
 async function readWizardResponse(response, operation, language) {
@@ -122,6 +145,7 @@ export default function LegalLicenseWizard({ locale = "ar" }) {
   const [busy, setBusy] = useState(false);
   const [busyDocument, setBusyDocument] = useState("");
   const [busyPdf, setBusyPdf] = useState(false);
+  const [busyBylaws, setBusyBylaws] = useState(false);
   const [error, setError] = useState("");
   const [sent, setSent] = useState(false);
   const [track, setTrack] = useState({ referenceNo: "", accessToken: "" });
@@ -134,26 +158,17 @@ export default function LegalLicenseWizard({ locale = "ar" }) {
   const stepHeadingRef = useRef(null);
   useStepScrollReset(step, { focusRef: stepHeadingRef });
 
-  // Coming from "My Account" with a known reference — switch straight to
-  // track mode and pre-fill it, so the citizen only has to type their
-  // access token instead of also hunting down the reference number.
-  const searchParams = useSearchParams();
-  useEffect(() => {
-    const ref = searchParams.get("ref");
-    if (ref) {
-      setMode("track");
-      setTrack((t) => ({ ...t, referenceNo: ref }));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const profile = useMemo(() => getLegalLicenseRequirementProfile(form.licenseType), [form.licenseType]);
   const sourceDocuments = useMemo(() => (profile?.sourceDocuments || [])
     .map((key) => LEGAL_LICENSE_SOURCE_DOCUMENTS[key]).filter(Boolean), [profile]);
-  const requiredKinds = useMemo(() => profile ? [...new Set([
-    ...GENERAL_LEGAL_LICENSE_DOCUMENTS.map((document) => document.kind), ...profile.attachmentKinds,
-  ])] : [], [profile]);
-  const applicationKinds = requiredKinds.filter((kind) => LEGAL_LICENSE_DOCUMENT_RULES[kind]?.owner === "APPLICATION");
+  const requiredKinds = useMemo(
+    () => profile ? requiredLegalLicenseDocumentKinds(profile.licenseType) : [],
+    [profile],
+  );
+  const applicationKinds = requiredKinds.filter((kind) => (
+    LEGAL_LICENSE_DOCUMENT_RULES[kind]?.owner === "APPLICATION"
+    && !(profile?.generatesBylaws && kind === "ARTICLES_OF_ASSOCIATION")
+  ));
   const founderKinds = requiredKinds.filter((kind) => LEGAL_LICENSE_DOCUMENT_RULES[kind]?.owner === "FOUNDER");
   const deficiencyContext = { status: application?.status, deficiencyScopes: application?.deficiencyScopes || [] };
 
@@ -215,6 +230,18 @@ export default function LegalLicenseWizard({ locale = "ar" }) {
       }).catch((resumeError) => {
         if (resumeError?.name === "AbortError"
           || !hydrationGuardRef.current.isCurrent(hydrationAttempt.id)) return;
+        if (!hashCredentials && localSnapshot && resumeError?.status === 404) {
+          localStorage.removeItem(STORAGE_KEY);
+          localStorage.removeItem(TRACKING_KEY);
+          setForm({ ...freshEmptyForm(), ...localSnapshot.form });
+          setApplication(null);
+          setToken("");
+          setTrack({ referenceNo: "", accessToken: "" });
+          setStep(localSnapshot.step);
+          setMode("new");
+          setError("");
+          return;
+        }
         setTrackedResult(null);
         setMode("track");
         reportWizardFailure(resumeError, "track", language, setError);
@@ -355,13 +382,17 @@ export default function LegalLicenseWizard({ locale = "ar" }) {
       setError(validationError);
       return;
     }
-    const saved = await createOrSave();
-    if (saved) setStep((current) => Math.min(current + 1, LEGAL_LICENSE_WIZARD_STEPS.length - 1));
+    // The local snapshot is the draft fallback advertised to the applicant.
+    // Do not trap them on the current step when the server is temporarily
+    // unavailable; createOrSave still reports the synchronization failure.
+    const destinationStep = nextVisibleStep;
+    await createOrSave();
+    if (destinationStep !== undefined) setStep(destinationStep);
   }
   function addFounder() {
     update("founders", [...form.founders, {
-      fullName: "", nationalId: "", birthDate: "", occupation: "", qualification: "",
-      phone: "", email: "", address: "", isAuthorizedRepresentative: form.founders.length === 0,
+      fullName: "", nationalId: "", birthDate: "", nationality: "", occupation: "", qualification: "",
+      phone: "", email: "", address: "", visualSignature: null, isAuthorizedRepresentative: form.founders.length === 0,
     }]);
   }
   function setFounder(index, key, value) {
@@ -374,28 +405,39 @@ export default function LegalLicenseWizard({ locale = "ar" }) {
   function removeFounder(index) {
     update("founders", form.founders.filter((_, founderIndex) => founderIndex !== index));
   }
-  async function uploadDocument(file, kind, founderId = null) {
-    if (!file || !application) return;
-    const owner = `upload:${kind}:${founderId || "application"}`;
+  async function uploadDocument(file, kind, founderId = null, founderIndex = null) {
+    if (!file) return;
+    const founderKey = founderId || (Number.isInteger(founderIndex) ? `founder-${founderIndex}` : "application");
+    const owner = `upload:${kind}:${founderKey}`;
     if (!beginDraftMutation(owner)) return;
-    const key = `${kind}:${founderId || ""}`;
+    const key = `${kind}:${founderKey}`;
     setBusyDocument(key);
     setError("");
     try {
+      let activeApplication = application;
+      let activeToken = token;
+      if (!activeApplication) {
+        const saved = await saveDraftUnlocked();
+        activeApplication = saved.application;
+        activeToken = saved.token;
+      }
+      const activeFounderId = founderId || (Number.isInteger(founderIndex)
+        ? activeApplication.founders?.[founderIndex]?.id
+        : null);
       const body = new FormData();
       body.set("file", file);
       body.set("kind", kind);
-      if (founderId) body.set("founderId", founderId);
-      const response = await fetch(`/api/legal-licenses/${application.id}/attachments`, {
-        method: "POST", headers: { "x-legal-license-token": token }, body,
+      if (activeFounderId) body.set("founderId", activeFounderId);
+      const response = await fetch(`/api/legal-licenses/${activeApplication.id}/attachments`, {
+        method: "POST", headers: { "x-legal-license-token": activeToken }, body,
       });
       const data = await readWizardResponse(response, "upload", language);
       if (!response.ok) throw createWizardUserError("upload", language, { ...data, status: response.status });
       setApplication((current) => ({
-        ...current,
+        ...(current || activeApplication),
         revision: data.revision,
         updatedAt: data.updatedAt,
-        attachments: [data.attachment, ...(current.attachments || []).filter((attachment) => !(
+        attachments: [data.attachment, ...((current || activeApplication).attachments || []).filter((attachment) => !(
           attachment.kind === data.attachment.kind
           && (attachment.founderId || null) === (data.attachment.founderId || null)
         ))],
@@ -430,16 +472,74 @@ export default function LegalLicenseWizard({ locale = "ar" }) {
       endDraftMutation(owner);
     }
   }
-  async function previewApplicationPdf() {
-    if (!application || mutationLockRef.current.locked()) return;
+  async function downloadApplicationPdf() {
+    const owner = "pdf";
+    if (!beginDraftMutation(owner)) return;
     setBusyPdf(true);
     setError("");
     try {
-      await downloadProtectedBlob(`/api/legal-licenses/${application.id}/pdf`, token, `${application.referenceNo || "legal-license"}.pdf`);
+      const saved = await saveDraftUnlocked();
+      await downloadProtectedBlob(
+        `/api/legal-licenses/${saved.application.id}/application-pdf`,
+        saved.token,
+        `${saved.application.referenceNo || "legal-license"}-application.pdf`,
+      );
     } catch (previewError) {
       reportWizardFailure(previewError, "preview", language, setError);
     } finally {
       setBusyPdf(false);
+      endDraftMutation(owner);
+    }
+  }
+  async function downloadApplicationPackagePdf() {
+    const owner = "pdf-package";
+    if (!beginDraftMutation(owner)) return;
+    setBusyPdf(true);
+    setError("");
+    try {
+      const saved = await saveDraftUnlocked();
+      await downloadProtectedBlob(
+        `/api/legal-licenses/${saved.application.id}/pdf`,
+        saved.token,
+        `${saved.application.referenceNo || "legal-license"}-complete.pdf`,
+      );
+    } catch (previewError) {
+      reportWizardFailure(previewError, "preview", language, setError);
+    } finally {
+      setBusyPdf(false);
+      endDraftMutation(owner);
+    }
+  }
+  async function downloadGeneratedBylawsDocx() {
+    const owner = "bylaws-docx";
+    if (!beginDraftMutation(owner)) return;
+    setBusyBylaws(true);
+    setError("");
+    try {
+      const saved = await saveDraftUnlocked();
+      await downloadProtectedBlob(
+        `/api/legal-licenses/${saved.application.id}/bylaws-docx`,
+        saved.token,
+        `${saved.application.referenceNo || "legal-license"}-bylaws.docx`,
+      );
+    } catch (downloadError) {
+      reportWizardFailure(downloadError, "download", language, setError);
+    } finally {
+      setBusyBylaws(false);
+      endDraftMutation(owner);
+    }
+  }
+  async function downloadStatusPdf(targetApplication = application, accessToken = token) {
+    if (!targetApplication?.id || !accessToken || !canDownloadLegalLicenseStatusReport(targetApplication)) return;
+    setError("");
+    try {
+      await downloadProtectedBlob(
+        `/api/legal-licenses/${targetApplication.id}/status-pdf`,
+        accessToken,
+        `status-${targetApplication.referenceNo || "legal-license"}.pdf`,
+      );
+    } catch (downloadError) {
+      reportWizardFailure(downloadError, "download", language, setError);
     }
   }
   async function submit() {
@@ -509,14 +609,29 @@ export default function LegalLicenseWizard({ locale = "ar" }) {
     }
   }
   const currentStep = LEGAL_LICENSE_WIZARD_STEPS[step];
+  const wizardContext = { profile, form, application };
+  const completePdfReady = wizardStepStatus("declaration", wizardContext).completed;
+  const visibleSteps = orderedLegalLicenseWizardSteps(profile)
+    .filter((item) => wizardStepStatus(item.id, wizardContext).required);
+  const visibleStepPosition = visibleSteps.findIndex((item) => item.index === step);
+  const previousStep = visibleSteps[visibleStepPosition - 1]?.index;
+  const nextVisibleStep = visibleSteps[visibleStepPosition + 1]?.index;
+  useEffect(() => {
+    if (!profile || visibleStepPosition !== -1) return;
+    const replacement = visibleSteps.find((item) => item.index > step) || visibleSteps.at(-1);
+    if (replacement) setStep(replacement.index);
+  }, [profile, step, visibleStepPosition, visibleSteps]);
   const currentEditable = isWizardStepEditable(step, deficiencyContext);
   const canEditField = (field, subjectRef) => !mutationBusy && isWizardFieldEditable(field, { ...deficiencyContext, subjectRef });
   const canEditRequirement = (key) => !mutationBusy && isWizardRequirementEditable(key, deficiencyContext);
   const canEditAttachment = (kind, subjectRef) => !mutationBusy && isWizardAttachmentEditable(kind, subjectRef, deficiencyContext);
-  const estimatedEvidenceCount = applicationKinds.length + founderKinds.length * Math.max(form.founders.length, 1);
+  const estimatedEvidenceCount = applicationKinds.length
+    + (profile?.generatesBylaws ? 1 : 0)
+    + founderKinds.length * Math.max(form.founders.length, 1);
 
-  const sourceBylawsUrl = profile?.generatesBylaws ? "/documents/legal-licenses/model-cultural-bylaws.pdf" : null;
-  const sourceChecklistUrl = profile ? LEGAL_LICENSE_SOURCE_DOCUMENTS[profile.licenseType]?.publicUrl : null;
+  const bylawTemplate = profile?.bylawTemplateDocument
+    ? LEGAL_LICENSE_SOURCE_DOCUMENTS[profile.bylawTemplateDocument]
+    : null;
 
   const stepContent = [
     <LicenseGuideStep key="guide" form={form} update={update} profile={profile} sourceDocuments={sourceDocuments}
@@ -535,18 +650,19 @@ export default function LegalLicenseWizard({ locale = "ar" }) {
     <DocumentsStep key="documents" application={application} founders={form.founders}
       applicationKinds={applicationKinds} founderKinds={founderKinds} isRtl={isRtl}
       busyKey={busyDocument} mutationBusy={mutationBusy} canEditAttachment={canEditAttachment} onUpload={uploadDocument} onDelete={deleteDocument} />,
-    <BylawsStep key="bylaws" profile={profile} form={form} source={LEGAL_LICENSE_SOURCE_DOCUMENTS["model-cultural-bylaws"]}
+    <BylawsStep key="bylaws" profile={profile} source={bylawTemplate} form={form}
       answer={form.bylawAnswers?.["bylaws.generated_from_model_acknowledgment"]}
       onAnswer={(key, value) => updateAnswer("bylawAnswers", key, value)} isRtl={isRtl} disabled={!currentEditable || mutationBusy}
-      onReturnToEntity={() => navigateToStep(3)} />,
+      mutationBusy={mutationBusy} busyTemplate={busyBylaws} onDownloadTemplate={downloadGeneratedBylawsDocx} />,
     <ReviewStep key="review" form={form} profile={profile} application={application}
-      isRtl={isRtl} onPreviewApplication={previewApplicationPdf}
-      sourceBylawsUrl={sourceBylawsUrl} sourceChecklistUrl={sourceChecklistUrl}
+      isRtl={isRtl} onPreviewApplication={downloadApplicationPdf}
+      onPreviewDossier={downloadApplicationPackagePdf}
+      onDownloadStatus={() => downloadStatusPdf()}
       busyPdf={busyPdf} />,
     <DeclarationStep key="declaration" form={form} update={update}
       postLicenseRequirements={profile?.postLicenseDeclarations || []}
       onPostLicenseAnswer={(key, value) => updateAnswer("postLicenseDeclarations", key, value)}
-      isRtl={isRtl} canEditField={canEditField} canEditRequirement={canEditRequirement} />,
+      setFounder={setFounder} isRtl={isRtl} canEditField={canEditField} canEditRequirement={canEditRequirement} />,
   ][step];
 
   return (
@@ -601,13 +717,13 @@ export default function LegalLicenseWizard({ locale = "ar" }) {
           <SubmissionSuccess application={application} token={token} isRtl={isRtl} onReset={resetNewApplication} />
         ) : (
           <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
-              <DossierRail steps={LEGAL_LICENSE_WIZARD_STEPS} currentStep={step} profile={profile}
+              <DossierRail steps={visibleSteps} currentStep={step} profile={profile}
                 form={form} application={application} isRtl={isRtl} mutationBusy={mutationBusy} onNavigate={navigateToStep} />
               <section aria-busy={mutationBusy} className="relative min-h-[560px] rounded-3xl border border-slate-100 bg-white p-5 shadow-sm md:p-8">
                 <DecorativeCorners />
                 <header className="mb-7 scroll-mt-28 border-b border-slate-100 pb-5">
                   <p className="text-xs font-black uppercase tracking-widest text-[#b9a779]">
-                    {isRtl ? `الخطوة ${step + 1} من 8` : `Step ${step + 1} of 8`}
+                    {isRtl ? `الخطوة ${visibleStepPosition + 1} من ${visibleSteps.length}` : `Step ${visibleStepPosition + 1} of ${visibleSteps.length}`}
                   </p>
                   <h2 ref={stepHeadingRef} tabIndex={-1}
                     className="mt-1 font-qomra text-2xl font-black text-[#054239] outline-none">
@@ -628,7 +744,7 @@ export default function LegalLicenseWizard({ locale = "ar" }) {
                   {stepContent}
                 </div>
                 <footer className="mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-5">
-                <button type="button" disabled={step === 0 || busy || mutationBusy} onClick={() => navigateToStep(step - 1)}
+                <button type="button" disabled={previousStep === undefined || busy || mutationBusy} onClick={() => navigateToStep(previousStep)}
                   className="group flex items-center gap-2 rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-bold text-slate-600 outline-none focus-visible:ring-4 focus-visible:ring-[#b9a779]/25 transition-all duration-200 active:scale-95 disabled:opacity-30">
                   {isRtl ? (
                     <ChevronRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
@@ -637,7 +753,7 @@ export default function LegalLicenseWizard({ locale = "ar" }) {
                   )}
                   {isRtl ? "السابق" : "Back"}
                 </button>
-                {step < 7 ? (
+                {nextVisibleStep !== undefined ? (
                   <button type="button" disabled={busy || mutationBusy} onClick={nextStep}
                     className="group flex items-center gap-2 rounded-xl bg-[#054239] px-6 py-3 text-sm font-black text-[#b9a779] outline-none focus-visible:ring-4 focus-visible:ring-[#b9a779]/25 transition-all duration-200 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50">
                     {busy ? (isRtl ? "جارٍ الحفظ…" : "Saving…") : (isRtl ? "حفظ ومتابعة" : "Save & continue")}
@@ -648,10 +764,20 @@ export default function LegalLicenseWizard({ locale = "ar" }) {
                     )}
                   </button>
                 ) : (
-                  <button type="button" disabled={busy || mutationBusy} onClick={submit}
-                    className="rounded-xl bg-[#054239] px-7 py-3 text-sm font-black text-[#b9a779] outline-none focus-visible:ring-4 focus-visible:ring-[#b9a779]/25 transition-all duration-200 active:scale-95 disabled:opacity-50">
-                    {busy ? (isRtl ? "جارٍ الإرسال…" : "Submitting…") : (isRtl ? "إرسال الطلب نهائياً" : "Submit application")}
-                  </button>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <button type="button" disabled={!completePdfReady || busyPdf || busy || mutationBusy} onClick={downloadApplicationPackagePdf}
+                      title={completePdfReady
+                        ? (isRtl ? "يتضمن نسخة الطلب كاملة، والنظام الأساسي المكتمل، وجميع الوثائق والمرفقات، وتواقيع مقدم الطلب والمؤسسين" : "Includes the complete application, completed bylaws, every attachment, and applicant and founder signatures")
+                        : (isRtl ? "أكمل التعهدات وتوقيع مقدم الطلب وتواقيع المؤسسين أولاً" : "Complete the declarations and every applicant and founder signature first")}
+                      className="inline-flex items-center gap-2 rounded-xl border border-[#054239] bg-white px-5 py-3 text-sm font-black text-[#054239] outline-none focus-visible:ring-4 focus-visible:ring-[#b9a779]/25 transition-all duration-200 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40">
+                      <Download className={`h-4 w-4 ${busyPdf ? "animate-bounce" : ""}`} />
+                      {busyPdf ? (isRtl ? "جاري تجهيز PDF…" : "Preparing PDF…") : (isRtl ? "حفظ الطلب كـ PDF" : "Save application as PDF")}
+                    </button>
+                    <button type="button" disabled={busy || busyPdf || mutationBusy} onClick={submit}
+                      className="rounded-xl bg-[#054239] px-7 py-3 text-sm font-black text-[#b9a779] outline-none focus-visible:ring-4 focus-visible:ring-[#b9a779]/25 transition-all duration-200 active:scale-95 disabled:opacity-50">
+                      {busy ? (isRtl ? "جارٍ الإرسال…" : "Submitting…") : (isRtl ? "إرسال الطلب نهائياً" : "Submit application")}
+                    </button>
+                  </div>
                 )}
               </footer>
             </section>
@@ -681,10 +807,10 @@ function DossierRail({ steps, currentStep, profile, form, application, isRtl, mu
         {application?.referenceNo ? <p className="mt-1 font-mono text-[11px] text-white/65" dir="ltr">{application.referenceNo}</p> : null}
       </header>
       <ol className="p-3">
-        {steps.map((item, index) => {
+        {steps.map((item, visibleIndex) => {
           const status = wizardStepStatus(item.id, { profile, form, application });
-          const available = !mutationBusy && canNavigateToWizardStep(index, { profile, form, application });
-          const active = index === currentStep;
+          const available = !mutationBusy && canNavigateToWizardStep(item.index, { profile, form, application });
+          const active = item.index === currentStep;
           const stateLabels = isRtl
             ? { current: "الحالية", completed: "مكتملة", incomplete: "غير مكتملة", notRequired: "غير مطلوبة" }
             : { current: "Current", completed: "Completed", incomplete: "Incomplete", notRequired: "Not required" };
@@ -694,15 +820,15 @@ function DossierRail({ steps, currentStep, profile, form, application, isRtl, mu
           ].filter(Boolean).join(isRtl ? "، " : ", ");
           return (
             <li key={item.id} className="relative">
-              {index < steps.length - 1 ? (
-                <span className={`absolute bottom-0 top-9 w-px ltr:left-[18px] rtl:right-[18px] ${index < currentStep ? "bg-emerald-500" : "bg-slate-200"}`} aria-hidden="true" />
+              {visibleIndex < steps.length - 1 ? (
+                <span className={`absolute bottom-0 top-9 w-px ltr:left-[18px] rtl:right-[18px] ${item.index < currentStep ? "bg-emerald-500" : "bg-slate-200"}`} aria-hidden="true" />
               ) : null}
-              <button type="button" onClick={() => available && onNavigate(index)} disabled={!available}
+              <button type="button" onClick={() => available && onNavigate(item.index)} disabled={!available}
                 aria-current={active ? "step" : undefined}
                 aria-label={`${item.label[language]} — ${stateText}`}
                 className={`relative flex w-full items-start gap-3 rounded-xl px-2 py-3 text-start text-xs font-bold outline-none focus-visible:ring-4 focus-visible:ring-[#b9a779]/20 disabled:cursor-not-allowed ${active ? "bg-[#054239]/8 text-[#054239]" : available ? "text-slate-700 hover:bg-slate-50" : "text-slate-400"}`}>
                 <span className={`z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border ${active ? "border-[#054239] bg-[#054239] text-[#b9a779]" : status.completed ? "border-emerald-600 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-white text-slate-500"}`}>
-                  {status.completed ? <Check className="h-4 w-4" /> : index + 1}
+                  {status.completed ? <Check className="h-4 w-4" /> : visibleIndex + 1}
                 </span>
                 <span className="min-w-0 pt-1">
                   <span className="block">{item.label[language]}</span>
@@ -775,6 +901,17 @@ function TrackingCard({ trackedResult, isRtl, onResume, onError }) {
           className="mt-4 inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-[#054239] outline-none focus-visible:ring-4 focus-visible:ring-[#b9a779]/20">
           <FileText className="h-4 w-4" />{attachment.originalName}
         </button>)}
+      {canDownloadLegalLicenseStatusReport(application) ? (
+        <button type="button"
+          onClick={() => downloadProtectedBlob(
+            `/api/legal-licenses/${application.id}/status-pdf`,
+            accessToken,
+            `status-${application.referenceNo}.pdf`,
+          ).catch((downloadError) => reportWizardFailure(downloadError, "download", language, onError))}
+          className="mt-4 inline-flex items-center gap-2 rounded-xl border border-[#b9a779] px-4 py-2 text-xs font-bold text-[#054239] outline-none focus-visible:ring-4 focus-visible:ring-[#b9a779]/20">
+          <Download className="h-4 w-4" />{isRtl ? "تحميل حالة الطلب وملاحظات اللجنة" : "Download status and committee notes"}
+        </button>
+      ) : null}
     </div>
   );
 }
