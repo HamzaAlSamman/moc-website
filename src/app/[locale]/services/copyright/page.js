@@ -10,7 +10,7 @@ import { useSearchParams } from "next/navigation";
 import DecorativeCorners from "../../../../components/DecorativeCorners";
 import ApexDateTimePicker from "../../../../components/ApexDateTimePicker";
 import { validateField, validateAll } from "../../../../lib/copyright-validation";
-import { PAYMENT_GATEWAYS, isPaymentGatewayActive } from "../../../../lib/payment-gateways.mjs";
+import { PAYMENT_GATEWAYS, isPaymentGatewayActive, isRedirectPaymentGateway } from "../../../../lib/payment-gateways.mjs";
 import { getFeesForRole as feesForRole } from "../../../../lib/copyright-fees.mjs";
 import { useStepScrollReset } from "../../../../lib/use-step-scroll-reset";
 import { Lightbulb, Hourglass, AlertTriangle, Info, FileText, CheckCircle, AlertCircle, CreditCard, Clock, Award, Check, Trash2, Plus, Download, X } from "lucide-react";
@@ -509,9 +509,10 @@ function FieldErrorText({ id, message }) {
 }
 
 
-function PaymentCard({ gatewayId, isRtl, showToast }) {
+function PaymentCard({ gatewayId, isRtl, showToast, onPayNow, payAmount }) {
   const [copied, setCopied] = useState(false);
   const [showModal, setShowModal] = useState(false);
+  const [payLoading, setPayLoading] = useState(false);
 
   const config = PAYMENT_GATEWAYS[gatewayId] || PAYMENT_GATEWAYS.cham_cash;
   const name = isRtl ? config.nameAr : config.nameEn;
@@ -553,6 +554,52 @@ function PaymentCard({ gatewayId, isRtl, showToast }) {
               ? "هذه الوسيلة قيد التجهيز ولم تُفعّل بعد، ولا يوجد لها رمز حساب. الدفع الإلكتروني متاح حالياً عبر بوابة شام كاش المعتمدة فقط."
               : "This gateway is being prepared and is not active yet, and it has no account code. Electronic payment is currently available only through the approved Cham Cash gateway."}
           </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Paymera has no account code to copy — it's a real API integration, so
+  // instead of manual-transfer instructions this shows a single button that
+  // starts the redirect to Paymera's hosted card+OTP page (see onPayNow,
+  // wired up by the caller with the submission id and stage to pay for).
+  if (config.mode === "redirect") {
+    const handlePayNow = async () => {
+      if (payLoading) return;
+      setPayLoading(true);
+      try {
+        await onPayNow?.();
+      } finally {
+        setPayLoading(false);
+      }
+    };
+    return (
+      <div className="relative overflow-hidden text-white border rounded-3xl p-6 sm:p-8 shadow-2xl text-start" style={surface}>
+        <div className="absolute top-0 right-0 w-48 h-48 rounded-full blur-3xl pointer-events-none" style={{ backgroundColor: `${accent}1a` }} />
+        <div className="relative z-10 flex flex-col items-center text-center gap-4 py-2">
+          <div className="w-16 h-16 rounded-2xl p-0.5 shadow-lg flex items-center justify-center overflow-hidden" style={{ backgroundImage: `linear-gradient(to top right, ${accent}, ${accent}80)` }}>
+            <div className="w-full h-full bg-white rounded-[14px] flex items-center justify-center overflow-hidden p-1.5">
+              <img src={config.logo} alt={`${name} Logo`} className="max-w-full max-h-full object-contain" />
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] font-bold tracking-wider uppercase font-inter" style={{ color: accent }}>{config.brandText}</div>
+            <div className="text-xl font-bold text-white font-qomra mt-1">{name}</div>
+          </div>
+          <p className="text-xs leading-relaxed text-white/75 max-w-md">
+            {isRtl ? config.redirectDescAr : config.redirectDescEn}
+          </p>
+          <button
+            type="button"
+            onClick={handlePayNow}
+            disabled={payLoading}
+            className="w-full sm:w-auto text-sm font-black px-8 py-3 rounded-full border transition disabled:opacity-60 disabled:cursor-wait cursor-pointer"
+            style={{ color: "#030705", borderColor: accent, backgroundColor: accent }}
+          >
+            {payLoading
+              ? (isRtl ? "جارِ التحويل..." : "Redirecting...")
+              : (isRtl ? `ادفع الآن${payAmount ? ` (${payAmount.toLocaleString()} ل.س)` : ""}` : `Pay Now${payAmount ? ` (${payAmount.toLocaleString()} L.S.)` : ""}`)}
+          </button>
         </div>
       </div>
     );
@@ -883,6 +930,11 @@ export default function CopyrightPage(props) {
       setTrackCode(code);
       setPortal("tracker");
 
+      // Set only on return from a Paymera redirect (see the callback route) —
+      // the status it already confirmed server-side, so this is just telling
+      // the citizen what the fetch below is about to show them.
+      const paymeraStatus = searchParams.get("paymera");
+
       const fetchAndTrack = async () => {
         setLoadingTrack(true);
         setErrorTracker("");
@@ -891,6 +943,15 @@ export default function CopyrightPage(props) {
           if (res.ok) {
             const data = await res.json();
             setTrackedSub(data.submission);
+            if (paymeraStatus === "A") {
+              showToast(isRtl ? "تم تأكيد الدفع عبر بيميرا بنجاح!" : "Payment via Paymera confirmed!", "success");
+            } else if (paymeraStatus === "P") {
+              showToast(isRtl ? "الدفع قيد التأكيد من بيميرا، يرجى تحديث الصفحة بعد قليل." : "Paymera is still confirming the payment — please refresh shortly.", "info");
+            } else if (paymeraStatus === "F" || paymeraStatus === "C") {
+              showToast(isRtl ? "لم تكتمل عملية الدفع عبر بيميرا. يمكنك إعادة المحاولة." : "The Paymera payment did not complete. You can try again.", "error");
+            } else if (paymeraStatus === "MISMATCH") {
+              showToast(isRtl ? "تعذر التحقق من عملية الدفع، يرجى التواصل مع الدعم." : "Could not verify the payment — please contact support.", "error");
+            }
           } else {
             setErrorTracker(locale === "en" ? "Request code not found" : "رمز المعاملة غير موجود في سجلاتنا");
           }
@@ -1223,6 +1284,30 @@ export default function CopyrightPage(props) {
     } catch (err) {
       console.error("Form submit error:", err);
       showToast("حدث خطأ في الشبكة أثناء إرسال الاستمارة", "error");
+    }
+  };
+
+  // Starts a Paymera redirect session for the given submission/stage and
+  // sends the browser there. Shared by all three PaymentCard call sites
+  // (initial payment during submission, and initial/final payment from the
+  // tracker) since the redirect flow itself doesn't differ between them —
+  // only which submission id and fee stage it's for.
+  const payWithPaymera = async (id, stage) => {
+    try {
+      const res = await fetch("/api/copyright/payment/paymera/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, stage, locale }),
+      });
+      const data = await res.json();
+      if (res.ok && data.paymentUrl) {
+        window.location.href = data.paymentUrl;
+      } else {
+        showToast(data.error || (isRtl ? "تعذر بدء عملية الدفع عبر بيميرا" : "Could not start the Paymera payment"), "error");
+      }
+    } catch (err) {
+      console.error("Paymera create-payment error:", err);
+      showToast(isRtl ? "خطأ بالاتصال بالخادم لبدء الدفع" : "Server error starting payment", "error");
     }
   };
 
@@ -1575,63 +1660,69 @@ export default function CopyrightPage(props) {
               t={t}
             />
 
-            <>
-              {/* Payment Details */}
-              <PaymentCard gatewayId={selectedGateway} isRtl={isRtl} showToast={showToast} />
+            {isRedirectPaymentGateway(selectedGateway) ? (
+              <PaymentCard gatewayId={selectedGateway} isRtl={isRtl} showToast={showToast}
+                payAmount={fees.initialTotal}
+                onPayNow={() => payWithPaymera(sub.id, "initial")} />
+            ) : (
+              <>
+                {/* Payment Details */}
+                <PaymentCard gatewayId={selectedGateway} isRtl={isRtl} showToast={showToast} />
 
-              {/* Inputs */}
-              <div className="space-y-4 border-t border-slate-100 pt-4 bg-white p-4 rounded-xl border border-slate-150">
-                <div>
-                  <label htmlFor="trackPaymentRef" className="block text-sm font-semibold text-slate-700 mb-2">{t.payRefLabel}</label>
-                  <input id="trackPaymentRef" type="text" value={trackPaymentRef}
-                    onChange={(e) => setTrackPaymentRef(e.target.value)}
-                    placeholder={t.payRefPlaceholder} dir={trackPaymentRef ? "ltr" : (isRtl ? "rtl" : "ltr")}
-                    className={`w-full border rounded-xl px-4 py-3 text-sm outline-none transition bg-white placeholder:text-slate-400 font-mono focus:ring-2 ${
-                      trackPaymentRefTouched && (!trackPaymentRef.trim() || trackPaymentRef.trim().length < 4)
-                        ? "border-rose-400 focus:border-rose-500 focus:ring-rose-100"
-                        : "border-slate-200 focus:border-[#b9a779] focus:ring-[#b9a779]/15"
-                    }`} />
-                  <p className="mt-1.5 text-xs text-slate-400">{t.payRefHint}</p>
-                </div>
+                {/* Inputs */}
+                <div className="space-y-4 border-t border-slate-100 pt-4 bg-white p-4 rounded-xl border border-slate-150">
+                  <div>
+                    <label htmlFor="trackPaymentRef" className="block text-sm font-semibold text-slate-700 mb-2">{t.payRefLabel}</label>
+                    <input id="trackPaymentRef" type="text" value={trackPaymentRef}
+                      onChange={(e) => setTrackPaymentRef(e.target.value)}
+                      placeholder={t.payRefPlaceholder} dir={trackPaymentRef ? "ltr" : (isRtl ? "rtl" : "ltr")}
+                      className={`w-full border rounded-xl px-4 py-3 text-sm outline-none transition bg-white placeholder:text-slate-400 font-mono focus:ring-2 ${
+                        trackPaymentRefTouched && (!trackPaymentRef.trim() || trackPaymentRef.trim().length < 4)
+                          ? "border-rose-400 focus:border-rose-500 focus:ring-rose-100"
+                          : "border-slate-200 focus:border-[#b9a779] focus:ring-[#b9a779]/15"
+                      }`} />
+                    <p className="mt-1.5 text-xs text-slate-400">{t.payRefHint}</p>
+                  </div>
 
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">{t.payReceiptLabel}</label>
-                  <FileUploadCard icon="fa-file-invoice" label={isRtl ? "رفع إيصال الدفع" : "Upload Receipt"}
-                    desc={t.payReceiptDesc} fileLabel={trackReceiptFileLabel}
-                    onChange={handleTrackReceiptFileChange} />
-                  {trackPaymentReceipt && (
-                    <div className="mt-3 flex items-start gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
-                      {trackPaymentReceipt.startsWith("data:application/pdf") ? (
-                        <div className="w-16 h-16 rounded-lg border border-slate-200 bg-white flex flex-col items-center justify-center shrink-0 text-rose-600 gap-1 shadow-sm">
-                          <FileText className="w-8 h-8" />
-                          <span className="text-[9px] font-black uppercase">PDF</span>
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">{t.payReceiptLabel}</label>
+                    <FileUploadCard icon="fa-file-invoice" label={isRtl ? "رفع إيصال الدفع" : "Upload Receipt"}
+                      desc={t.payReceiptDesc} fileLabel={trackReceiptFileLabel}
+                      onChange={handleTrackReceiptFileChange} />
+                    {trackPaymentReceipt && (
+                      <div className="mt-3 flex items-start gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                        {trackPaymentReceipt.startsWith("data:application/pdf") ? (
+                          <div className="w-16 h-16 rounded-lg border border-slate-200 bg-white flex flex-col items-center justify-center shrink-0 text-rose-600 gap-1 shadow-sm">
+                            <FileText className="w-8 h-8" />
+                            <span className="text-[9px] font-black uppercase">PDF</span>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setImagePreview({ src: trackPaymentReceipt, title: isRtl ? "إيصال الدفع" : "Payment receipt", downloadName: `receipt_${trackCode || "copyright"}.jpg` })}
+                            className="w-16 h-16 rounded-lg border border-slate-200 bg-white overflow-hidden shrink-0 cursor-zoom-in"
+                            title={isRtl ? "عرض الإيصال بالحجم الكامل" : "Preview receipt full size"}
+                          >
+                            <img src={trackPaymentReceipt} alt="Receipt" className="w-full h-full object-contain" />
+                          </button>
+                        )}
+                        <div className="flex-1">
+                          <p className="text-xs text-emerald-700 font-bold">{isRtl ? "✓ تم رفع الإيصال" : "✓ Receipt uploaded"}</p>
+                          <button type="button" onClick={() => { setTrackPaymentReceipt(null); setTrackReceiptFileLabel(t.fileSelect); }}
+                            className="text-xs text-rose-500 hover:text-rose-700 mt-1 cursor-pointer font-medium">{isRtl ? "حذف" : "Remove"}</button>
                         </div>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => setImagePreview({ src: trackPaymentReceipt, title: isRtl ? "إيصال الدفع" : "Payment receipt", downloadName: `receipt_${trackCode || "copyright"}.jpg` })}
-                          className="w-16 h-16 rounded-lg border border-slate-200 bg-white overflow-hidden shrink-0 cursor-zoom-in"
-                          title={isRtl ? "عرض الإيصال بالحجم الكامل" : "Preview receipt full size"}
-                        >
-                          <img src={trackPaymentReceipt} alt="Receipt" className="w-full h-full object-contain" />
-                        </button>
-                      )}
-                      <div className="flex-1">
-                        <p className="text-xs text-emerald-700 font-bold">{isRtl ? "✓ تم رفع الإيصال" : "✓ Receipt uploaded"}</p>
-                        <button type="button" onClick={() => { setTrackPaymentReceipt(null); setTrackReceiptFileLabel(t.fileSelect); }}
-                          className="text-xs text-rose-500 hover:text-rose-700 mt-1 cursor-pointer font-medium">{isRtl ? "حذف" : "Remove"}</button>
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
-              </div>
-            </>
 
-            <button onClick={() => handleTrackPay("initial")}
-              className="w-full bg-[#054239] hover:bg-[#04332b] text-white font-bold py-3 rounded-xl transition shadow active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
-            >
-              <span>{isRtl ? `تسديد الرسم الأولي (${fees.initialTotal.toLocaleString()} ل.س)` : `Pay Initial Fee (${fees.initialTotal.toLocaleString()} L.S.)`}</span>
-            </button>
+                <button onClick={() => handleTrackPay("initial")}
+                  className="w-full bg-[#054239] hover:bg-[#04332b] text-white font-bold py-3 rounded-xl transition shadow active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <span>{isRtl ? `تسديد الرسم الأولي (${fees.initialTotal.toLocaleString()} ل.س)` : `Pay Initial Fee (${fees.initialTotal.toLocaleString()} L.S.)`}</span>
+                </button>
+              </>
+            )}
           </div>
         )}
 
@@ -1740,63 +1831,69 @@ export default function CopyrightPage(props) {
               t={t}
             />
 
-            <>
-              {/* Payment Details */}
-              <PaymentCard gatewayId={selectedGateway} isRtl={isRtl} showToast={showToast} />
+            {isRedirectPaymentGateway(selectedGateway) ? (
+              <PaymentCard gatewayId={selectedGateway} isRtl={isRtl} showToast={showToast}
+                payAmount={fees.finalTotal}
+                onPayNow={() => payWithPaymera(sub.id, "final")} />
+            ) : (
+              <>
+                {/* Payment Details */}
+                <PaymentCard gatewayId={selectedGateway} isRtl={isRtl} showToast={showToast} />
 
-              {/* Inputs */}
-              <div className="space-y-4 border-t border-slate-100 pt-4 bg-white p-4 rounded-xl border border-slate-150">
-                <div>
-                  <label htmlFor="trackPaymentRef" className="block text-sm font-semibold text-slate-700 mb-2">{t.payRefLabel}</label>
-                  <input id="trackPaymentRef" type="text" value={trackPaymentRef}
-                    onChange={(e) => setTrackPaymentRef(e.target.value)}
-                    placeholder={t.payRefPlaceholder} dir={trackPaymentRef ? "ltr" : (isRtl ? "rtl" : "ltr")}
-                    className={`w-full border rounded-xl px-4 py-3 text-sm outline-none transition bg-white placeholder:text-slate-400 font-mono focus:ring-2 ${
-                      trackPaymentRefTouched && (!trackPaymentRef.trim() || trackPaymentRef.trim().length < 4)
-                        ? "border-rose-400 focus:border-rose-500 focus:ring-rose-100"
-                        : "border-slate-200 focus:border-[#b9a779] focus:ring-[#b9a779]/15"
-                    }`} />
-                  <p className="mt-1.5 text-xs text-slate-400">{t.payRefHint}</p>
-                </div>
+                {/* Inputs */}
+                <div className="space-y-4 border-t border-slate-100 pt-4 bg-white p-4 rounded-xl border border-slate-150">
+                  <div>
+                    <label htmlFor="trackPaymentRef" className="block text-sm font-semibold text-slate-700 mb-2">{t.payRefLabel}</label>
+                    <input id="trackPaymentRef" type="text" value={trackPaymentRef}
+                      onChange={(e) => setTrackPaymentRef(e.target.value)}
+                      placeholder={t.payRefPlaceholder} dir={trackPaymentRef ? "ltr" : (isRtl ? "rtl" : "ltr")}
+                      className={`w-full border rounded-xl px-4 py-3 text-sm outline-none transition bg-white placeholder:text-slate-400 font-mono focus:ring-2 ${
+                        trackPaymentRefTouched && (!trackPaymentRef.trim() || trackPaymentRef.trim().length < 4)
+                          ? "border-rose-400 focus:border-rose-500 focus:ring-rose-100"
+                          : "border-slate-200 focus:border-[#b9a779] focus:ring-[#b9a779]/15"
+                      }`} />
+                    <p className="mt-1.5 text-xs text-slate-400">{t.payRefHint}</p>
+                  </div>
 
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">{t.payReceiptLabel}</label>
-                  <FileUploadCard icon="fa-file-invoice" label={isRtl ? "رفع إيصال الدفع" : "Upload Receipt"}
-                    desc={t.payReceiptDesc} fileLabel={trackReceiptFileLabel}
-                    onChange={handleTrackReceiptFileChange} />
-                  {trackPaymentReceipt && (
-                    <div className="mt-3 flex items-start gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
-                      {trackPaymentReceipt.startsWith("data:application/pdf") ? (
-                        <div className="w-16 h-16 rounded-lg border border-slate-200 bg-white flex flex-col items-center justify-center shrink-0 text-rose-600 gap-1 shadow-sm">
-                          <FileText className="w-8 h-8" />
-                          <span className="text-[9px] font-black uppercase">PDF</span>
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">{t.payReceiptLabel}</label>
+                    <FileUploadCard icon="fa-file-invoice" label={isRtl ? "رفع إيصال الدفع" : "Upload Receipt"}
+                      desc={t.payReceiptDesc} fileLabel={trackReceiptFileLabel}
+                      onChange={handleTrackReceiptFileChange} />
+                    {trackPaymentReceipt && (
+                      <div className="mt-3 flex items-start gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                        {trackPaymentReceipt.startsWith("data:application/pdf") ? (
+                          <div className="w-16 h-16 rounded-lg border border-slate-200 bg-white flex flex-col items-center justify-center shrink-0 text-rose-600 gap-1 shadow-sm">
+                            <FileText className="w-8 h-8" />
+                            <span className="text-[9px] font-black uppercase">PDF</span>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setImagePreview({ src: trackPaymentReceipt, title: isRtl ? "إيصال الدفع النهائي" : "Final payment receipt", downloadName: `final_receipt_${trackCode || "copyright"}.jpg` })}
+                            className="w-16 h-16 rounded-lg border border-slate-200 bg-white overflow-hidden shrink-0 cursor-zoom-in"
+                            title={isRtl ? "عرض الإيصال بالحجم الكامل" : "Preview receipt full size"}
+                          >
+                            <img src={trackPaymentReceipt} alt="Receipt" className="w-full h-full object-contain" />
+                          </button>
+                        )}
+                        <div className="flex-1">
+                          <p className="text-xs text-emerald-700 font-bold">{isRtl ? "✓ تم رفع الإيصال" : "✓ Receipt uploaded"}</p>
+                          <button type="button" onClick={() => { setTrackPaymentReceipt(null); setTrackReceiptFileLabel(t.fileSelect); }}
+                            className="text-xs text-rose-500 hover:text-rose-700 mt-1 cursor-pointer font-medium">{isRtl ? "حذف" : "Remove"}</button>
                         </div>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => setImagePreview({ src: trackPaymentReceipt, title: isRtl ? "إيصال الدفع النهائي" : "Final payment receipt", downloadName: `final_receipt_${trackCode || "copyright"}.jpg` })}
-                          className="w-16 h-16 rounded-lg border border-slate-200 bg-white overflow-hidden shrink-0 cursor-zoom-in"
-                          title={isRtl ? "عرض الإيصال بالحجم الكامل" : "Preview receipt full size"}
-                        >
-                          <img src={trackPaymentReceipt} alt="Receipt" className="w-full h-full object-contain" />
-                        </button>
-                      )}
-                      <div className="flex-1">
-                        <p className="text-xs text-emerald-700 font-bold">{isRtl ? "✓ تم رفع الإيصال" : "✓ Receipt uploaded"}</p>
-                        <button type="button" onClick={() => { setTrackPaymentReceipt(null); setTrackReceiptFileLabel(t.fileSelect); }}
-                          className="text-xs text-rose-500 hover:text-rose-700 mt-1 cursor-pointer font-medium">{isRtl ? "حذف" : "Remove"}</button>
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
-              </div>
-            </>
 
-            <button onClick={() => handleTrackPay("final")}
-              className="w-full bg-[#054239] hover:bg-[#04332b] text-white font-bold py-3 rounded-xl transition shadow active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
-            >
-              <span>{isRtl ? `تسديد الرسم النهائي (${fees.finalTotal.toLocaleString()} ل.س)` : `Pay Final Fee (${fees.finalTotal.toLocaleString()} L.S.)`}</span>
-            </button>
+                <button onClick={() => handleTrackPay("final")}
+                  className="w-full bg-[#054239] hover:bg-[#04332b] text-white font-bold py-3 rounded-xl transition shadow active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <span>{isRtl ? `تسديد الرسم النهائي (${fees.finalTotal.toLocaleString()} ل.س)` : `Pay Final Fee (${fees.finalTotal.toLocaleString()} L.S.)`}</span>
+                </button>
+              </>
+            )}
           </div>
         )}
 
@@ -2632,66 +2729,74 @@ export default function CopyrightPage(props) {
                     t={t}
                   />
 
-                  <>
-                    <PaymentCard gatewayId={selectedGateway} isRtl={isRtl} showToast={showToast} />
+                  {isRedirectPaymentGateway(selectedGateway) ? (
+                    <PaymentCard gatewayId={selectedGateway} isRtl={isRtl} showToast={showToast}
+                      payAmount={fees.initialTotal}
+                      onPayNow={() => payWithPaymera(activeAppId, "initial")} />
+                  ) : (
+                    <>
+                      <PaymentCard gatewayId={selectedGateway} isRtl={isRtl} showToast={showToast} />
 
-                    <div className="space-y-4 border-t border-slate-100 pt-4">
-                      <div>
-                        <label htmlFor="paymentRef" className="block text-sm font-semibold text-slate-700 mb-2">{t.payRefLabel}</label>
-                        <input id="paymentRef" type="text" value={paymentRef}
-                          onChange={(e) => setPaymentRef(e.target.value)}
-                          onBlur={() => handleBlur("paymentRef")}
-                          aria-invalid={!!paymentRefError}
-                          aria-describedby={paymentRefError ? "paymentRef-error" : undefined}
-                          placeholder={t.payRefPlaceholder} dir={paymentRef ? "ltr" : (isRtl ? "rtl" : "ltr")}
-                          className={`w-full border rounded-xl px-4 py-3 text-sm outline-none transition bg-white placeholder:text-slate-400 font-mono focus:ring-2 ${
-                            paymentRefError
-                              ? "border-rose-400 focus:border-rose-500 focus:ring-rose-100"
-                              : "border-slate-200 focus:border-[#b9a779] focus:ring-[#b9a779]/15"
-                          }`} />
-                        <p className="mt-1.5 text-xs text-slate-400">{t.payRefHint}</p>
-                        <FieldErrorText id="paymentRef-error" message={paymentRefError} />
-                      </div>
+                      <div className="space-y-4 border-t border-slate-100 pt-4">
+                        <div>
+                          <label htmlFor="paymentRef" className="block text-sm font-semibold text-slate-700 mb-2">{t.payRefLabel}</label>
+                          <input id="paymentRef" type="text" value={paymentRef}
+                            onChange={(e) => setPaymentRef(e.target.value)}
+                            onBlur={() => handleBlur("paymentRef")}
+                            aria-invalid={!!paymentRefError}
+                            aria-describedby={paymentRefError ? "paymentRef-error" : undefined}
+                            placeholder={t.payRefPlaceholder} dir={paymentRef ? "ltr" : (isRtl ? "rtl" : "ltr")}
+                            className={`w-full border rounded-xl px-4 py-3 text-sm outline-none transition bg-white placeholder:text-slate-400 font-mono focus:ring-2 ${
+                              paymentRefError
+                                ? "border-rose-400 focus:border-rose-500 focus:ring-rose-100"
+                                : "border-slate-200 focus:border-[#b9a779] focus:ring-[#b9a779]/15"
+                            }`} />
+                          <p className="mt-1.5 text-xs text-slate-400">{t.payRefHint}</p>
+                          <FieldErrorText id="paymentRef-error" message={paymentRefError} />
+                        </div>
 
-                      <div>
-                        <label className="block text-sm font-semibold text-slate-700 mb-2">{t.payReceiptLabel}</label>
-                        <FileUploadCard icon="fa-file-invoice" label={isRtl ? "رفع إيصال الدفع" : "Upload Receipt"}
-                          desc={t.payReceiptDesc} fileLabel={receiptFileLabel}
-                          onChange={handleReceiptFileChange} />
-                        {paymentReceipt && (
-                          <div className="mt-3 flex items-start gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
-                            {paymentReceipt.startsWith("data:application/pdf") ? (
-                              <div className="w-16 h-16 rounded-lg border border-slate-200 bg-white flex flex-col items-center justify-center shrink-0 text-rose-600 gap-1 shadow-sm">
-                                <FileText className="w-8 h-8" />
-                                <span className="text-[9px] font-black uppercase">PDF</span>
+                        <div>
+                          <label className="block text-sm font-semibold text-slate-700 mb-2">{t.payReceiptLabel}</label>
+                          <FileUploadCard icon="fa-file-invoice" label={isRtl ? "رفع إيصال الدفع" : "Upload Receipt"}
+                            desc={t.payReceiptDesc} fileLabel={receiptFileLabel}
+                            onChange={handleReceiptFileChange} />
+                          {paymentReceipt && (
+                            <div className="mt-3 flex items-start gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                              {paymentReceipt.startsWith("data:application/pdf") ? (
+                                <div className="w-16 h-16 rounded-lg border border-slate-200 bg-white flex flex-col items-center justify-center shrink-0 text-rose-600 gap-1 shadow-sm">
+                                  <FileText className="w-8 h-8" />
+                                  <span className="text-[9px] font-black uppercase">PDF</span>
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => setImagePreview({ src: paymentReceipt, title: isRtl ? "إيصال الدفع" : "Payment receipt", downloadName: `receipt_${activeAppId || "copyright"}.jpg` })}
+                                  className="w-16 h-16 rounded-lg border border-slate-200 bg-white overflow-hidden shrink-0 cursor-zoom-in"
+                                  title={isRtl ? "عرض الإيصال بالحجم الكامل" : "Preview receipt full size"}
+                                >
+                                  <img src={paymentReceipt} alt="Receipt" className="w-full h-full object-contain" />
+                                </button>
+                              )}
+                              <div className="flex-1">
+                                <p className="text-xs text-emerald-700 font-bold">{isRtl ? "✓ تم رفع الإيصال" : "✓ Receipt uploaded"}</p>
+                                <button type="button" onClick={() => { setPaymentReceipt(null); setReceiptFileLabel(t.fileSelect); }}
+                                  className="text-xs text-rose-500 hover:text-rose-700 mt-1 cursor-pointer font-medium">{isRtl ? "حذف" : "Remove"}</button>
                               </div>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => setImagePreview({ src: paymentReceipt, title: isRtl ? "إيصال الدفع" : "Payment receipt", downloadName: `receipt_${activeAppId || "copyright"}.jpg` })}
-                                className="w-16 h-16 rounded-lg border border-slate-200 bg-white overflow-hidden shrink-0 cursor-zoom-in"
-                                title={isRtl ? "عرض الإيصال بالحجم الكامل" : "Preview receipt full size"}
-                              >
-                                <img src={paymentReceipt} alt="Receipt" className="w-full h-full object-contain" />
-                              </button>
-                            )}
-                            <div className="flex-1">
-                              <p className="text-xs text-emerald-700 font-bold">{isRtl ? "✓ تم رفع الإيصال" : "✓ Receipt uploaded"}</p>
-                              <button type="button" onClick={() => { setPaymentReceipt(null); setReceiptFileLabel(t.fileSelect); }}
-                                className="text-xs text-rose-500 hover:text-rose-700 mt-1 cursor-pointer font-medium">{isRtl ? "حذف" : "Remove"}</button>
                             </div>
-                          </div>
-                        )}
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  </>
+                    </>
+                  )}
                 </div>
 
-                <button onClick={handlePaymentSubmit}
-                  className="w-full bg-[#054239] hover:bg-[#04332b] text-white font-bold py-4 rounded-2xl transition shadow-md flex items-center justify-center gap-2 cursor-pointer">
-                  <span>{isRtl ? `تسديد الرسم الأولي (${fees.initialTotal.toLocaleString()} ل.س)` : `Pay Initial Fee (${fees.initialTotal.toLocaleString()} L.S.)`}</span>
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" /></svg>
-                </button>
+                {!isRedirectPaymentGateway(selectedGateway) && (
+                  <button onClick={handlePaymentSubmit}
+                    className="w-full bg-[#054239] hover:bg-[#04332b] text-white font-bold py-4 rounded-2xl transition shadow-md flex items-center justify-center gap-2 cursor-pointer">
+                    <span>{isRtl ? `تسديد الرسم الأولي (${fees.initialTotal.toLocaleString()} ل.س)` : `Pay Initial Fee (${fees.initialTotal.toLocaleString()} L.S.)`}</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" /></svg>
+                  </button>
+                )}
               </div>
             )}
 

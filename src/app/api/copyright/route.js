@@ -8,6 +8,8 @@ import { nextReferenceNumberSafe, REFERENCE_SCOPES } from "@/lib/reference-numbe
 import { readCopyrightJson } from "@/lib/copyright-request.mjs";
 import { copyrightReceiptAvailability } from "@/lib/copyright-payments";
 import { isPaymentGatewayActive } from "@/lib/payment-gateways.mjs";
+import { getPaymeraPaymentStatus } from "@/lib/paymera.mjs";
+import { getFeesForRole } from "@/lib/copyright-fees.mjs";
 import { getCurrentCitizenOptional } from "@/lib/citizen-dal";
 import { claimRecordForLoggedInCitizen } from "@/lib/citizen-submission-link.mjs";
 import {
@@ -281,8 +283,28 @@ export async function PUT(request) {
       if (typeof data.paymentRef !== "string" || data.paymentRef.trim().length < 4 || data.paymentRef.trim().length > 200) {
         return NextResponse.json({ error: "مرجع الدفع مطلوب ويجب أن يكون بين 4 و200 حرف" }, { status: 400 });
       }
-      try { validateUploadedDocument(data.paymentReceipt, "paymentReceipt", 5 * 1024 * 1024); }
-      catch (error) { return NextResponse.json({ error: error.message }, { status: 400 }); }
+      // Paymera is confirmed electronically rather than by a citizen-uploaded
+      // screenshot, so instead of validating a receipt image we independently
+      // re-check the claimed paymentId against Paymera's own get-payment-status —
+      // never trust that a caller who says gateway=paymearia actually has an
+      // accepted payment. Every other gateway is still a manual transfer, so it
+      // keeps requiring the receipt image for Finance to verify.
+      if (data.paymentGateway === "paymearia") {
+        try {
+          const stage = action === "pay_initial" ? "initial" : "final";
+          const status = await getPaymeraPaymentStatus(data.paymentRef.trim());
+          const expectedAmount = getFeesForRole(existing.applicantRole)[stage === "initial" ? "initialTotal" : "finalTotal"];
+          if (status.status !== "A" || Number(status.amount) !== expectedAmount || status.notes !== `${id}:${stage}`) {
+            return NextResponse.json({ error: "تعذر التحقق من عملية الدفع عبر بيميرا" }, { status: 402 });
+          }
+        } catch (error) {
+          console.error("Paymera payment verification error:", error);
+          return NextResponse.json({ error: "تعذر التحقق من عملية الدفع عبر بيميرا" }, { status: 502 });
+        }
+      } else {
+        try { validateUploadedDocument(data.paymentReceipt, "paymentReceipt", 5 * 1024 * 1024); }
+        catch (error) { return NextResponse.json({ error: error.message }, { status: 400 }); }
+      }
       if (existing.paymentRef === data.paymentRef.trim()) {
         const previous = await prisma.copyrightPayment.findUnique({
           where: { submissionId_stage: { submissionId: id, stage: action === "pay_initial" ? "initial" : "final" } },

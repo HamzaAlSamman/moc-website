@@ -33,6 +33,7 @@ export default function ApexDateTimePicker({
   locale = "ar",
   id,
   maxDate, // optional Date/ISO-string — disables days after it (e.g. "no future incident dates")
+  minDate, // optional Date/ISO-string — disables days before it
   showPresets = true,
   "aria-invalid": ariaInvalid,
   "aria-describedby": ariaDescribedby,
@@ -60,7 +61,16 @@ export default function ApexDateTimePicker({
     mq.addEventListener("change", update);
     return () => mq.removeEventListener("change", update);
   }, []);
-  const [currentMonth, setCurrentMonth] = useState(() => new Date());
+  // When there's no value yet, open on maxDate's month instead of today's —
+  // otherwise a picker like "birth date, must be before 2016" lands on a
+  // calendar page where every day is disabled.
+  const [currentMonth, setCurrentMonth] = useState(() => {
+    if (!value && maxDate) {
+      const d = maxDate instanceof Date ? maxDate : new Date(maxDate);
+      if (!Number.isNaN(d.getTime())) return d;
+    }
+    return new Date();
+  });
   const [selectedDate, setSelectedDate] = useState(null);
   
   // Time selector state
@@ -270,7 +280,7 @@ export default function ApexDateTimePicker({
     return grid;
   }, [currentMonth]);
 
-  // Normalize maxDate to a midnight Date for pure day-level comparison
+  // Normalize min/maxDate to midnight Dates for pure day-level comparison
   // (an incident/completion date has no time component to compare against).
   const maxDateObj = useMemo(() => {
     if (!maxDate) return null;
@@ -279,10 +289,51 @@ export default function ApexDateTimePicker({
     return new Date(d.getFullYear(), d.getMonth(), d.getDate());
   }, [maxDate]);
 
+  const minDateObj = useMemo(() => {
+    if (!minDate) return null;
+    const d = minDate instanceof Date ? minDate : new Date(minDate);
+    if (Number.isNaN(d.getTime())) return null;
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  }, [minDate]);
+
   const isDateDisabled = (date) => {
-    if (!maxDateObj) return false;
-    return new Date(date.getFullYear(), date.getMonth(), date.getDate()) > maxDateObj;
+    const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    if (maxDateObj && d > maxDateObj) return true;
+    if (minDateObj && d < minDateObj) return true;
+    return false;
   };
+
+  // Year/month jump panels and the month arrows must respect min/maxDate too —
+  // otherwise the day grid disables every day but the panels still let you
+  // land on a blocked year/month, which reads as broken rather than restricted.
+  const isYearDisabled = (yr) => {
+    if (maxDateObj && yr > maxDateObj.getFullYear()) return true;
+    if (minDateObj && yr < minDateObj.getFullYear()) return true;
+    return false;
+  };
+
+  const isMonthDisabled = (monthIdx) => {
+    const y = currentMonth.getFullYear();
+    if (maxDateObj) {
+      if (y > maxDateObj.getFullYear()) return true;
+      if (y === maxDateObj.getFullYear() && monthIdx > maxDateObj.getMonth()) return true;
+    }
+    if (minDateObj) {
+      if (y < minDateObj.getFullYear()) return true;
+      if (y === minDateObj.getFullYear() && monthIdx < minDateObj.getMonth()) return true;
+    }
+    return false;
+  };
+
+  const isNextMonthDisabled = Boolean(maxDateObj) && (
+    currentMonth.getFullYear() > maxDateObj.getFullYear() ||
+    (currentMonth.getFullYear() === maxDateObj.getFullYear() && currentMonth.getMonth() >= maxDateObj.getMonth())
+  );
+
+  const isPrevMonthDisabled = Boolean(minDateObj) && (
+    currentMonth.getFullYear() < minDateObj.getFullYear() ||
+    (currentMonth.getFullYear() === minDateObj.getFullYear() && currentMonth.getMonth() <= minDateObj.getMonth())
+  );
 
   // Is date currently selected?
   const isDateSelected = (date) => {
@@ -380,13 +431,17 @@ export default function ApexDateTimePicker({
   }, [resolvedTheme]);
 
   const currentYear = currentMonth.getFullYear();
+  // Bound the jump panel to the min/maxDate span when either is set — otherwise
+  // it shows a fixed ±10/+15 window around the viewed month, and reaching e.g.
+  // 1900 (a birth-date minDate) means repeatedly clicking the earliest visible
+  // year just to re-center the window, one bite at a time.
   const yearRange = useMemo(() => {
+    const start = minDateObj ? minDateObj.getFullYear() : currentYear - 10;
+    const end = maxDateObj ? maxDateObj.getFullYear() : currentYear + 15;
     const range = [];
-    const start = currentYear - 10;
-    const end = currentYear + 15;
     for (let y = start; y <= end; y++) range.push(y);
     return range;
-  }, [currentYear]);
+  }, [currentYear, minDateObj, maxDateObj]);
 
   // CSS class resolution for the input field to match native site inputs
   // Enforce font-cairo instead of font-qomra in RTL to prevent standard numbers (like 1) rendering as Roman/artistic glyphs (like I).
@@ -429,10 +484,11 @@ export default function ApexDateTimePicker({
 
             {/* Calendar Navigation Header */}
             <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">
-              <button 
-                type="button" 
-                onClick={() => changeMonth(-1)}
-                className="w-9 h-9 rounded-lg flex items-center justify-center text-slate-500 hover:bg-[#b9a779]/10 hover:text-slate-800 transition"
+              <button
+                type="button"
+                onClick={() => !isPrevMonthDisabled && changeMonth(-1)}
+                disabled={isPrevMonthDisabled}
+                className="w-9 h-9 rounded-lg flex items-center justify-center text-slate-500 hover:bg-[#b9a779]/10 hover:text-slate-800 transition disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"
               >
                 {isRtl ? <ChevronRight className="w-5 h-5" /> : <ChevronLeft className="w-5 h-5" />}
               </button>
@@ -454,10 +510,11 @@ export default function ApexDateTimePicker({
                 </button>
               </div>
 
-              <button 
-                type="button" 
-                onClick={() => changeMonth(1)}
-                className="w-9 h-9 rounded-lg flex items-center justify-center text-slate-500 hover:bg-[#b9a779]/10 hover:text-slate-800 transition"
+              <button
+                type="button"
+                onClick={() => !isNextMonthDisabled && changeMonth(1)}
+                disabled={isNextMonthDisabled}
+                className="w-9 h-9 rounded-lg flex items-center justify-center text-slate-500 hover:bg-[#b9a779]/10 hover:text-slate-800 transition disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"
               >
                 {isRtl ? <ChevronLeft className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
               </button>
@@ -466,35 +523,43 @@ export default function ApexDateTimePicker({
             {/* Quick jump panels */}
             {jumpPanel === "month" && (
               <div className="grid grid-cols-3 gap-2 h-48 overflow-y-auto p-1.5 bg-slate-50/50 rounded-xl border border-slate-100 mb-3">
-                {MONTHS_AR.map((mName, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => selectMonthJump(idx)}
-                    className={`text-xs font-bold py-2.5 px-1 rounded-lg transition ${isRtl ? "font-qomra" : "font-inter"} ${
-                      idx === currentMonth.getMonth() ? themeColors.goldBg : "text-slate-655 hover:bg-slate-100"
-                    }`}
-                  >
-                    {isRtl ? mName : MONTHS_EN[idx].substring(0, 3)}
-                  </button>
-                ))}
+                {MONTHS_AR.map((mName, idx) => {
+                  const disabledMonth = isMonthDisabled(idx);
+                  return (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => !disabledMonth && selectMonthJump(idx)}
+                      disabled={disabledMonth}
+                      className={`text-xs font-bold py-2.5 px-1 rounded-lg transition ${isRtl ? "font-qomra" : "font-inter"} ${
+                        idx === currentMonth.getMonth() ? themeColors.goldBg : "text-slate-655 hover:bg-slate-100"
+                      } ${disabledMonth ? "opacity-30 cursor-not-allowed hover:bg-transparent" : ""}`}
+                    >
+                      {isRtl ? mName : MONTHS_EN[idx].substring(0, 3)}
+                    </button>
+                  );
+                })}
               </div>
             )}
 
             {jumpPanel === "year" && (
               <div className="grid grid-cols-4 gap-1.5 h-48 overflow-y-auto p-1.5 bg-slate-50/50 rounded-xl border border-slate-100 mb-3">
-                {yearRange.map((yr) => (
-                  <button
-                    key={yr}
-                    type="button"
-                    onClick={() => selectYearJump(yr)}
-                    className={`text-xs font-bold py-2.5 rounded-lg transition font-cairo ${
-                      yr === currentMonth.getFullYear() ? themeColors.goldBg : "text-slate-655 hover:bg-slate-100"
-                    }`}
-                  >
-                    {yr}
-                  </button>
-                ))}
+                {yearRange.map((yr) => {
+                  const disabledYear = isYearDisabled(yr);
+                  return (
+                    <button
+                      key={yr}
+                      type="button"
+                      onClick={() => !disabledYear && selectYearJump(yr)}
+                      disabled={disabledYear}
+                      className={`text-xs font-bold py-2.5 rounded-lg transition font-cairo ${
+                        yr === currentMonth.getFullYear() ? themeColors.goldBg : "text-slate-655 hover:bg-slate-100"
+                      } ${disabledYear ? "opacity-30 cursor-not-allowed hover:bg-transparent" : ""}`}
+                    >
+                      {yr}
+                    </button>
+                  );
+                })}
               </div>
             )}
 

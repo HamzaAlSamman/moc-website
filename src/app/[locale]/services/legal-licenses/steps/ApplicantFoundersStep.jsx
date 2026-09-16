@@ -152,6 +152,7 @@ export default function ApplicantFoundersStep({
                     isRtl={isRtl}
                     disabled={!canEditField(key, founder.id)}
                     minDate={key === "birthDate" ? "1900-01-01" : undefined}
+                    maxDate={key === "birthDate" ? "2015-12-31" : undefined}
                     showPresets={key !== "birthDate"}
                   />
                 ))}

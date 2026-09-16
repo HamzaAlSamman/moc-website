@@ -29,6 +29,7 @@ $ITEMS = @(
     ".next", "prisma", "scripts", "design-system",
     "package.json", "package-lock.json",
     "next.config.mjs", "postcss.config.mjs", "jsconfig.json",
+    "ecosystem.config.js",
     "README.md", "AGENTS.md"
 )
 

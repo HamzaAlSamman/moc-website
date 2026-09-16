@@ -57,3 +57,17 @@ next-env.d.ts
 /moc-update*.zip
 /moc-next-no-uploads.zip
 /public/uploads.zip
+
+# Local database dumps — contain real user rows and password hashes, never commit
+/moc_database*.sql
+/moc_database*.dump
+
+# Vendor-confidential integration material and local reference screenshots
+/بايميرا/
+/شام كاش.jpg
+/سيرتيل كاش.jpg
+/ام تي ان كاش.jpg
+/بايميرا.png
+
+# Local Claude Code settings
+.claude/settings.local.json

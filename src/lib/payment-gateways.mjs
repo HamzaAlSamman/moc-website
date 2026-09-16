@@ -20,8 +20,6 @@ const SYRIATEL_CASH_ACCOUNT_CODE =
   process.env.NEXT_PUBLIC_SYRIATEL_CASH_ACCOUNT_CODE || "0933123456";
 const MTN_CASH_ACCOUNT_CODE =
   process.env.NEXT_PUBLIC_MTN_CASH_ACCOUNT_CODE || "0999123456";
-const PAYMEARA_ACCOUNT_CODE =
-  process.env.NEXT_PUBLIC_PAYMEARA_ACCOUNT_CODE || "pay-123456";
 
 // Single source of truth for the payment gateways: the selector and the
 // details card both read it, so a gateway's status, colours and copy can
@@ -119,33 +117,25 @@ export const PAYMENT_GATEWAYS = {
         "Take a screenshot of the receipt and upload below."
       ]
     },
+    // Unlike every other gateway here, Paymera is a real API integration
+    // (redirect to a hosted card+OTP page, confirmed server-side via
+    // get-payment-status — see src/lib/paymera.mjs) rather than "copy this
+    // code, pay elsewhere, upload a screenshot". `mode: "redirect"` is how
+    // the payment UI (PaymentCard in the copyright page) tells the two apart
+    // — a redirect gateway has no account code to show or copy.
     paymearia: {
-      status: "soon",
+      status: "active",
+      mode: "redirect",
       nameAr: "بيميرا",
       nameEn: "Paymeara",
-      descAr: "الدفع الإلكتروني الآمن عبر بوابة بيميرا",
-      descEn: "Pay via Paymeara electronic gateway",
+      descAr: "الدفع الإلكتروني الآمن بالبطاقة المصرفية عبر بوابة بيميرا",
+      descEn: "Pay by bank card via the Paymera electronic gateway",
       theme: { accent: "#a855f7", gradient: ["#2b1147", "#130725", "#090313"] },
       logo: "/images/paymearia.png",
       qr: null,
-      accountCode: PAYMEARA_ACCOUNT_CODE,
-      brandText: "PAYMEARA ELECTRONIC GATEWAY",
-      howToPayAr: "طريقة التحويل عبر بوابة بيميرا:",
-      howToPayEn: "How to transfer via Paymeara gateway:",
-      instructionsAr: [
-        "افتح تطبيق بيميرا الإلكتروني أو قم بزيارة البوابة.",
-        "اختر خيار الدفع الإلكتروني السريع.",
-        "أدخل رمز التاجر المنسوخ أعلاه.",
-        "أدخل مبلغ الرسم المطلوب بدقة، ثم أكّد العملية.",
-        "قم بتصوير شاشة الإيصال ورفعها في الحقل المخصص أدناه."
-      ],
-      instructionsEn: [
-        "Open Paymeara app or visit the portal.",
-        "Choose fast electronic payment.",
-        "Enter the merchant code copied above.",
-        "Enter the required fee amount, then confirm.",
-        "Take a screenshot of the receipt and upload below."
-      ]
+      brandText: "PAYMERA ELECTRONIC GATEWAY",
+      redirectDescAr: "سيتم تحويلك إلى صفحة بيميرا الآمنة لإدخال بيانات بطاقتك المصرفية ورمز التحقق (OTP)، ثم العودة تلقائياً لإكمال معاملتك.",
+      redirectDescEn: "You'll be redirected to Paymera's secure page to enter your card details and OTP, then brought back automatically to finish your transaction."
     }
 };
 
@@ -161,6 +151,17 @@ export const PAYMENT_GATEWAY_IDS = Object.keys(PAYMENT_GATEWAYS);
  */
 export function isPaymentGatewayActive(id) {
   return PAYMENT_GATEWAYS[id]?.status === "active";
+}
+
+/**
+ * True for a gateway paid by redirecting to a hosted payment page and
+ * confirmed server-side (currently only Paymera) rather than by the citizen
+ * typing a transfer reference and uploading a receipt screenshot.
+ *
+ * @param {string} id
+ */
+export function isRedirectPaymentGateway(id) {
+  return PAYMENT_GATEWAYS[id]?.mode === "redirect";
 }
 
 /**

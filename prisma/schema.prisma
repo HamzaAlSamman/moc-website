@@ -640,6 +640,12 @@ model CopyrightSubmission {
   paymentRef                 String?
   payments                   CopyrightPayment[]
   paymentReceipt             String?            @db.Text
+  // Paymera eGate payment session ids, set when a redirect-based payment is
+  // created and read back by the trigger/callback routes (which only get
+  // submissionId+stage on their URL) to look up which session to confirm.
+  // See src/lib/paymera.mjs and copyright-payments.js#confirmPaymeraCopyrightPayment.
+  paymeraInitialPaymentId    String?
+  paymeraFinalPaymentId      String?
   commercialRegisterFile     String?            @db.Text
   delegationFile             String?            @db.Text
   representativeIdFile       String?            @db.Text

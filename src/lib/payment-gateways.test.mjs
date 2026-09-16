@@ -5,6 +5,7 @@ import {
   PAYMENT_GATEWAYS,
   PAYMENT_GATEWAY_IDS,
   isPaymentGatewayActive,
+  isRedirectPaymentGateway,
   paymentGatewayName,
 } from "./payment-gateways.mjs";
 
@@ -30,7 +31,7 @@ test("only live gateways are active, and unknown ids never are", () => {
   assert.equal(isPaymentGatewayActive("cham_cash"), true);
   assert.equal(isPaymentGatewayActive("syriatel_cash"), false);
   assert.equal(isPaymentGatewayActive("mtn_cash"), false);
-  assert.equal(isPaymentGatewayActive("paymearia"), false);
+  assert.equal(isPaymentGatewayActive("paymearia"), true);
 
   // The API feeds request data straight into this check, so anything that is
   // not a known live gateway must come back false rather than throw.
@@ -39,9 +40,15 @@ test("only live gateways are active, and unknown ids never are", () => {
   }
 });
 
-test("exactly one gateway is live today", () => {
+test("exactly the manual-transfer and redirect gateways are live today", () => {
   const active = PAYMENT_GATEWAY_IDS.filter(isPaymentGatewayActive);
-  assert.deepEqual(active, ["cham_cash"]);
+  assert.deepEqual(active, ["cham_cash", "paymearia"]);
+});
+
+test("only Paymera is a redirect gateway", () => {
+  assert.equal(isRedirectPaymentGateway("paymearia"), true);
+  assert.equal(isRedirectPaymentGateway("cham_cash"), false);
+  assert.equal(isRedirectPaymentGateway("unknown_wallet"), false);
 });
 
 test("names resolve in both languages and degrade to the id", () => {
@@ -50,11 +57,20 @@ test("names resolve in both languages and degrade to the id", () => {
   assert.equal(paymentGatewayName("nope"), "nope");
 });
 
-test("an active gateway ships an account code and payment instructions", () => {
-  for (const id of PAYMENT_GATEWAY_IDS.filter(isPaymentGatewayActive)) {
+test("an active manual-transfer gateway ships an account code and payment instructions", () => {
+  for (const id of PAYMENT_GATEWAY_IDS.filter(isPaymentGatewayActive).filter((id) => !isRedirectPaymentGateway(id))) {
     const gateway = PAYMENT_GATEWAYS[id];
     assert.ok(gateway.accountCode, `${id} is live but has no account code`);
     assert.ok(gateway.instructionsAr.length > 0, `${id} is live but has no instructions`);
     assert.ok(gateway.instructionsEn.length > 0, `${id} is live but has no English instructions`);
+  }
+});
+
+test("an active redirect gateway ships redirect copy instead of an account code", () => {
+  for (const id of PAYMENT_GATEWAY_IDS.filter(isRedirectPaymentGateway)) {
+    const gateway = PAYMENT_GATEWAYS[id];
+    assert.ok(isPaymentGatewayActive(id), `${id} is a redirect gateway but not active`);
+    assert.ok(gateway.redirectDescAr && gateway.redirectDescEn, `${id} is missing redirect copy`);
+    assert.ok(!gateway.accountCode, `${id} is a redirect gateway but still has an account code`);
   }
 });

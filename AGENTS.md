@@ -18,7 +18,7 @@ When the user asks to "save/upload/deploy to Plesk", run `.\deploy.ps1`
 prints the server commands, since SSH from outside is often blocked and the
 upload happens through Plesk File Manager).
 
-- Include: `.next` (build output), `public` except uploads, `prisma`, `scripts`, `design-system`, `package.json`, `package-lock.json`, `next.config.mjs`, `postcss.config.mjs`, `jsconfig.json`, `README.md`, `AGENTS.md`, and a generated `restore-next-aliases.sh`.
+- Include: `.next` (build output), `public` except uploads, `prisma`, `scripts`, `design-system`, `package.json`, `package-lock.json`, `next.config.mjs`, `postcss.config.mjs`, `jsconfig.json`, `ecosystem.config.js`, `README.md`, `AGENTS.md`, and a generated `restore-next-aliases.sh`.
 - Exclude: `src` (the server never reads source now), `public/uploads`, `public/uploads.zip`, `node_modules`, `.next/cache`, `.next/dev`, `.next/node_modules`, `.env*`, `.codegraph`, database dumps, existing ZIP files, and local/temp backup folders.
 - The script verifies the ZIP before uploading and aborts if `.next/BUILD_ID` is missing (incomplete build) or if anything forbidden slipped in.
 
@@ -42,6 +42,30 @@ pm2 restart moc-next --update-env
 to the production database. Skipping it after a release that adds new tables
 or columns leaves the schema out of sync — the app will throw at runtime the
 moment it touches the missing table/column, not at build time.
+
+### The app listens on 3001, and pm2 must be told so
+
+`ecosystem.config.js` pins `PORT=3001` and `NODE_OPTIONS=--dns-result-order=ipv4first`.
+Start the app through it — never with a bare `pm2 start npm -- start`:
+
+```bash
+pm2 delete moc-next && pm2 start ecosystem.config.js && pm2 save
+```
+
+Apache proxies the site to `127.0.0.1:3001` (`ProxyPass` in
+`/var/www/vhosts/system/moc.gov.sy/conf/vhost.conf`), **not** to Next's
+default 3000 — that port belongs to Grafana, and 3100 to
+`alsham.moc.gov.sy`, a separate Next.js site on this same server. Until this
+file existed both settings lived only in pm2's in-memory process list, so a
+`pm2 delete moc-next` erased them: the recreated process fell back to 3000,
+crash-looped on `EADDRINUSE` against Grafana, and Apache answered **503** on
+an empty 3001 — a full outage whose logs blame a port nothing in the repo
+mentioned. `pm2 restart` preserves the config; `pm2 delete` does not.
+
+The `ipv4first` flag is not cosmetic either: `egate.paymera.cc` publishes AAAA
+records, this server's IPv6 egress is dead, and Node's `fetch` tries the AAAA
+address first — so every Paymera call fails with `ConnectTimeoutError` while
+`curl` to the same host succeeds. That asymmetry is the tell.
 
 ### Why `.next/dev` and `.next/node_modules` are excluded
 
@@ -300,3 +324,71 @@ NEXT_PUBLIC_CHAM_CASH_ACCOUNT_CODE=
 Because it is a `NEXT_PUBLIC_` var it is baked in at build time — and the build
 now runs locally, so set it in the local build environment *before* running
 `.\deploy.ps1`. A value set only on Plesk has no effect.
+
+### Paymera eGate (copyright electronic payment)
+
+Unlike every other gateway in `payment-gateways.mjs`, Paymera (`paymearia`,
+`mode: "redirect"`) is a real API integration, not "copy this account code
+and upload a screenshot" — see `بايميرا/paymera-egate-integration-guide.md`
+and the specifications PDF in the same folder. `src/lib/paymera.mjs` calls it
+server-side only; the key must never reach the browser.
+
+```env
+PAYMERA_BASE_URL=https://egate-t.paymera.cc   # egate.paymera.cc for production
+PAYMERA_API_KEY=<issued by Paymera>
+PAYMERA_TERMINAL_ID=<8-character terminal id, issued separately from the API key>
+```
+
+`createPaymeraPayment` throws a clear "Paymera is not configured" error (not
+a silent failure) if either var is missing — the citizen just can't select
+Paymera until both are set. Production access is IP-restricted by Paymera to
+the server's own public IP (requested through the sponsoring bank); the test
+environment (`egate-t.paymera.cc`) is not.
+
+This is also the one payment method that changed `prisma/schema.prisma`:
+`CopyrightSubmission.paymeraInitialPaymentId` / `paymeraFinalPaymentId` hold
+the in-flight Paymera session id between `create-payment` and the
+trigger/callback routes confirming it, so the usual
+`prisma migrate deploy` after this release is not optional — those columns
+don't exist on production until it runs.
+
+The trigger/callback routes
+(`src/app/api/copyright/payment/paymera/{trigger,callback}/route.js`) are
+built from `APP_BASE_URL` (same fallback chain as the password-reset links
+above) — if it points somewhere Paymera's payment page or the citizen's own
+browser can't reach, a payment can complete on Paymera's side with nothing
+here ever finding out. `confirmPaymeraCopyrightPayment` in
+`copyright-payments.js` is the one place that turns a confirmed Paymera
+payment into the same `pay_initial`/`pay_final` transition a manually-typed
+payment goes through, so it never drifts from that path; it re-verifies the
+amount and its own `notes` marker against `get-payment-status` before
+trusting a paymentId, and `/api/copyright` PUT does the same check again
+independently for `gateway=paymearia` (instead of requiring the receipt
+screenshot every other gateway needs) — so recording a Paymera payment is
+never just "the caller said so".
+
+When a payment refuses to start, `paymeraRequest` logs the raw HTTP status and
+the first 500 bytes of the response before throwing, because the two failure
+modes are indistinguishable from the citizen-facing 502:
+
+```bash
+pm2 logs moc-next --lines 100 --nostream | grep "Paymera request failed"
+```
+
+A genuine Paymera rejection always comes back as JSON carrying
+`ErrorMessage`/`ErrorCode` (`1` = unauthorized — check the API key and terminal
+id). An **HTML body with HTTP 403** is not Paymera at all: it is Cloudflare in
+front of the gateway refusing the request, and the usual cause is
+`APP_BASE_URL` pointing at `localhost`. `callbackURL` and `triggerURL` are
+built from it and travel *inside the request body*, and a body carrying
+`http://localhost:3000/...` trips Cloudflare's SSRF rules — the same key, the
+same terminal id and the same machine succeed the moment those URLs are
+public.
+
+So Paymera cannot be exercised from a plain `npm run dev`: point
+`APP_BASE_URL` at a tunnel (`cloudflared tunnel --url http://localhost:3000`)
+for a local run, or test on the deployed server. Production is unaffected,
+since `APP_BASE_URL=https://moc.gov.sy` is already public. Chasing the
+credentials instead of the payload here costs hours — the fast check is the
+same request sent twice, once with public callback URLs and once with
+localhost ones.
